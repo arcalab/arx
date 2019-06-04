@@ -25,8 +25,9 @@ object Parser extends RegexParsers {
 
 
   val typeId:Parser[String] = """[A-Z][a-zA-Z0-9_]*""".r
-  val pTypeId:Parser[String] = """[a-z][a-zA-Z0-9_]*""".r //possible can just be represented as a regular typename
+  val parametricTypeId:Parser[String] = """[a-z][a-zA-Z0-9_]*""".r //possible can just be represented as a regular typename
   val identifier:Parser[String] = """[a-zA-Z][a-zA-Z0-9_]*""".r
+
   /* Program */
 
   def program:Parser[AST] =
@@ -36,9 +37,6 @@ object Parser extends RegexParsers {
       }
 
   /* Type declaration */
-
-  // data TypeName = Variants
-  // data TypeName<ParamTypes> = Variants
 
   def typeDecl:Parser[AST] =
     "data" ~
@@ -57,29 +55,20 @@ object Parser extends RegexParsers {
 
   def typeName:Parser[AST] =
     typeId ~ opt("<"~> typeParams <~">")  ^^ {case n~opt =>  TypeName(n,opt.getOrElse(List[AST]()))} |
-    pTypeId ^^ {case n => PTypeName(n)}
+    parametricTypeId ^^ {case n => ParametricTypeName(n)}
 
   def typeParams:Parser[List[AST]] =
     typeId ~ "," ~ typeParams ^^ {case n~_~par =>  TypeName(n)::par} |
-    pTypeId ~ "," ~ typeParams ^^ {case n~_~par =>  PTypeName(n)::par} |
+    parametricTypeId ~ "," ~ typeParams ^^ {case n~_~par =>  ParametricTypeName(n)::par} |
     typeId  ^^ {case n => List(TypeName(n))} |
-    pTypeId ^^ {case n => List(PTypeName(n))}
+    parametricTypeId ^^ {case n => List(ParametricTypeName(n))}
 
   def typeVariants: Parser[List[AST]] =
-//    typeVariant ~ "|" ~ typeVariants ^^ {case v~_~vs =>  v::vs} |
-    typeVariant ~ opt("|" ~> typeVariants) ^^ {case v~vs => v::vs.getOrElse(List()).toList} //|
-//    typeVariant ^^ {case v => List(v)}
+    typeVariant ~ opt("|" ~> typeVariants) ^^ {case v~vs => v::vs.getOrElse(List())}
 
   def typeVariant: Parser[AST] =
     typeId ~ "(" ~ typeNames ~ ")" ^^ {case n~_~params~_ => TypeCons(n,params)}|
     typeId ^^ {case n => TypeVal(n)}
-
-//  def constParam: Parser[List[AST]] =
-//    typeId ~ opt("<"~> typeParams <~">") ~"," ~ constParam ^^ {case n~opt~_~par =>  TypeName(n,opt.getOrElse(List()))::par} |
-//    pTypeId ~ "," ~ constParam ^^ {case n~_~par =>  PTypeName(n)::par} |
-//    typeId  ^^ {case n => List(TypeName(n))} |
-//    pTypeId ^^ {case n => List(PTypeName(n))}
-
 
   /* Assignments */
 
@@ -100,33 +89,15 @@ object Parser extends RegexParsers {
 
   /* ADT Expressions */
 
-//  def adtExpr:Parser[AST] =
-//    adtConstructor ~ "("~paramExprs~")" ^^ {case c~_~par~_ => AdtConsExpr(c,par) } |
-//    adtValue ^^ {case n => AdtTerm(n)} |
-//    identifier ^^ {case n => Identifier(n)}
-
-//  def paramExprs:Parser[List[AST]] =
-//    adtExpr ~ "," ~ adtExpr ^^ {case e1~_~e2 => List(e1,e2)} |
-//      adtExpr ^^ {case e => List(e)}
-//
-  def adtConstructor:String = {//Parser[String] ={
-    adts.flatMap(t => t.variants).map(v => v match {
+  def adtConstructor:String = adts.flatMap(t => t.variants).map(v => v match {
       case TypeVal(n) => ""
       case TypeCons(n,param) => n.r
     }).filterNot(_ == "").mkString("|")
-  }
 
-  def adtValue:String = {//:Parser[String] = {
-    adts.flatMap(t => t.variants).map(v => v match {
+  def adtValue:String = adts.flatMap(t => t.variants).map(v => v match {
       case TypeVal(n) => n.r
       case TypeCons(n,param) => ""
     }).filterNot(_ == "").mkString("|")
-  }//.foldRight("")(_+"|"+_).r
-
-
 
   /* Functions */
-
-
-
 }
