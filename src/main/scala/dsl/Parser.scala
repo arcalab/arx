@@ -47,26 +47,26 @@ object Parser extends RegexParsers {
         }
 
   def typeNameDecl:Parser[TypeName] =
-    typeId ~ opt("<"~> typeParams <~">")  ^^ {case n~opt =>  TypeName(n,opt.getOrElse(List[AST]()))}
+    typeId ~ opt("<"~> typeParams <~">")  ^^ {case n~opt =>  ConTypeName(n,opt.getOrElse(List()))}
 
-  def typeNames:Parser[List[AST]] =
+  def typeNames:Parser[List[TypeName]] =
     typeName ~ "," ~ typeNames ^^ {case n~_~ns => n::ns} |
       typeName ^^ {case n => List(n)}
 
-  def typeName:Parser[AST] =
-    typeId ~ opt("<"~> typeParams <~">")  ^^ {case n~opt =>  TypeName(n,opt.getOrElse(List[AST]()))} |
-    parametricTypeId ^^ {case n => ParametricTypeName(n)}
+  def typeName:Parser[TypeName] =
+    typeId ~ opt("<"~> typeParams <~">")  ^^ {case n~opt =>  ConTypeName(n,opt.getOrElse(List()))} |
+    parametricTypeId ^^ {case n => AbsTypeName(n)}
 
-  def typeParams:Parser[List[AST]] =
-    typeId ~ "," ~ typeParams ^^ {case n~_~par =>  TypeName(n)::par} |
-    parametricTypeId ~ "," ~ typeParams ^^ {case n~_~par =>  ParametricTypeName(n)::par} |
-    typeId  ^^ {case n => List(TypeName(n))} |
-    parametricTypeId ^^ {case n => List(ParametricTypeName(n))}
+  def typeParams:Parser[List[TypeName]] =
+    typeId ~ "," ~ typeParams ^^ {case n~_~par =>  ConTypeName(n)::par} |
+    parametricTypeId ~ "," ~ typeParams ^^ {case n~_~par =>  AbsTypeName(n)::par} |
+    typeId  ^^ {case n => List(ConTypeName(n))} |
+    parametricTypeId ^^ {case n => List(AbsTypeName(n))}
 
-  def typeVariants: Parser[List[AST]] =
+  def typeVariants: Parser[List[Variant]] =
     typeVariant ~ opt("|" ~> typeVariants) ^^ {case v~vs => v::vs.getOrElse(List())}
 
-  def typeVariant: Parser[AST] =
+  def typeVariant: Parser[Variant] =
     typeId ~ "(" ~ typeNames ~ ")" ^^ {case n~_~params~_ => TypeCons(n,params)}|
     typeId ^^ {case n => TypeVal(n)}
 

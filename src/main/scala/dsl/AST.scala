@@ -11,17 +11,28 @@ sealed trait AST {
     case Statements(sts) => sts.flatMap(_.getTypes)
     case _ => List()
   }
+
+  def getAssignments:List[Assignment] = this match {
+    case a@Assignment(v,e) => List(a)
+    case Statements(sts) => sts.flatMap(_.getAssignments)
+    case _ => List()
+  }
 }
 
 case class Statements(sts:List[AST]) extends AST {}
 
 /* Type Declarations */
 
-case class TypeDecl(name:TypeName,variants:List[AST]) extends AST {}
-case class ParametricTypeName(name:String) extends AST{}
-case class TypeName(name:String,param:List[AST]=List()) extends AST{}
-case class TypeVal(name:String) extends AST {}
-case class TypeCons(name:String,param:List[AST]) extends AST {}
+case class TypeDecl(name:TypeName,variants:List[Variant]) extends AST {}
+
+/* Type Declarations - Type Names */
+//case class ParametricTypeName(name:String) extends AST{}
+//case class TypeName(name:String,param:List[TypeName]=List()) extends AST{}
+
+/* Type Declarations - Variants */
+//sealed trait Variant
+//case class TypeVal(name:String) extends Variant {}
+//case class TypeCons(name:String,param:List[TypeName]) extends Variant {}
 
 
 /* Assignments */
