@@ -77,13 +77,13 @@ object Parser extends RegexParsers {
 
   /* Expressions */
 
-  def expr:Parser[AST] =
+  def expr:Parser[Expr] =
     identifier ~ "("~paramExprs~")" ^^ {
       case c~_~par~_ if (c.matches(adtConstructor)) => AdtConsExpr(c,par)
       case c~_~par~_ => throw new ParsingException("Unknown Constructor: " + c )} |
     identifier ^^ {case i => if(i.matches(adtValue)) AdtTerm(i) else Identifier(i) }
 
-  def paramExprs:Parser[List[AST]] =
+  def paramExprs:Parser[List[Expr]] =
     expr ~ "," ~ expr ^^ {case e1~_~e2 => List(e1,e2)} |
       expr ^^ {case e => List(e)}
 
