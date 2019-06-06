@@ -9,12 +9,6 @@ package dsl
 object Unify {
 
   def apply(cons:Set[TCons]):Map[TVar,TypeExpr] = {
-    var r= cons.toList.sortBy(t=> !t.l.isInstanceOf[TVar])
-    println(s"order list : $r")
-    apply(r)
-  }
-
-  def apply(cons:List[TCons]):Map[TVar,TypeExpr] = {
     if (cons.isEmpty) {println("no more constraints"); Map()}
     else {
       var c = cons.head
@@ -38,9 +32,14 @@ object Unify {
           var toUn = cons.tail++ List(TCons(t1,t3),TCons(t2,t4))
           println("to unify: "+ toUn)
           Unify(toUn)
+        case (BaseType(n1,ps1),BaseType(n2,ps2)) if (ps1.size == ps2.size) && (n1==n2) =>
+          var toUn = cons.tail++ ps1.zip(ps2).map(p => TCons(p._1,p._2))
+          println("to unify: "+ toUn)
+          Unify(toUn)
       }
     }
 
   }
+
 
 }
