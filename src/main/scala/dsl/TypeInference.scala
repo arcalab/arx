@@ -16,7 +16,7 @@ object TypeInference {
   class Context {
     protected val ctx: Map[String,TypeExpr] = Map()
 
-    def exists(x:String):Boolean = ctx contains x
+    def contains(x:String):Boolean = ctx contains x
 
     def apply(x:String):TypeExpr = ctx(x)
 
@@ -40,7 +40,7 @@ object TypeInference {
       newCon
     }
 
-    def show = ctx.toString()
+    def get = ctx
 
   }
 
@@ -92,6 +92,8 @@ object TypeInference {
         // find the type of the adt term
         var variant = adt.find(k => k._1.name == n).get._1
         var ttype = getTypeExpr(variant, adt)
+        // replace all parametric types with new variables accordingly
+        ttype = mkNewParametricTVars(ttype,Map())._1
         //todo: see how to handle TVar in this case
         (ctx, ttype, Set())
       } catch {
@@ -101,6 +103,8 @@ object TypeInference {
         // find the type of the constructor
         var variant = adt.find(k => k._1.name == n).get._1
         var ctype = getTypeExpr(variant,adt)
+        // replace all parametric types with new variables accordingly
+        ctype = mkNewParametricTVars(ctype,Map())._1
         // infer the types of the actual parameters
         var pstypes = ps.map(p => infer(ctx,p,adt))
         // mk constructor constraints from each actual param to each formal param
@@ -116,7 +120,7 @@ object TypeInference {
         //}
         var newCons = TCons(T,ctype)
         // mk new Context from inferred context
-        var newCtx:Context = pstypes.map(pt => pt._1).foldLeft(ctx)(_.join(_))
+        var newCtx:Context = pstypes.map(pt => pt._1).foldRight(ctx)(_.join(_))
         (newCtx, T, paramsConst++pstypes.flatMap(pt=> pt._3)+(newCons))
       } catch {
         case e:NoSuchElementException => throw new TypeException("Unknown variant name: " + n)
@@ -156,15 +160,43 @@ object TypeInference {
           // type of rest of the parameter
           var pstypes = ps.map(p => getTypeExpr(p))
           // from right to left create the expected type of the constructor
-          (pstypes++List(tc)).foldLeft(ptype)(TMap(_,_))
+          var res = (ptype::pstypes).foldRight(tc)(TMap(_,_))
+          println(s"type exp of variant: $v = \n $res")
+          res
   }
 
   def getTypeExpr(tn:TypeName):TypeExpr = tn match {
     case AbsTypeName(atn) => TVar(atn)// TVar(freshVar())
     case ConTypeName(ctn,ps) =>
       BaseType(ctn,ps.map(p => getTypeExpr(p)))
+//      mkNewParametricTVars(res,Map())._1
   }
 
+
+  def mkNewParametricTVars(te: TypeExpr,map:Map[TVar,TVar]):(TypeExpr,Map[TVar,TVar]) = te match {
+    case TUnit => (TUnit,map)
+    case t@TVar(n) if n.matches("[a-z][a-zA-Z0-9_]*") =>
+      if (map.contains(t))
+        (map(t),map)
+      else {
+        var fresh = TVar(freshVar())
+        (fresh,map+(t->fresh))
+      }
+    case TMap(from, to) =>
+      val (nfrom,nmapf) = mkNewParametricTVars(from,map)
+      val (nto,nmapt) = mkNewParametricTVars(to,nmapf)
+      (TMap(nfrom,nto),nmapt)
+    case BaseType(n,ps) =>
+      var params = ps.toIterator
+      var nps:List[TypeExpr] = List()
+      var nmap = map
+      while (params.hasNext) {
+        var res = mkNewParametricTVars(params.next(),nmap)
+        nmap = res._2
+        nps++= List(res._1)
+      }
+      (BaseType(n,nps),nmap)
+  }
 }
 
 /* T1 = T2 */

@@ -15,6 +15,6 @@ object DSL {
     case f:Parser.NoSuccess => throw new ParsingException("Parser failed: "+f.msg)
   }
 
-//  def infer(ast: AST) = TypeInference.infer(ast)
+  def infer(ast: AST) = TypeInference.infer(ast)
 
 }
