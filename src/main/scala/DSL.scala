@@ -1,5 +1,5 @@
 import common.ParsingException
-import dsl.{AST, Parser, TypeInference}
+import dsl._
 //import dsl.TypeInference._
 
 /**
@@ -17,4 +17,5 @@ object DSL {
 
   def infer(ast: AST) = TypeInference.infer(ast)
 
+  def unify(cons:Set[TCons]) = Unify(cons)
 }

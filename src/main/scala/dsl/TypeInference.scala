@@ -1,6 +1,6 @@
 package dsl
 
-import common.TypeException
+import common.{TypeException, UndefinedVarException}
 
 //
 ///**
@@ -29,7 +29,6 @@ object TypeInference {
     }
 
 
-
     // todo: decide how to handle multiple definitions of a variable, for now assume that doesn't happen
     def join(other:Context):Context = {
       var oldCtx = ctx
@@ -40,7 +39,7 @@ object TypeInference {
       newCon
     }
 
-    def get = ctx
+    def get:Map[String,TypeExpr] = ctx
 
   }
 
@@ -80,7 +79,7 @@ object TypeInference {
     val newConst = TCons(T,texp)
     // return:
     // - the new context return by the exprs (already contains newCtx)
-    // - the type of the assignment, for now is the type of the id, todo: although an assignment should be of type unit?
+    // - the type of the assignment, for now is the type of the id
     // - the set of constraints with the addition of Tid = Texp
     (ctxexp,T,cexp+newConst)
   }
@@ -88,37 +87,50 @@ object TypeInference {
   private def infer(ctx:Context, expr:Expr, adt:Map[Variant,TypeDecl]):(Context,TypeExpr,Set[TCons]) = {
 //    var dt:Map[Variant,TypeDecl] = adt.flatMap(td => td.variants.map(v => (v -> td))).toMap
     expr match {
+      case Identifier(n) =>
+        // if id is defined already return the type of id, other wise it is undefined
+        if (ctx.contains(n))
+          (ctx,ctx(n),Set())
+        else throw new UndefinedVarException("Unknown identifier: " + n)
       case t@AdtTerm(n) => try {
         // find the type of the adt term
-        var variant = adt.find(k => k._1.name == n).get._1
-        var ttype = getTypeExpr(variant, adt)
+        var variant:Variant = adt.find(k => k._1.name == n).get._1
+        var ttype = getVariantType(adt(variant).name)
         // replace all parametric types with new variables accordingly
-        ttype = mkNewParametricTVars(ttype,Map())._1
+        ttype = mkNewParametricTVar(ttype,Map())._1
+        // add a new variable to the context
+        var fresh = TVar(freshVar())
+        // add the corresponding constraint
+        var tcons = TCons(fresh,ttype)
         //todo: see how to handle TVar in this case
-        (ctx, ttype, Set())
+        (ctx, fresh, Set(tcons))
       } catch {
         case e:NoSuchElementException => throw new TypeException("Unknown variant name: " + n)
       }
       case c@AdtConsExpr(n, ps) => try {
         // find the type of the constructor
         var variant = adt.find(k => k._1.name == n).get._1
-        var ctype = getTypeExpr(variant,adt)
-        // replace all parametric types with new variables accordingly
-        ctype = mkNewParametricTVars(ctype,Map())._1
+        var rctype = getVariantType(adt(variant).name)
+        // find the type of the parameters
+        var ctype = getFormalParamsTypes(variant,adt)
+        // replace all parametric types with new variables accordingly in the parameters and in the type of the constructor
+        val (cctype,m) = mkNewParametricTVars(ctype,Map())//._1
+        rctype = mkNewParametricTVar(rctype,m)._1
+        println("The type of the constructor name is = " + rctype)
+        println("the type of the formal parameters of the constructor are"+ cctype)
         // infer the types of the actual parameters
         var pstypes = ps.map(p => infer(ctx,p,adt))
+        println("the type of the actual parameters of the constructor are"+ pstypes.map(c=>c._2).mkString("\n"))
         // mk constructor constraints from each actual param to each formal param
         // todo: asumme for now we already check at parsing if the number of params match
         // todo: see how to handle TVar in this case
-        var paramsConst = mkConstCons(ctype,pstypes.map(pt => pt._2))
+//        var paramsConst:Set[TCons] = mkConstCons(cctype,pstypes.map(pt => pt._2))
+        var paramsConst:Set[TCons] = cctype.zip(pstypes.map(pt => pt._2)).map(p => TCons(p._1,p._2)).toSet
+        println("the constraints parameter to parameter are "+ paramsConst.mkString("\n"))
         // mk the type of this expression:
         var T = TVar(freshVar())
-        // mk the actual type of the constructor based on the infer types of the parameters
-        //var actConsType = pstypes.map(pt=>pt._2) match {
-        //  case List(p) => TMap(p,)
-        //  case h::tail =>
-        //}
-        var newCons = TCons(T,ctype)
+        // mk new constrait for T and for the fresh variable
+        var newCons = TCons(T,rctype)
         // mk new Context from inferred context
         var newCtx:Context = pstypes.map(pt => pt._1).foldRight(ctx)(_.join(_))
         (newCtx, T, paramsConst++pstypes.flatMap(pt=> pt._3)+(newCons))
@@ -128,87 +140,83 @@ object TypeInference {
     }
   }
 
-  def mkConstCons(consType:TypeExpr,actParams:List[TypeExpr]):Set[TCons] = {
-    // the last type expr of consType if the type of the constructor, thus ignore
-    if (actParams.isEmpty) Set()
-    else {
-      consType match {
-        case TMap(t1, t2) => Set(TCons(t1, actParams.head)) ++ mkConstCons(t2, actParams.tail)
-        case t@TVar(n) => Set(TCons(t,actParams.head))
-        case t@BaseType(n, p) => Set(TCons(t,actParams.head))
-      }
-    }
+
+  def getFormalParamsTypes(v:Variant, adt:Map[Variant,TypeDecl]):List[TypeExpr] = v match {
+    case TypeVal(n) => List()
+    case TypeCons(n,ps) =>
+      //find the expected type expression of each parameter
+      var tp = ps.map(p => getVariantType(p))
+      tp
   }
 
-  def getTypeExpr(v:Variant, adt:Map[Variant,TypeDecl]):TypeExpr = v match {
-        case TypeVal(n) =>
-          var tn = adt(v).name
-          getTypeExpr(tn)
-        case TypeCons(n,List(p)) =>
-          // find the type name of the constructor
-          var tc = getTypeExpr(adt(v).name)
-          //find the expected type expression of each parameter
-          var tp = getTypeExpr(p)
-          // return the expected type of the constructor
-          TMap(tp,tc)
-        case TypeCons(n,p::ps) =>
-          // find the type name of the constructor
-          var tc = getTypeExpr(adt(v).name)
-          //find the expected type expression of each parameter
-          // type of first parameter
-          var ptype = getTypeExpr(p)
-          // type of rest of the parameter
-          var pstypes = ps.map(p => getTypeExpr(p))
-          // from right to left create the expected type of the constructor
-          var res = (ptype::pstypes).foldRight(tc)(TMap(_,_))
-          println(s"type exp of variant: $v = \n $res")
-          res
-  }
 
-  def getTypeExpr(tn:TypeName):TypeExpr = tn match {
+  def getVariantType(tn:TypeName):TypeExpr = tn match {
     case AbsTypeName(atn) => TVar(atn)// TVar(freshVar())
     case ConTypeName(ctn,ps) =>
-      BaseType(ctn,ps.map(p => getTypeExpr(p)))
+      BaseType(ctn,ps.map(p => getVariantType(p)))
 //      mkNewParametricTVars(res,Map())._1
   }
 
+  def mkNewParametricTVars(tes:List[TypeExpr],map:Map[TVar,TVar]):(List[TypeExpr],Map[TVar,TVar]) = {
+    var nmap = map
+    var ntes = List[TypeExpr]()
+    for (te <- tes) {
+      var res = mkNewParametricTVar(te,nmap)
+      nmap = res._2
+      ntes ++= List(res._1)
+    }
+    (ntes,nmap)
+  }
 
-  def mkNewParametricTVars(te: TypeExpr,map:Map[TVar,TVar]):(TypeExpr,Map[TVar,TVar]) = te match {
+  def mkNewParametricTVar(te: TypeExpr,map:Map[TVar,TVar]):(TypeExpr,Map[TVar,TVar]) = te match {
     case TUnit => (TUnit,map)
     case t@TVar(n) if n.matches("[a-z][a-zA-Z0-9_]*") =>
       if (map.contains(t))
         (map(t),map)
       else {
         var fresh = TVar(freshVar())
-        (fresh,map+(t->fresh))
-      }
+        (fresh,map+(t->fresh))}
     case TMap(from, to) =>
-      val (nfrom,nmapf) = mkNewParametricTVars(from,map)
-      val (nto,nmapt) = mkNewParametricTVars(to,nmapf)
+      val (nfrom,nmapf) = mkNewParametricTVar(from,map)
+      val (nto,nmapt) = mkNewParametricTVar(to,nmapf)
       (TMap(nfrom,nto),nmapt)
     case BaseType(n,ps) =>
-      var params = ps.toIterator
-      var nps:List[TypeExpr] = List()
-      var nmap = map
-      while (params.hasNext) {
-        var res = mkNewParametricTVars(params.next(),nmap)
-        nmap = res._2
-        nps++= List(res._1)
-      }
-      (BaseType(n,nps),nmap)
+      var nres = mkNewParametricTVars(ps,map)
+      (BaseType(n,nres._1),nres._2)
   }
 }
 
 /* T1 = T2 */
 case class TCons(l:TypeExpr,r:TypeExpr) {}
 
-sealed trait TypeExpr
+sealed trait TypeExpr {
+  def substitute(tvar:TVar,te:TypeExpr):TypeExpr
+}
 
 /* ADT type */
-case class BaseType(name:String,param:List[TypeExpr]) extends TypeExpr
+case class BaseType(name:String,param:List[TypeExpr]) extends TypeExpr {
+  def substitute(tvar:TVar,te:TypeExpr):BaseType = {
+    BaseType(name,param.map(t => t.substitute(tvar,te)))
+  }
+}
 /* typeExp -> typeExp */
-case class TMap(from: TypeExpr, to:TypeExpr) extends TypeExpr
+case class TMap(from: TypeExpr, to:TypeExpr) extends TypeExpr {
+  def substitute(tvar:TVar,te:TypeExpr):TMap = {
+    TMap(from.substitute(tvar,te),to.substitute(tvar,te))
+  }
+}
 /* type variable */
-case class TVar(name:String) extends TypeExpr
+case class TVar(name:String) extends TypeExpr {
+  def occurs(te:TypeExpr):Boolean = te match {
+    case TUnit => false
+    case t@TVar(n) => this == t
+    case TMap(t1,t2) => this.occurs(t1) || this.occurs(t2)
+    case BaseType(name, param) => param.exists(t=> this.occurs(t))
+  }
 
-case object TUnit extends TypeExpr
+  def substitute(tvar:TVar,te:TypeExpr):TypeExpr = if (this == tvar) te else this
+}
+
+case object TUnit extends TypeExpr {
+  def substitute(TVar: TVar,te:TypeExpr):TypeExpr = this
+}
