@@ -1,3 +1,4 @@
+import analysis.syntax.Parser
 import org.scalatest.FlatSpec
 import dsl._
 import common.ParsingException

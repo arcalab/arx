@@ -1,7 +1,6 @@
-package dsl
+package dsl.analysis.semantics
 
-import common.TypeException
-
+import dsl.common.TypeException
 
 /**
   * Created by guillecledou on 2019-06-06

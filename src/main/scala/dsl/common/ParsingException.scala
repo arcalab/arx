@@ -1,4 +1,4 @@
-package common
+package dsl.common
 
 /**
   * Created by guillecledou on 2019-06-03

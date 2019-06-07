@@ -1,4 +1,4 @@
-package dsl
+package dsl.analysis.syntax
 
 /**
   * Created by guillecledou on 2019-05-31

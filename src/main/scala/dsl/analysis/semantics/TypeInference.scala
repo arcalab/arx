@@ -1,6 +1,7 @@
-package dsl
+package dsl.analysis.semantics
 
-import common.{TypeException, UndefinedVarException}
+import dsl.analysis.syntax._
+import dsl.common.{TypeException, UndefinedVarException}
 
 /**
   * Created by guillecledou on 2019-06-03
@@ -131,8 +132,8 @@ object TypeInference {
 
 
   def getFormalParamsTypes(v:Variant, adt:Map[Variant,TypeDecl]):List[TypeExpr] = v match {
-    case TypeVal(n) => List()
-    case TypeCons(n,ps) =>
+    case AdtVal(n) => List()
+    case AdtConst(n,ps) =>
       //find the expected type expression of each parameter
       var tp = ps.map(p => getVariantType(p))
       tp
@@ -173,39 +174,4 @@ object TypeInference {
       var nres = mkNewParametricTVars(ps,map)
       (BaseType(n,nres._1),nres._2)
   }
-}
-
-/* T1 = T2 */
-case class TCons(l:TypeExpr,r:TypeExpr) {}
-
-sealed trait TypeExpr {
-  def substitute(tvar:TVar,te:TypeExpr):TypeExpr
-}
-
-/* ADT type */
-case class BaseType(name:String,param:List[TypeExpr]) extends TypeExpr {
-  def substitute(tvar:TVar,te:TypeExpr):BaseType = {
-    BaseType(name,param.map(t => t.substitute(tvar,te)))
-  }
-}
-/* typeExp -> typeExp */
-case class TMap(from: TypeExpr, to:TypeExpr) extends TypeExpr {
-  def substitute(tvar:TVar,te:TypeExpr):TMap = {
-    TMap(from.substitute(tvar,te),to.substitute(tvar,te))
-  }
-}
-/* type variable */
-case class TVar(name:String) extends TypeExpr {
-  def occurs(te:TypeExpr):Boolean = te match {
-    case TUnit => false
-    case t@TVar(n) => this == t
-    case TMap(t1,t2) => this.occurs(t1) || this.occurs(t2)
-    case BaseType(name, param) => param.exists(t=> this.occurs(t))
-  }
-
-  def substitute(tvar:TVar,te:TypeExpr):TypeExpr = if (this == tvar) te else this
-}
-
-case object TUnit extends TypeExpr {
-  def substitute(TVar: TVar,te:TypeExpr):TypeExpr = this
 }

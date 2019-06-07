@@ -1,10 +1,9 @@
-package dsl
+package dsl.analysis.syntax
 
-import common.ParsingException
+import dsl.common.ParsingException
 
 import scala.util.matching.Regex
 import scala.util.parsing.combinator.RegexParsers
-
 
 /**
   * Created by guillecledou on 2019-05-31
@@ -67,8 +66,8 @@ object Parser extends RegexParsers {
     typeVariant ~ opt("|" ~> typeVariants) ^^ {case v~vs => v::vs.getOrElse(List())}
 
   def typeVariant: Parser[Variant] =
-    typeId ~ "(" ~ typeNames ~ ")" ^^ {case n~_~params~_ => TypeCons(n,params)}|
-    typeId ^^ {case n => TypeVal(n)}
+    typeId ~ "(" ~ typeNames ~ ")" ^^ {case n~_~params~_ => AdtConst(n,params)}|
+    typeId ^^ {case n => AdtVal(n)}
 
   /* Assignments */
 
@@ -90,13 +89,13 @@ object Parser extends RegexParsers {
   /* ADT Expressions */
 
   def adtConstructor:String = adts.flatMap(t => t.variants).map(v => v match {
-      case TypeVal(n) => ""
-      case TypeCons(n,param) => n.r
+      case AdtVal(n) => ""
+      case AdtConst(n,param) => n.r
     }).filterNot(_ == "").mkString("|")
 
   def adtValue:String = adts.flatMap(t => t.variants).map(v => v match {
-      case TypeVal(n) => n.r
-      case TypeCons(n,param) => ""
+      case AdtVal(n) => n.r
+      case AdtConst(n,param) => ""
     }).filterNot(_ == "").mkString("|")
 
   /* Functions */

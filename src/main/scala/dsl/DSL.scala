@@ -1,6 +1,9 @@
-import common.ParsingException
-import dsl.TypeInference.Context
-import dsl._
+package dsl
+
+import dsl.common.ParsingException
+import dsl.analysis.semantics.TypeInference.Context
+import dsl.analysis.semantics._
+import dsl.analysis.syntax.{AST, Parser}
 
 /**
   * Created by guillecledou on 2019-06-04
