@@ -1,4 +1,4 @@
-name := "reactivedsl"
+name := "reactiveDsl"
 
 version := "0.1"
 

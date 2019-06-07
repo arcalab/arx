@@ -55,7 +55,7 @@ object TypeInference {
     * @param adt
     * @return a constraint typing relation: (context, type of the last expression, set of type constraints)
     */
-  private def infer(ast:AST):(Context,TypeExpr,Set[TCons]) = {
+  def infer(ast:AST):(Context,TypeExpr,Set[TCons]) = {
     // find known adt from the ast
     var adt:Map[Variant,TypeDecl] = ast.getTypes.flatMap(td => td.variants.map(v => v -> td)).toMap
     // initialize type variables
