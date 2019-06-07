@@ -1,6 +1,6 @@
 import common.ParsingException
+import dsl.TypeInference.Context
 import dsl._
-//import dsl.TypeInference._
 
 /**
   * Created by guillecledou on 2019-06-04
@@ -15,7 +15,17 @@ object DSL {
     case f:Parser.NoSuccess => throw new ParsingException("Parser failed: "+f.msg)
   }
 
-  def infer(ast: AST) = TypeInference.infer(ast)
+  def unify(cons:Set[TCons]):Map[TVar,TypeExpr] = Unify.simplify(Unify(cons))
 
-  def unify(cons:Set[TCons]) = Unify(cons)
+  def infer(ast:AST):(Context,TypeExpr,Set[TCons]) = TypeInference.infer(ast)
+
+  def typeCheck(ast: AST):Map[String,TypeExpr] = {
+    // mk type constraints
+    val (ctx,t,cons) = infer(ast)
+    // try to unify them
+    val substitutions:Map[TVar,TypeExpr] = unify(cons)
+    // return the type for each identifier
+    ctx.get.map(e => e._1 -> substitutions(e._2))
+  }
+
 }

@@ -2,26 +2,24 @@ package dsl
 
 import common.{TypeException, UndefinedVarException}
 
-//
-///**
-//  * Created by guillecledou on 2019-06-03
-//  */
-//
-//
+/**
+  * Created by guillecledou on 2019-06-03
+  */
+
 object TypeInference {
 
   private var tVars:Int = 0
   private def freshVar():String = {tVars+=1; (tVars-1).toString}
 
   class Context {
-    protected val ctx: Map[String,TypeExpr] = Map()
+    protected val ctx: Map[String,TVar] = Map()
 
     def contains(x:String):Boolean = ctx contains x
 
-    def apply(x:String):TypeExpr = ctx(x)
+    def apply(x:String):TVar = ctx(x)
 
     // todo: decide how to handle multiple definitions of a variable, for now assume that doesn't happen
-    def add(x:String,t:TypeExpr):Context = {
+    def add(x:String,t:TVar):Context = {
       var oldCtx = ctx
       new Context {
           override val ctx = oldCtx + (x -> t)
@@ -39,13 +37,13 @@ object TypeInference {
       newCon
     }
 
-    def get:Map[String,TypeExpr] = ctx
+    def get:Map[String,TVar] = ctx
 
   }
 
 
   def infer(ast:AST):(Context,TypeExpr,Set[TCons]) = {
-    var adt:Map[Variant,TypeDecl] = ast.getTypes.flatMap(td => td.variants.map(v => (v -> td))).toMap
+    var adt:Map[Variant,TypeDecl] = ast.getTypes.flatMap(td => td.variants.map(v => v -> td)).toMap
     tVars = 0
     infer(ast,adt)
   }
@@ -64,7 +62,7 @@ object TypeInference {
     (res._1,res._2,newCons)
   }
 
-  private def infer(ctx:Context, asg:Assignment, adt:Map[Variant,TypeDecl]/*List[TypeDecl]*/): (Context,TypeExpr,Set[TCons]) = {
+  private def infer(ctx:Context, asg:Assignment, adt:Map[Variant,TypeDecl]): (Context,TypeExpr,Set[TCons]) = {
     // asg: id = expr
     val id:Identifier = asg.variable
     val expr:Expr = asg.expr
@@ -84,60 +82,51 @@ object TypeInference {
     (ctxexp,T,cexp+newConst)
   }
 
-  private def infer(ctx:Context, expr:Expr, adt:Map[Variant,TypeDecl]):(Context,TypeExpr,Set[TCons]) = {
-//    var dt:Map[Variant,TypeDecl] = adt.flatMap(td => td.variants.map(v => (v -> td))).toMap
-    expr match {
-      case Identifier(n) =>
-        // if id is defined already return the type of id, other wise it is undefined
-        if (ctx.contains(n))
-          (ctx,ctx(n),Set())
-        else throw new UndefinedVarException("Unknown identifier: " + n)
-      case t@AdtTerm(n) => try {
-        // find the type of the adt term
-        var variant:Variant = adt.find(k => k._1.name == n).get._1
-        var ttype = getVariantType(adt(variant).name)
-        // replace all parametric types with new variables accordingly
-        ttype = mkNewParametricTVar(ttype,Map())._1
-        // add a new variable to the context
-        var fresh = TVar(freshVar())
-        // add the corresponding constraint
-        var tcons = TCons(fresh,ttype)
-        //todo: see how to handle TVar in this case
-        (ctx, fresh, Set(tcons))
+  private def infer(ctx:Context, expr:Expr, adt:Map[Variant,TypeDecl]):(Context,TypeExpr,Set[TCons]) = expr match {
+    case Identifier(n) =>
+      // if id is defined already return the type of id, other wise it is undefined
+      if (ctx.contains(n))
+        (ctx,ctx(n),Set())
+      else throw new UndefinedVarException("Unknown identifier: " + n)
+    case t@AdtTerm(n) => try {
+      // find the type of the adt term
+      var variant:Variant = adt.find(k => k._1.name == n).get._1
+      var ttype = getVariantType(adt(variant).name)
+      // replace all parametric types with new variables accordingly
+      ttype = mkNewParametricTVar(ttype,Map())._1
+      // create a new variable
+      var fresh = TVar(freshVar())
+      // add the corresponding constraint
+      var tcons = TCons(fresh,ttype)
+      //todo: see how to handle TVar in this case
+      (ctx, fresh, Set(tcons))
       } catch {
         case e:NoSuchElementException => throw new TypeException("Unknown variant name: " + n)
       }
-      case c@AdtConsExpr(n, ps) => try {
-        // find the type of the constructor
-        var variant = adt.find(k => k._1.name == n).get._1
-        var rctype = getVariantType(adt(variant).name)
-        // find the type of the parameters
-        var ctype = getFormalParamsTypes(variant,adt)
-        // replace all parametric types with new variables accordingly in the parameters and in the type of the constructor
-        val (cctype,m) = mkNewParametricTVars(ctype,Map())//._1
-        rctype = mkNewParametricTVar(rctype,m)._1
-        println("The type of the constructor name is = " + rctype)
-        println("the type of the formal parameters of the constructor are"+ cctype)
-        // infer the types of the actual parameters
-        var pstypes = ps.map(p => infer(ctx,p,adt))
-        println("the type of the actual parameters of the constructor are"+ pstypes.map(c=>c._2).mkString("\n"))
-        // mk constructor constraints from each actual param to each formal param
-        // todo: asumme for now we already check at parsing if the number of params match
-        // todo: see how to handle TVar in this case
-//        var paramsConst:Set[TCons] = mkConstCons(cctype,pstypes.map(pt => pt._2))
-        var paramsConst:Set[TCons] = cctype.zip(pstypes.map(pt => pt._2)).map(p => TCons(p._1,p._2)).toSet
-        println("the constraints parameter to parameter are "+ paramsConst.mkString("\n"))
-        // mk the type of this expression:
-        var T = TVar(freshVar())
-        // mk new constrait for T and for the fresh variable
-        var newCons = TCons(T,rctype)
-        // mk new Context from inferred context
-        var newCtx:Context = pstypes.map(pt => pt._1).foldRight(ctx)(_.join(_))
-        (newCtx, T, paramsConst++pstypes.flatMap(pt=> pt._3)+(newCons))
+    case c@AdtConsExpr(n, ps) => try {
+      // find the type of the constructor
+      var variant = adt.find(k => k._1.name == n).get._1
+      var rctype = getVariantType(adt(variant).name)
+      // find the type of the parameters
+      var ctype = getFormalParamsTypes(variant,adt)
+      // replace all parametric types with new variables accordingly in the parameters and in the type of the constructor
+      val (cctype,m) = mkNewParametricTVars(ctype,Map())//._1
+      rctype = mkNewParametricTVar(rctype,m)._1
+      // infer the types of the actual parameters
+      var pstypes = ps.map(p => infer(ctx,p,adt))
+      // mk constructor constraints from each actual param to each formal param
+      // todo: asumme for now we already check at parsing if the number of params match
+      var paramsConst:Set[TCons] = cctype.zip(pstypes.map(pt => pt._2)).map(p => TCons(p._1,p._2)).toSet
+      // mk the type of this expression:
+      var T = TVar(freshVar())
+      // mk new constrait for T and for the fresh variable
+      var newCons = TCons(T,rctype)
+      // mk new Context from inferred context
+      var newCtx:Context = pstypes.map(pt => pt._1).foldRight(ctx)(_.join(_))
+      (newCtx, T, paramsConst++pstypes.flatMap(pt=> pt._3)+(newCons))
       } catch {
         case e:NoSuchElementException => throw new TypeException("Unknown variant name: " + n)
       }
-    }
   }
 
 
