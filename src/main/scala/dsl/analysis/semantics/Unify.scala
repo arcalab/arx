@@ -24,19 +24,4 @@ object Unify {
       case (t1,t2) => throw new TypeException(s"Impossible to unify $t1 with $t2")
   }
 
-  def simplify(sol:Map[TVar,TypeExpr]):Map[TVar,TypeExpr] = {
-    var sols = sol.toSet
-    var res = sols.map(s => simplify(s,sols))
-    res.toMap
-  }
-
-  private def simplify(s:(TVar,TypeExpr),sols:Set[(TVar,TypeExpr)]):(TVar,TypeExpr) = s match {
-    case (t1@TVar(n1),t2@TVar(n2)) =>
-      // find the definition of t2
-      var te = sols.find(sub => sub._1==t2)
-      // if it exist return a new substitution from t1 to the actual type expression of t2
-      if (te.isDefined) (t1,te.get._2) else  (t1,t2)
-    case _ => s
-  }
-
 }

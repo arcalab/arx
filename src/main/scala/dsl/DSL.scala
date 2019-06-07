@@ -18,7 +18,7 @@ object DSL {
     case f:Parser.NoSuccess => throw new ParsingException("Parser failed: "+f.msg)
   }
 
-  def unify(cons:Set[TCons]):Map[TVar,TypeExpr] = Unify.simplify(Unify(cons))
+  def unify(cons:Set[TCons]):Map[TVar,TypeExpr] = Unify(cons)
 
   def infer(ast:AST):(Context,TypeExpr,Set[TCons]) = TypeInference.infer(ast)
 
@@ -26,7 +26,7 @@ object DSL {
     // mk type constraints
     val (ctx,t,cons) = infer(ast)
     // try to unify them
-    val substitutions:Map[TVar,TypeExpr] = unify(cons)
+    val substitutions:Map[TVar,TypeExpr] = Substitution(unify(cons))
     // return the type for each identifier
     ctx.get.map(e => e._1 -> substitutions(e._2))
   }
