@@ -15,20 +15,20 @@ object TypeInference {
   class Context {
     protected val ctx: Map[String,TVar] = Map()
 
+    def get:Map[String,TVar] = ctx
+
     def contains(x:String):Boolean = ctx contains x
 
     def apply(x:String):TVar = ctx(x)
 
-    // todo: decide how to handle multiple definitions of a variable, for now assume that doesn't happen
+    // todo: handle multiple definitions of a variable, for now assume it doesn't happen
     def add(x:String,t:TVar):Context = {
       var oldCtx = ctx
       new Context {
           override val ctx = oldCtx + (x -> t)
         }
     }
-
-
-    // todo: decide how to handle multiple definitions of a variable, for now assume that doesn't happen
+    // todo: handle multiple definitions of a variable, for now we don't have different scopes
     def join(other:Context):Context = {
       var oldCtx = ctx
       var newCon:Context = other
@@ -37,21 +37,33 @@ object TypeInference {
       }
       newCon
     }
-
-    def get:Map[String,TVar] = ctx
-
   }
 
-
-  def infer(ast:AST):(Context,TypeExpr,Set[TCons]) = {
+  /* todo: how to handle cases like:
+      -----Case1-----
+      x = Nil ---> is going to say that x should be of type List<T>
+      y = Cons(Zero,x) ---> is going to say that x should be of type List<Nat>
+      z = Cons(True,x) ---> is going to say that x should be of type List<Bool>
+      PROBLEM: the unification is going to fail
+      -----Case2-----
+      x = Nil ---> is going to say that x should be of type List<T>
+      PROBLEM?: if x is never use on the rhs, T is never going to be match with a concrete type
+  */
+  /**
+    * Infers the type of the each assignment/expression of the AST by means of constraint typing
+    * @param ast
+    * @param adt
+    * @return a constraint typing relation: (context, type of the last expression, set of type constraints)
+    */
+  private def infer(ast:AST):(Context,TypeExpr,Set[TCons]) = {
+    // find known adt from the ast
     var adt:Map[Variant,TypeDecl] = ast.getTypes.flatMap(td => td.variants.map(v => v -> td)).toMap
+    // initialize type variables
     tVars = 0
-    infer(ast,adt)
-  }
-
-
-  def infer(ast:AST,adt:Map[Variant,TypeDecl]):(Context,TypeExpr,Set[TCons]) = {
+    // get all assignments (for now are the only expressions to type
     var assig = ast.getAssignments
+    // for each assignment infer its type, using the contex from previous inferred assignments
+    // accumulate all the constraints from each inferred assignment
     var res:(Context,TypeExpr,Set[TCons]) = (new Context,TUnit,Set[TCons]())
     var newCons:Set[TCons] = Set()
     var newCtx = new Context
@@ -60,9 +72,19 @@ object TypeInference {
       newCtx = res._1
       newCons ++= res._3
     }
+    // return the last known context, the type of the last assignment and the accumulated set of constraints
     (res._1,res._2,newCons)
   }
 
+  /**
+    * Given an assignment id = expression, finds the type of the id and the expr
+    * by means of constraint typing
+    *
+    * @param ctx
+    * @param asg
+    * @param adt
+    * @return a new constraint typing relation: (context, type of the id, set of type constraints)
+    */
   private def infer(ctx:Context, asg:Assignment, adt:Map[Variant,TypeDecl]): (Context,TypeExpr,Set[TCons]) = {
     // asg: id = expr
     val id:Identifier = asg.variable
@@ -83,6 +105,15 @@ object TypeInference {
     (ctxexp,T,cexp+newConst)
   }
 
+  /**
+    * Given a expression, finds the type of the expression based on the kind of expression
+    * (adtTerm, adtConst, or id for now) by means of constraint typing
+    *
+    * @param ctx
+    * @param asg
+    * @param adt
+    * @return a new constraint typing relation: (context, type of the expression, set of type constraints)
+    */
   private def infer(ctx:Context, expr:Expr, adt:Map[Variant,TypeDecl]):(Context,TypeExpr,Set[TCons]) = expr match {
     case Identifier(n) =>
       // if id is defined already return the type of id, other wise it is undefined
@@ -131,6 +162,13 @@ object TypeInference {
   }
 
 
+  /**
+    * Given a ADT variant, return the type of its formal parameters, if any
+    *
+    * @param v
+    * @param adt
+    * @return
+    */
   def getFormalParamsTypes(v:Variant, adt:Map[Variant,TypeDecl]):List[TypeExpr] = v match {
     case AdtVal(n) => List()
     case AdtConst(n,ps) =>
@@ -139,14 +177,28 @@ object TypeInference {
       tp
   }
 
-
+  /**
+    * Given a TypeName return its type:
+    * a) An abstract type name returns a type variable with the same name
+    * b) A concrete type name returns a BaseType with the same name, and the corresponding type of each parameter
+    * @param tn
+    * @return
+    */
   def getVariantType(tn:TypeName):TypeExpr = tn match {
     case AbsTypeName(atn) => TVar(atn)// TVar(freshVar())
-    case ConTypeName(ctn,ps) =>
-      BaseType(ctn,ps.map(p => getVariantType(p)))
-//      mkNewParametricTVars(res,Map())._1
+    case ConTypeName(ctn,ps) => BaseType(ctn,ps.map(p => getVariantType(p)))
   }
 
+  /**
+    * Given a list of type expression (of parameters) which may have parametric types (abstract types)
+    * creates a new parametric type variable for each abstract type, and replace each
+    * appearance of the abstract type with the corresponding variable
+    * E.g.: List<a> -> List<T> for some new T
+    *
+    * @param tes
+    * @param map
+    * @return
+    */
   def mkNewParametricTVars(tes:List[TypeExpr],map:Map[TVar,TVar]):(List[TypeExpr],Map[TVar,TVar]) = {
     var nmap = map
     var ntes = List[TypeExpr]()
@@ -157,7 +209,16 @@ object TypeInference {
     }
     (ntes,nmap)
   }
-
+  /**
+    * Given a type expression which may have parametric types
+    * creates a new type variable for each abstract type, and replace each
+    * appearance of the abstract type with the corresponding variable.
+    * E.g.: List<a> -> List<T> for some new T
+    *
+    * @param tes
+    * @param map
+    * @return
+    */
   def mkNewParametricTVar(te: TypeExpr,map:Map[TVar,TVar]):(TypeExpr,Map[TVar,TVar]) = te match {
     case TUnit => (TUnit,map)
     case t@TVar(n) if n.matches("[a-z][a-zA-Z0-9_]*") =>

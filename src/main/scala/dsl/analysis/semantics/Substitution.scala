@@ -40,8 +40,12 @@ object Substitution {
         (known(t),known)
       else {
         // find the concrete type of t and add t to the known variables
-        val (ct, nk) = substitute(sols(t), sols, known)
-        (ct, nk + (t -> ct))
+        if (sols.contains(t)) {
+          val (ct, nk) = substitute(sols(t), sols, known)
+          (ct, nk + (t -> ct))
+        } else
+          // todo: if t is not defined in the solution, let it undefined for know
+          (t,known)
       }
     case BaseType(n,ps) =>
       // substitute each parameter of the base type remembering the new known variables

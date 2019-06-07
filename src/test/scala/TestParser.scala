@@ -1,4 +1,4 @@
-import analysis.syntax.Parser
+import dsl.analysis.syntax._
 import org.scalatest.FlatSpec
 import dsl._
 import common.ParsingException
@@ -16,14 +16,14 @@ class TestParser extends FlatSpec {
     // type name with params
     ConTypeName("List",List(AbsTypeName("a"))),
     // variants of the type
-    List( TypeVal("Nil"),
-          TypeCons("Cons",List(AbsTypeName("a"),ConTypeName("List",List(AbsTypeName("a")))))))
+    List( AdtVal("Nil"),
+          AdtConst("Cons",List(AbsTypeName("a"),ConTypeName("List",List(AbsTypeName("a")))))))
 
   var t2 = TypeDecl(
     // type name with no params
     ConTypeName("Bool",List()),
     // variants of the type
-    List( TypeVal("True"),TypeVal("False")))
+    List( AdtVal("True"),AdtVal("False")))
 
   var asg1 = Assignment(Identifier("x"),AdtTerm("Nil"))
   var asg2 = Assignment(Identifier("y"),AdtConsExpr("Cons",List(AdtTerm("True"),AdtTerm("Nil"))))
@@ -73,7 +73,6 @@ class TestParser extends FlatSpec {
   def notOK(code:String) =
     s"The program $code" should "throw a ParsingException" in {
     assertThrows[ParsingException] {Parser.parse(code)}
-
   }
 
 }
