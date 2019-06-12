@@ -147,7 +147,7 @@ object TypeInference {
       // infer the types of the actual parameters
       var pstypes = ps.map(p => infer(ctx,p,adt))
       // mk constructor constraints from each actual param to each formal param
-      // todo: asumme for now we already check at parsing if the number of params match
+      // it was already checked at parsing if the number of params matched
       var paramsConst:Set[TCons] = cctype.zip(pstypes.map(pt => pt._2)).map(p => TCons(p._1,p._2)).toSet
       // mk the type of this expression:
       var T = TVar(freshVar())

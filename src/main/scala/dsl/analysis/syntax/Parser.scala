@@ -13,9 +13,11 @@ import scala.util.parsing.combinator.RegexParsers
 object Parser extends RegexParsers {
 
   private var adts:List[TypeDecl] = List()
+  private var names:List[String] = List() // no need for scopes for now.
 
   def parse(code:String):ParseResult[AST] = {
     adts = List()
+    names = List()
     parseAll(program,code)
   }
 
@@ -38,15 +40,17 @@ object Parser extends RegexParsers {
   /* Type declaration */
 
   def typeDecl:Parser[AST] =
-    "data" ~
-      typeNameDecl ~ "=" ~
-        typeVariants ^^ {case _~n~_~vs =>
+    "data" ~ typeNameDecl ~ "=" ~ typeVariants ^^
+      { case _~n~_~vs =>
           adts++=List(TypeDecl(n,vs))
           TypeDecl(n,vs)
         }
 
   def typeNameDecl:Parser[TypeName] =
-    typeId ~ opt("<"~> typeParams <~">")  ^^ {case n~opt =>  ConTypeName(n,opt.getOrElse(List()))}
+    typeId ~ opt("<"~> typeParams <~">")  ^^ {
+      case n~opt if names.contains(n) => throw new ParsingException(s"Name $n is already declared within the scope")
+      case n~opt =>  names::=n; ConTypeName(n,opt.getOrElse(List()))
+    }
 
   def typeNames:Parser[List[TypeName]] =
     typeName ~ "," ~ typeNames ^^ {case n~_~ns => n::ns} |
@@ -66,8 +70,14 @@ object Parser extends RegexParsers {
     typeVariant ~ opt("|" ~> typeVariants) ^^ {case v~vs => v::vs.getOrElse(List())}
 
   def typeVariant: Parser[Variant] =
-    typeId ~ "(" ~ typeNames ~ ")" ^^ {case n~_~params~_ => AdtConst(n,params)}|
-    typeId ^^ {case n => AdtVal(n)}
+    typeId ~ "(" ~ typeNames ~ ")" ^^ {
+      case n~_~params~_ if names.contains(n) => throw new ParsingException(s"Name $n is already declared within the scope")
+      case n~_~params~_ => names::=n; AdtConst(n,params)
+    } |
+    typeId ^^ {
+      case n if names.contains(n) => throw new ParsingException(s"Name $n is already declared within the scope")
+      case n => names::=n; AdtVal(n)
+    }
 
   /* Assignments */
 
@@ -78,7 +88,12 @@ object Parser extends RegexParsers {
 
   def expr:Parser[Expr] =
     identifier ~ "("~paramExprs~")" ^^ {
-      case c~_~par~_ if (c.matches(adtConstructor)) => AdtConsExpr(c,par)
+      case c~_~par~_ if (c.matches(adtConstructor)) =>
+        if (sizeOfParams(c) == par.size)
+          AdtConsExpr(c,par)
+        else
+          throw new ParsingException("Number of actual parameters does not corresponds with number of formal " +
+            "parameters for constructor: "+ c)
       case c~_~par~_ => throw new ParsingException("Unknown Constructor: " + c )} |
     identifier ^^ {case i => if(i.matches(adtValue)) AdtTerm(i) else Identifier(i) }
 
@@ -86,17 +101,40 @@ object Parser extends RegexParsers {
     expr ~ "," ~ expr ^^ {case e1~_~e2 => List(e1,e2)} |
       expr ^^ {case e => List(e)}
 
-  /* ADT Expressions */
+  /* ADT Auxiliary functions */
 
-  def adtConstructor:String = adts.flatMap(t => t.variants).map(v => v match {
+  /**
+    * regex expression containing all known adt constructor names
+    * @return
+    */
+  lazy val adtConstructor:String = adts.flatMap(t => t.variants).map(v => v match {
       case AdtVal(n) => ""
       case AdtConst(n,param) => n.r
     }).filterNot(_ == "").mkString("|")
 
-  def adtValue:String = adts.flatMap(t => t.variants).map(v => v match {
+  /**
+    * regex expression containing all known adt value names
+    * @return
+    */
+  lazy val adtValue:String = adts.flatMap(t => t.variants).map(v => v match {
       case AdtVal(n) => n.r
       case AdtConst(n,param) => ""
     }).filterNot(_ == "").mkString("|")
 
-  /* Functions */
+  /**
+    * Number of parameters for a given ADT constructor
+    * @param adtConst
+    * @return
+    */
+  def sizeOfParams(adtConst:String):Int = {
+    var variant =  adts.flatMap(t => t.variants).find(v => v.name == adtConst)
+    if (variant.isDefined)
+      variant.get match {
+       case AdtVal(n) => throw new ParsingException("An ADT Value Variant has no Parameters: ")
+       case AdtConst(n,p) => p.size
+      }
+    else
+      throw new ParsingException("Unknown Constructor: " + adtConst)
+  }
+
 }
