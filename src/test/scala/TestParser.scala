@@ -63,7 +63,7 @@ class TestParser extends FlatSpec {
   def OK(code:String,ast:AST) =
     s"The program $code" should "be accepted by the parser" in {
 //      assert(Parser.parse(code).isInstanceOf[Parser.Success[AST]])
-      Parser.parse(code) match {
+      Parser.parseProgram(code) match {
         case Parser.Success(res, next) => assertResult(ast)(res)
         case f:Parser.NoSuccess => throw new ParsingException("Parser failed: "+f.msg)
       }
@@ -72,7 +72,7 @@ class TestParser extends FlatSpec {
 
   def notOK(code:String) =
     s"The program $code" should "throw a ParsingException" in {
-    assertThrows[ParsingException] {Parser.parse(code)}
+    assertThrows[ParsingException] {Parser.parseProgram(code)}
   }
 
 }

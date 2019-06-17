@@ -1,5 +1,7 @@
 package dsl.analysis.syntax
 
+import preo.ast.Connector
+
 /**
   * Created by guillecledou on 2019-05-31
   */
@@ -45,3 +47,5 @@ case class Assignment(variable:Identifier, expr:Expr) extends AST {}
 //case class AdtTerm(term:String) extends AST {}
 //case class AdtConsExpr(cons:String,params:List[AST]) extends AST {}
 
+
+case class ConnDef(name:String, c:Connector) extends AST {}

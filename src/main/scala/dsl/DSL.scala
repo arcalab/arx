@@ -12,7 +12,7 @@ import dsl.analysis.syntax.{AST, Parser}
 
 object DSL {
 
-  def parse(code:String):AST = Parser.parse(code) match {
+  def parse(code:String):AST = Parser.parseProgram(code) match {
     case Parser.Success(result, next) => result
     case f:Parser.NoSuccess => throw new ParsingException("Parser failed: "+f.msg)
   }
