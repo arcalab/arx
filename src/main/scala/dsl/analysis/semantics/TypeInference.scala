@@ -2,6 +2,7 @@ package dsl.analysis.semantics
 
 import dsl.analysis.syntax._
 import dsl.common.{TypeException, UndefinedVarException}
+import preo.DSL
 
 /**
   * Created by guillecledou on 2019-06-03
@@ -60,7 +61,10 @@ object TypeInference {
     var adt:Map[Variant,TypeDecl] = ast.getTypes.flatMap(td => td.variants.map(v => v -> td)).toMap
     // initialize type variables
     tVars = 0
-    // get all assignments (for now are the only expressions to type
+    // get all connector definitions
+    var conns = ast.getDefs
+    // todo: for each defined connector infer its type
+    // get all assignments (for now are the only expressions to type)
     var assig = ast.getAssignments
     // for each assignment infer its type, using the contex from previous inferred assignments
     // accumulate all the constraints from each inferred assignment
@@ -159,6 +163,19 @@ object TypeInference {
       } catch {
         case e:NoSuchElementException => throw new TypeException("Unknown variant name: " + n)
       }
+    case ConnId(n,ps) =>
+      /*
+      // find the type of the connector with name n
+      var tconn = ctx(n)
+      // find the type of each actual parameter of the connector
+      // if it has no parameters, assume no concrete data is send ~~ unit for now
+      // var psTypes = ps.map(p => infer(ctx,p,adt))
+      // mk a fresh var for the type of this expression
+      var T = TVar(freshVar())
+      // mk a new constraint saying that the type of this expression is of type T
+      var newCons = Set(TCons(T,tconn))
+      (ctx,TUnit,newCons) */
+      (ctx,TUnit,Set())
   }
 
 

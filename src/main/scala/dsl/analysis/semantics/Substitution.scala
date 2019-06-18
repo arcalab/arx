@@ -62,5 +62,6 @@ object Substitution {
       val (ct1,k1) = substitute(t1,sols,known)
       val (ct2,k2) = substitute(t2,sols,k1)
       (TMap(ct1,ct2),k2)
+    case TUnit => (TUnit,known)
   }
 }

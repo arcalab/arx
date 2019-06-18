@@ -2,11 +2,10 @@ package dsl.analysis.syntax
 
 import dsl.common.ParsingException
 import preo.ast.Connector
-import preo.lang
+import preo.{DSL, lang}
 
 import scala.util.matching.Regex
 import scala.util.parsing.combinator.RegexParsers
-
 import dsl.analysis.syntax.SymbolType._
 
 /**
@@ -16,11 +15,13 @@ import dsl.analysis.syntax.SymbolType._
 object Parser extends RegexParsers with preo.lang.Parser {
 
   private var adts:List[TypeDecl] = List()
+  private var conns:List[ConnDef] = List()
 //  private var names:List[String] = List() // no need for scopes for now.
   private var sym: SymbolsTable = new SymbolsTable
 
   def parseProgram(code:String):ParseResult[AST] = {
     adts = List()
+    conns = List()
 //    names = List()
     sym = new SymbolsTable
     parseAll(program,code)
@@ -97,10 +98,9 @@ object Parser extends RegexParsers with preo.lang.Parser {
 
   /* Connector definitions */
 
-
   def connDef:Parser[ConnDef] =
-  "def" ~ identifierCapOrSmall ~ "= {" ~ preo ~ "}" ^^ {
-    case _~id~_~conn~_ => sym=sym.add(id,CONNNAME); ConnDef(id,conn)
+  "def" ~ identifierCapOrSmall ~ "="~"{" ~ preo ~ "}" ^^ {
+    case _~id~_~_~conn~_ => sym=sym.add(id,CONNNAME); conns::=ConnDef(id,conn); ConnDef(id,conn)
   }
 
   /* Assignments */
@@ -114,15 +114,20 @@ object Parser extends RegexParsers with preo.lang.Parser {
 
   def dataExpr:Parser[Expr] =
     identifierCapOrSmall ~ "("~paramExprs~")" ^^ {
-      case c~_~par~_ if (sym(c)==ADTCONST) =>
+      case c~_~par~_ if sym(c)==ADTCONST =>
         if (sizeOfParams(c) == par.size)
           AdtConsExpr(c,par)
         else throw new ParsingException("Number of actual parameters does not corresponds with number of formal " +
-            "parameters for constructor: "+ c)} |
+            "parameters for constructor: "+ c)
+      case c~_~par~_ if sym(c)==CONNNAME =>
+        // todo: check number of input parameters or total parameters
+        ConnId(c,par)
+      } |
     identifierCapOrSmall ^^ {
-      case i if (sym(i) == ADTVAL) => AdtTerm(i)
-      case i if (sym(i) == VARNAME) =>  Identifier(i)
-      case i if (sym(i) == ADTCONST) => throw new ParsingException(s"Missing actual parameters for constructor ${i}")
+      case i if sym(i) == ADTVAL   => AdtTerm(i)
+      case i if sym(i) == VARNAME  => Identifier(i)
+      case i if sym(i) == ADTCONST => throw new ParsingException(s"Missing actual parameters for constructor ${i}")
+      case i if sym(i) == CONNNAME => ConnId(i)
     }
 
 //  def dataExpr:Parser[Expr] =

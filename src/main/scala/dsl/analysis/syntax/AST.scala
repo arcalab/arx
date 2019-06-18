@@ -19,6 +19,12 @@ sealed trait AST {
     case Statements(sts) => sts.flatMap(_.getAssignments)
     case _ => List()
   }
+
+  def getDefs:List[ConnDef] =  this match {
+    case c@ConnDef(name, con) => List(c)
+    case Statements(sts) => sts.flatMap(_.getDefs)
+    case _ => List()
+  }
 }
 
 case class Statements(sts:List[AST]) extends AST {}
