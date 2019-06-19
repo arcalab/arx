@@ -110,25 +110,39 @@ object Parser extends RegexParsers with preo.lang.Parser {
 
   /* Expressions */
 
-  /* Data Expressions */
-
   def dataExpr:Parser[Expr] =
-    identifierCapOrSmall ~ "("~paramExprs~")" ^^ {
-      case c~_~par~_ if sym(c)==ADTCONST =>
-        if (sizeOfParams(c) == par.size)
-          AdtConsExpr(c,par)
-        else throw new ParsingException("Number of actual parameters does not corresponds with number of formal " +
-            "parameters for constructor: "+ c)
-      case c~_~par~_ if sym(c)==CONNNAME =>
-        // todo: check number of input parameters or total parameters
-        ConnId(c,par)
-      } |
-    identifierCapOrSmall ^^ {
-      case i if sym(i) == ADTVAL   => AdtTerm(i)
-      case i if sym(i) == VARNAME  => Identifier(i)
-      case i if sym(i) == ADTCONST => throw new ParsingException(s"Missing actual parameters for constructor ${i}")
-      case i if sym(i) == CONNNAME => ConnId(i)
+    identifierCapOrSmall ~ opt("("~>paramExprs<~")") ^^ {
+      case c ~ None => sym(c) match {
+        case ADTVAL => AdtTerm(c)
+        case VARNAME => Identifier(c)
+        case ADTCONST => throw new ParsingException(s"Missing actual parameters for constructor ${c}")
+        case CONNNAME => ConnId(c)}
+      case c ~ Some(ps) => sym(c) match {
+        case ADTCONST =>
+          var nparams = sizeOfParams(c)
+          if (nparams == ps.size) AdtConsExpr(c, ps)
+          else throw new ParsingException(s"Constructor ${c} expected $nparams parameters, but ${ps.size} found")
+        case CONNNAME =>
+          // todo: check number of input parameters or total parameters
+          ConnId(c, ps)}
     }
+
+//  def dataExpr:Parser[Expr] =
+//    identifierCapOrSmall ~ "("~paramExprs~")" ^^ {
+//      case c~_~par~_ if sym(c)==ADTCONST =>
+//        if (sizeOfParams(c) == par.size)
+//          AdtConsExpr(c,par)
+//        else throw new ParsingException("Number of actual parameters does not corresponds with number of formal " +
+//            "parameters for constructor: "+ c)
+//      case c~_~par~_ if sym(c)==CONNNAME =>
+//        ConnId(c,par)
+//      } |
+//    identifierCapOrSmall ^^ {
+//      case i if sym(i) == ADTVAL   => AdtTerm(i)
+//      case i if sym(i) == VARNAME  => Identifier(i)
+//      case i if sym(i) == ADTCONST => throw new ParsingException(s"Missing actual parameters for constructor ${i}")
+//      case i if sym(i) == CONNNAME => ConnId(i)
+//    }
 
 //  def dataExpr:Parser[Expr] =
 //    identifierCapOrSmall ~ "("~paramExprs~")" ^^ {
@@ -162,7 +176,6 @@ object Parser extends RegexParsers with preo.lang.Parser {
 //
 //  /**
 //    * regex expression containing all known adt value names
-//    * @return
 //    */
 //  lazy val adtValue:String = adts.flatMap(t => t.variants).map(v => v match {
 //      case AdtVal(n) => n.r

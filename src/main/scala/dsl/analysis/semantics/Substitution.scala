@@ -63,5 +63,36 @@ object Substitution {
       val (ct2,k2) = substitute(t2,sols,k1)
       (TMap(ct1,ct2),k2)
     case TUnit => (TUnit,known)
+
+    case TOpt(t) =>
+      val (ct,nk) = substitute(t,sols,known)
+      (TOpt(ct),nk)
+    case TProd(f,os) =>
+      val (ct,nk) = substitute(f,sols,known)
+      var ostypes = substitute(os.head,sols,known)
+      var cOs = List(ostypes._1)
+      for (o <-os.tail) {
+        ostypes = substitute(o,sols,ostypes._2)
+        cOs ::=ostypes._1
+      }
+      (TProd(ct,cOs),ostypes._2)
+    case TEithers(f,os) =>
+      val (ct,nk) = substitute(f,sols,known)
+      var ostypes = substitute(os.head,sols,known)
+      var cOs = List(ostypes._1)
+      for (o <-os.tail) {
+        ostypes = substitute(o,sols,ostypes._2)
+        cOs ::=ostypes._1
+      }
+      (TEithers(ct,cOs),ostypes._2)
+    case TTuple(f,os) =>
+      val (ct,nk) = substitute(f,sols,known)
+      var ostypes = substitute(os.head,sols,known)
+      var cOs = List(ostypes._1)
+      for (o <-os.tail) {
+        ostypes = substitute(o,sols,ostypes._2)
+        cOs ::=ostypes._1
+      }
+      (TTuple(ct,cOs),ostypes._2)
   }
 }

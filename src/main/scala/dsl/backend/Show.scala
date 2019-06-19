@@ -15,6 +15,12 @@ object Show {
     case BaseType(n,Nil) => n
     case BaseType(n, ps) => n + ps.map(Show(_)).mkString("<",",",">")
     case TUnit => "()"
+
+    case TEithers(h,t) => s"Either<${(h::t).map(Show(_)).mkString(",")}>"
+    case TTuple(h,t) => s"(${(h::t).map(Show(_)).mkString(",")})"
+    case TProd(h,t) => s"${(h::t).map(Show(_)).mkString(" x ")}"
+    case TOpt(t) => s"Opt[${Show(t)}]"
+
   }
 
 }
