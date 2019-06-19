@@ -411,6 +411,33 @@ object TypeInference {
     case TOpt(t) =>
       val (nt,nm) = mkNewParametricTVar(t,map)
       (TOpt(nt),nm)
-//    case TEithers => 
+    case TEithers(f,os) =>
+      val (nf,nmf) = mkNewParametricTVar(f,map)
+      var current = mkNewParametricTVar(os.head,nmf)
+      var nothers = List(current._1)
+      for (o<-os.tail) {
+        current = mkNewParametricTVar(o,current._2)
+        nothers::= current._1
+      }
+      (TEithers(nf,nothers),current._2)
+    case TTuple(f,os) =>
+      val (nf,nmf) = mkNewParametricTVar(f,map)
+      var current = mkNewParametricTVar(os.head,nmf)
+      var nothers = List(current._1)
+      for (o<-os.tail) {
+        current = mkNewParametricTVar(o,current._2)
+        nothers::= current._1
+      }
+      (TTuple(nf,nothers),current._2)
+    case TProd(f,os) =>
+      val (nf,nmf) = mkNewParametricTVar(f,map)
+      var current = mkNewParametricTVar(os.head,nmf)
+      var nothers = List(current._1)
+      for (o<-os.tail) {
+        current = mkNewParametricTVar(o,current._2)
+        nothers::= current._1
+      }
+      (TProd(nf,nothers),current._2)
+
   }
 }
