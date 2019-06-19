@@ -60,7 +60,7 @@ object TypeInference {
     * @param adt
     * @return a constraint typing relation: (context, type of the last expression, set of type constraints)
     */
-  def infer(ast:AST):(Context,Map[String,TypeExpr],TypeExpr,Set[TCons]) = {
+  def infer(ast:AST):(Context,Map[String,TypeConn],TypeExpr,Set[TCons]) = {
     // find known adt from the ast
     var adt:Map[Variant,TypeDecl] = ast.getTypes.flatMap(td => td.variants.map(v => v -> td)).toMap
     // initialize type variables
@@ -78,7 +78,7 @@ object TypeInference {
     */
     // for each connector def infer its type
 //    var tConns:Map[String,(Context,TypeExpr,Set[TCons])] = conns.map(c=> c.name->infer(ctx,c,adt)).toMap
-    var tConns:Map[String,TypeExpr] = conns.map(c => c.name -> TypeConn(c)).toMap
+    var tConns:Map[String,TypeConn] = conns.map(c => c.name -> TypeConn(c)).toMap
     // for each conn create a TVar
 //    var connVars:Map[String,TVar] = tConns.map(tc => tc._1->TVar(freshVar()))
     // for each conn add a constraint from its TVar to its actual type
@@ -145,7 +145,7 @@ object TypeInference {
     * @param adt
     * @return a new constraint typing relation: (context, type of the id, set of type constraints)
     */
-  private def infer(ctx:Context,ctxConn:Map[String,TypeExpr],asg:Assignment, adt:Map[Variant,TypeDecl]): (Context,TypeExpr,Set[TCons]) = {
+  private def infer(ctx:Context,ctxConn:Map[String,TypeConn],asg:Assignment, adt:Map[Variant,TypeDecl]): (Context,TypeExpr,Set[TCons]) = {
     // asg: id = expr
     val id:Identifier = asg.variable
     val expr:Expr = asg.expr
@@ -174,7 +174,7 @@ object TypeInference {
     * @param adt
     * @return a new constraint typing relation: (context, type of the expression, set of type constraints)
     */
-  private def infer(ctx:Context, ctxConn:Map[String,TypeExpr], expr:Expr, adt:Map[Variant,TypeDecl]):(Context,TypeExpr,Set[TCons]) = expr match {
+  private def infer(ctx:Context, ctxConn:Map[String,TypeConn], expr:Expr, adt:Map[Variant,TypeDecl]):(Context,TypeExpr,Set[TCons]) = expr match {
     case Identifier(n) =>
       // if id is defined already return the type of id, other wise it is undefined
       if (ctx.contains(n))
@@ -221,15 +221,26 @@ object TypeInference {
       }
     case ConnId(n,ps) =>
       // find the type of the connector with name n
-      var tconn = ctxConn(n)
+      var tconn:TypeConn = ctxConn(n)
       // find the type of each actual parameter of the connector
-      // if it has no parameters, assume no concrete data is sent ~~ unit for now
-      // var psTypes = ps.map(p => infer(ctx,p,adt))
+      // todo: if it has no parameters, assume no concrete data is sent ~~ unit for now
+      var psTypes = ps.map(p => infer(ctx,ctxConn,p,adt))
+      // create new variables for each abstract var type in the formal parameters (inputs)
+      var renamInsTypes= mkNewParametricTVars(tconn.ins,Map())
+      var renamOutsTypes = mkNewParametricTVars(tconn.outs,renamInsTypes._2)
+      // add a constraint from each formal param to each actual param
+      var paramConst:Set[TCons] = renamInsTypes._1.zip(psTypes.map(pt=>pt._2)).map(p => TCons(p._1,p._2)).toSet
       // mk a fresh var for the type of this expression
       var T = TVar(freshVar())
       // mk a new constraint saying that the type of this expression is of type T
-      var newCons = Set(TCons(T,tconn))
-      (ctx,tconn,newCons)
+//      var connInsType:TypeExpr =
+//        if (tconn.ins.size>1) tconn.ins.init.foldRight[TypeExpr](tconn.ins.last)(TMap(_,_))
+//        else  if (tconn.ins.isEmpty) TUnit else tconn.ins.head
+//      var connOutsType:TypeExpr = if (tconn.ins.size>1) TProd(tconn.ins.head,tconn.ins.tail)
+//      else  if (tconn.ins.isEmpty) TUnit else tconn.ins.head
+      var connType = TypeConn(renamInsTypes._1,renamOutsTypes._1).getType//tconn.getType
+      var newCons = paramConst++Set(TCons(T,connType))++psTypes.flatMap(pt=>pt._3)
+      (ctx,T,newCons)
 //      (ctx,TUnit,Set())
   }
 
@@ -397,5 +408,9 @@ object TypeInference {
     case BaseType(n,ps) =>
       var nres = mkNewParametricTVars(ps,map)
       (BaseType(n,nres._1),nres._2)
+    case TOpt(t) =>
+      val (nt,nm) = mkNewParametricTVar(t,map)
+      (TOpt(nt),nm)
+//    case TEithers => 
   }
 }

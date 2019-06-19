@@ -12,6 +12,21 @@ import preo.backend.Network.Prim
   */
 
 
+case class TypeConn(ins:List[TypeExpr],outs:List[TypeExpr]) {
+  def getType:TypeExpr = {
+    var connInsType:TypeExpr =
+      if (ins.size>1) ins.init.foldRight[TypeExpr](ins.last)(TMap(_,_))
+      else  if (ins.isEmpty) TUnit else ins.head
+    var connOutsType:TypeExpr = if (outs.size>1) TProd(outs.head,outs.tail)
+    else  if (outs.isEmpty) TUnit else outs.head
+    if (ins.isEmpty && outs.isEmpty)
+      TUnit
+    else
+      TMap(connInsType,connOutsType)
+  }
+
+}
+
 /**
   * Helper to type a connector definition
   */
@@ -19,8 +34,9 @@ object TypeConn {
 
   private var tVars:Int = 0
   private def freshVar():String = {tVars+=1; s"_${(tVars-1)}"}
-  private var prettiSeed = 1
+  private var prettiSeed = 0
   private def prettifySeed():Int = {prettiSeed+=1; prettiSeed-1}
+  private var tvars2pretty:Map[String,String] = Map()
 
   /**
     * Type a connector definition
@@ -28,16 +44,40 @@ object TypeConn {
     * @param connDef connector definition
     * @return the type expression of the defined connector
     */
-  def apply(connDef: ConnDef):TypeExpr = {
+//  def apply(connDef: ConnDef):TypeExpr = {
+//    // initialize seeds
+//    tVars =0
+//    prettiSeed = 0
+//    // infer connector type
+//    val (tvar,const) = infer(connDef)
+//    // try to unify and substitute
+//    val substitutions:Map[TVar,TypeExpr] = Substitute(Unify(const))
+//    prettify(tvar.substitute(tvar,substitutions(tvar)))
+//  }
+  def apply(connDef: ConnDef):TypeConn = {
     // initialize seeds
     tVars =0
     prettiSeed = 0
+    tvars2pretty = Map()
+    // convert the defined connector into a network
+    var network = Network(DSL.unsafeCoreConnector(connDef.c))
     // infer connector type
-    val (tvar,const) = infer(connDef)
+    val (tvar,const) = infer(connDef)//network
     // try to unify and substitute
-    val substitutions:Map[TVar,TypeExpr] = Substitution(Unify(const))
-    prettify(tvar.substitute(tvar,substitutions(tvar)))
+    val substitutions:Map[TVar,TypeExpr] = Substitute(Unify(const))
+    println(s"tvars:${tvar}")
+    var ins = //if (network.ins.isEmpty) List() else
+      network.ins.map(i=> tvar(i)).map(tv=> prettify(tv.substitute(tv,substitutions.getOrElse(tv,tv))))
+    println(s"Substitutions:${substitutions}")
+    var outs = //if (network.outs.isEmpty) List() else
+      network.outs.map(i=> tvar(i)).map(tv=> prettify(tv.substitute(tv,substitutions.getOrElse(tv,tv))))
+
+    var res = TypeConn(ins,outs)
+    //prettify(tvar.substitute(tvar,substitutions(tvar)))
+    res
   }
+
+
 
   /**
     * Given a connector definition, returns its type
@@ -48,7 +88,7 @@ object TypeConn {
     * @param adt
     * @return
     */
-  private def infer(connDef:ConnDef):(TVar,Set[TCons]) = {
+  private def infer(connDef:ConnDef):(Map[Int,TVar],Set[TCons]) = { //:(TVar,Set[TCons]) = {
     def mkTCons(tvars:List[TypeExpr]):Set[TCons] = tvars match {
       case Nil => Set()
       case h::Nil=> Set()
@@ -61,22 +101,24 @@ object TypeConn {
       // closed network
       case (Nil,Nil) =>
         var T = TVar(freshVar)
-        (T,Set(TCons(T,TUnit)))
+         (Map(),Set())
+//        (T,Set(TCons(T,TUnit)))
       // no outputs
       case (ins,Nil) =>
         // for each in create a new freshvar
-        var Tins = ins.map(i=>TVar(freshVar()))
+//        var Tins = ins.map(i=>TVar(freshVar()))
         // the type of the connector is Tin1 -> ... -> TinN -> TUnit
-        var TConn = Tins.foldRight[TypeExpr](TUnit)(TMap(_,_))
-        var T = TVar(freshVar())
-        (T,Set(TCons(T,TConn)))
+//        var TConn = Tins.foldRight[TypeExpr](TUnit)(TMap(_,_))
+//        var T = TVar(freshVar())
+         (ins.map(i => i->TVar(freshVar())).toMap,Set())
+//        (T,Set(TCons(T,TConn)))
       // possible inputs and definitely outputs
       case (ins,outs) =>
         // infer the type for each prim
         var Tprims = network.prims.flatMap(p=> infer(p))
         // group types by port
         var portTypes = Tprims.groupBy(_._1).mapValues(_.map(_._2))
-        // make for each port that has more that one type variable, make a constraint for them to be equal
+        // for each port that has more that one type variable, make a constraint for them to be equal
         var newCons = portTypes.flatMap(pt=> mkTCons(pt._2)).toSet
         // make the type of the connector: Tin1 -> ... -> TinN -> Tout1 x ... x ToutN
         // first, the type of the output
@@ -85,7 +127,9 @@ object TypeConn {
         var TConn = (ins).map(p=> portTypes(p).head)
           .foldRight[TypeExpr](Tout)(TMap(_,_))
         var T = TVar(freshVar())
-        (T,newCons+TCons(T,TConn))
+        var Tports = (ins++outs).map(p => p->TVar(freshVar())).toMap//((ins++outs).map(p=> portTypes(p).head))
+        (Tports,newCons++Tports.map(e=> TCons(e._2,portTypes(e._1).head)))
+//        (T,newCons+TCons(T,TConn))
     }
   }
 
@@ -148,15 +192,15 @@ object TypeConn {
   }
 
   private def prettify(te: TypeExpr):TypeExpr = {
-    var known:Map[String,String] = Map()
+//    var tvars2pretty:Map[String,String] = Map()
     def pretty(te: TypeExpr): TypeExpr = te match {
       case t@TVar(n) =>
         if (n.startsWith("_")) {
-          if (known.contains(n))
-            TVar(known(n))
+          if (tvars2pretty.contains(n))
+            TVar(tvars2pretty(n))
           else {
             var s = intToAlph(prettifySeed())
-            known+= (n->s)
+            tvars2pretty+= (n->s)
             TVar(s)
           }
         } else t

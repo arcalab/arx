@@ -1,11 +1,11 @@
 package dsl.analysis.semantics
 
 /**
-  * Created by guillerminacledou on 2019-06-07
+  * Created by guillecledou on 2019-06-07
   */
 
 
-object Substitution {
+object Substitute {
 
   /**
     * Substitute each type variable that might appear on a type expression with the

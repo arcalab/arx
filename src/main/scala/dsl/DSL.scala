@@ -22,15 +22,19 @@ object DSL {
 
   def unify(cons:Set[TCons]):Map[TVar,TypeExpr] = Unify(cons)
 
-  def infer(ast:AST):(Context,Map[String,TypeExpr],TypeExpr,Set[TCons]) = TypeInference.infer(ast)
+  def infer(ast:AST):(Context,Map[String,TypeConn],TypeExpr,Set[TCons]) = TypeInference.infer(ast)
 
   def typeCheck(ast: AST):Map[String,TypeExpr] = {
     // mk type constraints
     val (ctx,tconns,t,cons) = infer(ast)
     // try to unify them
-    val substitutions:Map[TVar,TypeExpr] = Substitution(unify(cons))
+    println("About to substitute")
+    val substitutions:Map[TVar,TypeExpr] = Substitute(unify(cons))
+    // mk type of connector
+    var connTypes = tconns.map(c=> c._1->c._2.getType)
     // return the type for each identifier
-    ctx.get.map(e => e._1 -> substitutions(e._2))++tconns
+    println("Show substitution")
+    ctx.get.map(e => e._1 -> substitutions(e._2))++connTypes//tconns
   }
 
   def unsafeCoreConnector(c:Connector):CoreConnector =
