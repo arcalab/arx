@@ -2,6 +2,7 @@ package dsl.analysis.semantics
 
 import dsl.DSL
 import dsl.analysis.syntax.{ConnDef, TypeDecl, Variant}
+import dsl.backend.Prettify
 import dsl.common.TypeException
 import preo.ast.CPrim
 import preo.backend.Network
@@ -13,17 +14,24 @@ import preo.backend.Network.Prim
 
 
 case class TypeConn(ins:List[TypeExpr],outs:List[TypeExpr]) {
+
   def getType:TypeExpr = {
-    var connInsType:TypeExpr =
-      if (ins.size>1) ins.init.foldRight[TypeExpr](ins.last)(TMap(_,_))
-      else  if (ins.isEmpty) TUnit else ins.head
-    var connOutsType:TypeExpr = if (outs.size>1) TProd(outs.head,outs.tail)
-    else  if (outs.isEmpty) TUnit else outs.head
     if (ins.isEmpty && outs.isEmpty)
       TUnit
     else
-      TMap(connInsType,connOutsType)
+      TMap(this.getInputType,this.getOutputType)
   }
+
+  def getOutputType:TypeExpr =
+    if (outs.size>1)
+      TProd(outs.head,outs.tail)
+    else if (outs.isEmpty) TUnit else outs.head
+
+
+  def getInputType:TypeExpr =
+    if (ins.size>1)
+      ins.init.foldRight[TypeExpr](ins.last)(TMap(_,_))
+    else if (ins.isEmpty) TUnit else ins.head
 
 }
 
@@ -34,9 +42,9 @@ object TypeConn {
 
   private var tVars:Int = 0
   private def freshVar():String = {tVars+=1; s"_${(tVars-1)}"}
-  private var prettiSeed = 0
-  private def prettifySeed():Int = {prettiSeed+=1; prettiSeed-1}
-  private var tvars2pretty:Map[String,String] = Map()
+//  private var prettiSeed = 0
+//  private def prettifySeed():Int = {prettiSeed+=1; prettiSeed-1}
+//  private var tvars2pretty:Map[String,String] = Map()
 
   /**
     * Type a connector definition
@@ -57,23 +65,23 @@ object TypeConn {
   def apply(connDef: ConnDef):TypeConn = {
     // initialize seeds
     tVars =0
-    prettiSeed = 0
-    tvars2pretty = Map()
+    // reset prettifier
+    Prettify.reset()
+//    prettiSeed = 0
+//    tvars2pretty = Map()
     // convert the defined connector into a network
     var network = Network(DSL.unsafeCoreConnector(connDef.c))
     // infer connector type
     val (tvar,const) = infer(connDef)//network
     // try to unify and substitute
     val substitutions:Map[TVar,TypeExpr] = Substitute(Unify(const))
-    println(s"tvars:${tvar}")
-    var ins = //if (network.ins.isEmpty) List() else
-      network.ins.map(i=> tvar(i)).map(tv=> prettify(tv.substitute(tv,substitutions.getOrElse(tv,tv))))
-    println(s"Substitutions:${substitutions}")
-    var outs = //if (network.outs.isEmpty) List() else
-      network.outs.map(i=> tvar(i)).map(tv=> prettify(tv.substitute(tv,substitutions.getOrElse(tv,tv))))
-
+    // base on the substitutions, replace variables by the corresponding typeExpr in inputs and outputs types,
+    // and prettify free variables
+    var ins =
+      network.ins.map(i=> tvar(i)).map(tv=> Prettify(tv.substitute(tv,substitutions.getOrElse(tv,tv))))
+    var outs =
+      network.outs.map(i=> tvar(i)).map(tv=> Prettify(tv.substitute(tv,substitutions.getOrElse(tv,tv))))
     var res = TypeConn(ins,outs)
-    //prettify(tvar.substitute(tvar,substitutions(tvar)))
     res
   }
 
@@ -191,34 +199,34 @@ object TypeConn {
       throw new TypeException(s"Unknown type for primitive ${p.name}")
   }
 
-  private def prettify(te: TypeExpr):TypeExpr = {
-//    var tvars2pretty:Map[String,String] = Map()
-    def pretty(te: TypeExpr): TypeExpr = te match {
-      case t@TVar(n) =>
-        if (n.startsWith("_")) {
-          if (tvars2pretty.contains(n))
-            TVar(tvars2pretty(n))
-          else {
-            var s = intToAlph(prettifySeed())
-            tvars2pretty+= (n->s)
-            TVar(s)
-          }
-        } else t
-      case TMap(t1, t2) => TMap(pretty(t1), pretty(t2))
-      case TOpt(t) => TOpt(pretty(t))
-      case TProd(t, ts) => TProd(pretty(t), ts.map(pretty))
-      case TEithers(t, ts) => TEithers(pretty(t), ts.map(pretty))
-      case TTuple(t, ts) => TTuple(pretty(t), ts.map(pretty))
-      case t => t
-    }
-    pretty(te)
-  }
-
-  private def intToAlph(i:Int):String = {
-    var quotient = i/26
-    var rem = i%26
-    var res = ('a'.toInt + rem).toChar
-    if (quotient == 0 ) res.toString else intToAlph(quotient-1)+res
-  }
+//  private def prettify(te: TypeExpr):TypeExpr = {
+////    var tvars2pretty:Map[String,String] = Map()
+//    def pretty(te: TypeExpr): TypeExpr = te match {
+//      case t@TVar(n) =>
+//        if (n.startsWith("_")) {
+//          if (tvars2pretty.contains(n))
+//            TVar(tvars2pretty(n))
+//          else {
+//            var s = intToAlph(prettifySeed())
+//            tvars2pretty+= (n->s)
+//            TVar(s)
+//          }
+//        } else t
+//      case TMap(t1, t2) => TMap(pretty(t1), pretty(t2))
+//      case TOpt(t) => TOpt(pretty(t))
+//      case TProd(t, ts) => TProd(pretty(t), ts.map(pretty))
+//      case TEithers(t, ts) => TEithers(pretty(t), ts.map(pretty))
+//      case TTuple(t, ts) => TTuple(pretty(t), ts.map(pretty))
+//      case t => t
+//    }
+//    pretty(te)
+//  }
+//
+//  private def intToAlph(i:Int):String = {
+//    var quotient = i/26
+//    var rem = i%26
+//    var res = ('a'.toInt + rem).toChar
+//    if (quotient == 0 ) res.toString else intToAlph(quotient-1)+res
+//  }
 
 }

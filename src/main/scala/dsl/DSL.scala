@@ -28,12 +28,10 @@ object DSL {
     // mk type constraints
     val (ctx,tconns,t,cons) = infer(ast)
     // try to unify them
-    println("About to substitute")
     val substitutions:Map[TVar,TypeExpr] = Substitute(unify(cons))
     // mk type of connector
     var connTypes = tconns.map(c=> c._1->c._2.getType)
     // return the type for each identifier
-    println("Show substitution")
     ctx.get.map(e => e._1 -> substitutions(e._2))++connTypes//tconns
   }
 

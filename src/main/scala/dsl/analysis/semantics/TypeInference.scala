@@ -185,7 +185,7 @@ object TypeInference {
       var variant:Variant = adt.find(k => k._1.name == n).get._1
       var ttype = getVariantType(adt(variant).name)
       // replace all parametric types with new variables accordingly
-      ttype = mkNewParametricTVar(ttype,Map())._1
+      ttype = mkNewTypeVar(ttype,Map())._1
       // create a new variable
       var fresh = TVar(freshVar())
       // add the corresponding constraint
@@ -200,10 +200,10 @@ object TypeInference {
       var variant = adt.find(k => k._1.name == n).get._1
       var rctype = getVariantType(adt(variant).name)
       // find the type of the parameters
-      var ctype = getFormalParamsTypes(variant,adt)
+      var ctype = getFormalParamType(variant,adt)
       // replace all parametric types with new variables accordingly in the parameters and in the type of the constructor
-      val (cctype,m) = mkNewParametricTVars(ctype,Map())//._1
-      rctype = mkNewParametricTVar(rctype,m)._1
+      val (cctype,m) = mkNewTypeVars(ctype,Map())//._1
+      rctype = mkNewTypeVar(rctype,m)._1
       // infer the types of the actual parameters
       var pstypes = ps.map(p => infer(ctx,ctxConn,p,adt))
       // mk constructor constraints from each actual param to each formal param
@@ -226,19 +226,17 @@ object TypeInference {
       // todo: if it has no parameters, assume no concrete data is sent ~~ unit for now
       var psTypes = ps.map(p => infer(ctx,ctxConn,p,adt))
       // create new variables for each abstract var type in the formal parameters (inputs)
-      var renamInsTypes= mkNewParametricTVars(tconn.ins,Map())
-      var renamOutsTypes = mkNewParametricTVars(tconn.outs,renamInsTypes._2)
+      var renamInsTypes= mkNewTypeVars(tconn.ins,Map())
+      var renamOutsTypes = mkNewTypeVars(tconn.outs,renamInsTypes._2)
       // add a constraint from each formal param to each actual param
       var paramConst:Set[TCons] = renamInsTypes._1.zip(psTypes.map(pt=>pt._2)).map(p => TCons(p._1,p._2)).toSet
       // mk a fresh var for the type of this expression
       var T = TVar(freshVar())
+      // make the type of the connector
+      // inputs -> outputs : var connType = TypeConn(renamInsTypes._1,renamOutsTypes._1).getType//tconn.getType
+      // just outputs:
+      var connType = TypeConn(renamInsTypes._1,renamOutsTypes._1).getOutputType//tconn.getType
       // mk a new constraint saying that the type of this expression is of type T
-//      var connInsType:TypeExpr =
-//        if (tconn.ins.size>1) tconn.ins.init.foldRight[TypeExpr](tconn.ins.last)(TMap(_,_))
-//        else  if (tconn.ins.isEmpty) TUnit else tconn.ins.head
-//      var connOutsType:TypeExpr = if (tconn.ins.size>1) TProd(tconn.ins.head,tconn.ins.tail)
-//      else  if (tconn.ins.isEmpty) TUnit else tconn.ins.head
-      var connType = TypeConn(renamInsTypes._1,renamOutsTypes._1).getType//tconn.getType
       var newCons = paramConst++Set(TCons(T,connType))++psTypes.flatMap(pt=>pt._3)
       (ctx,T,newCons)
 //      (ctx,TUnit,Set())
@@ -343,7 +341,7 @@ object TypeInference {
     * @param adt
     * @return
     */
-  def getFormalParamsTypes(v:Variant, adt:Map[Variant,TypeDecl]):List[TypeExpr] = v match {
+  def getFormalParamType(v:Variant, adt:Map[Variant,TypeDecl]):List[TypeExpr] = v match {
     case AdtVal(n) => List()
     case AdtConst(n,ps) =>
       //find the expected type expression of each parameter
@@ -373,11 +371,11 @@ object TypeInference {
     * @param map
     * @return
     */
-  def mkNewParametricTVars(tes:List[TypeExpr],map:Map[TVar,TVar]):(List[TypeExpr],Map[TVar,TVar]) = {
+  def mkNewTypeVars(tes:List[TypeExpr], map:Map[TVar,TVar]):(List[TypeExpr],Map[TVar,TVar]) = {
     var nmap = map
     var ntes = List[TypeExpr]()
     for (te <- tes) {
-      var res = mkNewParametricTVar(te,nmap)
+      var res = mkNewTypeVar(te,nmap)
       nmap = res._2
       ntes ++= List(res._1)
     }
@@ -393,7 +391,7 @@ object TypeInference {
     * @param map
     * @return
     */
-  def mkNewParametricTVar(te: TypeExpr,map:Map[TVar,TVar]):(TypeExpr,Map[TVar,TVar]) = te match {
+  def mkNewTypeVar(te: TypeExpr, map:Map[TVar,TVar]):(TypeExpr,Map[TVar,TVar]) = te match {
     case TUnit => (TUnit,map)
     case t@TVar(n) if n.matches("[a-z][a-zA-Z0-9_]*") =>
       if (map.contains(t))
@@ -402,39 +400,39 @@ object TypeInference {
         var fresh = TVar(freshVar())
         (fresh,map+(t->fresh))}
     case TMap(from, to) =>
-      val (nfrom,nmapf) = mkNewParametricTVar(from,map)
-      val (nto,nmapt) = mkNewParametricTVar(to,nmapf)
+      val (nfrom,nmapf) = mkNewTypeVar(from,map)
+      val (nto,nmapt) = mkNewTypeVar(to,nmapf)
       (TMap(nfrom,nto),nmapt)
     case BaseType(n,ps) =>
-      var nres = mkNewParametricTVars(ps,map)
+      var nres = mkNewTypeVars(ps,map)
       (BaseType(n,nres._1),nres._2)
     case TOpt(t) =>
-      val (nt,nm) = mkNewParametricTVar(t,map)
+      val (nt,nm) = mkNewTypeVar(t,map)
       (TOpt(nt),nm)
     case TEithers(f,os) =>
-      val (nf,nmf) = mkNewParametricTVar(f,map)
-      var current = mkNewParametricTVar(os.head,nmf)
+      val (nf,nmf) = mkNewTypeVar(f,map)
+      var current = mkNewTypeVar(os.head,nmf)
       var nothers = List(current._1)
       for (o<-os.tail) {
-        current = mkNewParametricTVar(o,current._2)
+        current = mkNewTypeVar(o,current._2)
         nothers::= current._1
       }
       (TEithers(nf,nothers),current._2)
     case TTuple(f,os) =>
-      val (nf,nmf) = mkNewParametricTVar(f,map)
-      var current = mkNewParametricTVar(os.head,nmf)
+      val (nf,nmf) = mkNewTypeVar(f,map)
+      var current = mkNewTypeVar(os.head,nmf)
       var nothers = List(current._1)
       for (o<-os.tail) {
-        current = mkNewParametricTVar(o,current._2)
+        current = mkNewTypeVar(o,current._2)
         nothers::= current._1
       }
       (TTuple(nf,nothers),current._2)
     case TProd(f,os) =>
-      val (nf,nmf) = mkNewParametricTVar(f,map)
-      var current = mkNewParametricTVar(os.head,nmf)
+      val (nf,nmf) = mkNewTypeVar(f,map)
+      var current = mkNewTypeVar(os.head,nmf)
       var nothers = List(current._1)
       for (o<-os.tail) {
-        current = mkNewParametricTVar(o,current._2)
+        current = mkNewTypeVar(o,current._2)
         nothers::= current._1
       }
       (TProd(nf,nothers),current._2)
