@@ -41,7 +41,7 @@ case class TypeConn(ins:List[TypeExpr],outs:List[TypeExpr]) {
 object TypeConn {
 
   private var tVars:Int = 0
-  private def freshVar():String = {tVars+=1; s"_${(tVars-1)}"}
+  private def freshVar():String = {tVars+=1; s"${(tVars-1)}"}
 //  private var prettiSeed = 0
 //  private def prettifySeed():Int = {prettiSeed+=1; prettiSeed-1}
 //  private var tvars2pretty:Map[String,String] = Map()

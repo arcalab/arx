@@ -4,6 +4,7 @@ import dsl.common.{ParsingException, TypeException}
 import dsl.analysis.semantics.Context
 import dsl.analysis.semantics._
 import dsl.analysis.syntax.{AST, Parser}
+import dsl.backend.Prettify
 import preo.DSL
 import preo.ast.{Connector, CoreConnector}
 import preo.frontend.{Eval, Show, Simplify}
@@ -30,9 +31,16 @@ object DSL {
     // try to unify them
     val substitutions:Map[TVar,TypeExpr] = Substitute(unify(cons))
     // mk type of connector
-    var connTypes = tconns.map(c=> c._1->c._2.getType)
-    // return the type for each identifier
-    ctx.get.map(e => e._1 -> substitutions(e._2))++connTypes//tconns
+    val connTypes = tconns.map(c=> c._1->c._2.getType)
+    // for each typed identifier, get its typed and prettify it in case it has free type variables
+    val rawIdTypes = ctx.get.map(e => e._1 -> substitutions(e._2))
+    var idTypes = Map[String,TypeExpr]()
+    for((id,t) <- rawIdTypes) {
+      Prettify.reset()
+      idTypes += id -> Prettify(t)
+    }
+    // return the type for each identifier and for each connector definition
+    idTypes++connTypes
   }
 
   def unsafeCoreConnector(c:Connector):CoreConnector =
