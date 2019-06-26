@@ -20,7 +20,6 @@ object Show {
     case TTuple(h,t) => s"(${(h::t).map(Show(_)).mkString(",")})"
     case TProd(h,t) => s"${(h::t).map(Show(_)).mkString(" x ")}"
     case TOpt(t) => s"Opt[${Show(t)}]"
-
   }
 
 }

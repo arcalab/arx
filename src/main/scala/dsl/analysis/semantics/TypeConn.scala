@@ -13,6 +13,12 @@ import preo.backend.Network.Prim
   */
 
 
+/**
+  * // todo: probably it can be renamed and act as general function type
+  * Connector type consisting of the type of its input and output parameters
+  * @param ins type of each input parameter
+  * @param outs type of each output parameter
+  */
 case class TypeConn(ins:List[TypeExpr],outs:List[TypeExpr]) {
 
   def getType:TypeExpr = {
@@ -25,13 +31,17 @@ case class TypeConn(ins:List[TypeExpr],outs:List[TypeExpr]) {
   def getOutputType:TypeExpr =
     if (outs.size>1)
       TProd(outs.head,outs.tail)
-    else if (outs.isEmpty) TUnit else outs.head
+    else {
+      if (outs.isEmpty) TUnit else outs.head
+    }
 
 
   def getInputType:TypeExpr =
     if (ins.size>1)
       ins.init.foldRight[TypeExpr](ins.last)(TMap(_,_))
-    else if (ins.isEmpty) TUnit else ins.head
+    else {
+      if (ins.isEmpty) TUnit else ins.head
+    }
 
 }
 
@@ -41,7 +51,7 @@ case class TypeConn(ins:List[TypeExpr],outs:List[TypeExpr]) {
 object TypeConn {
 
   private var tVars:Int = 0
-  private def freshVar():String = {tVars+=1; s"${(tVars-1)}"}
+  private def freshVar():String = {tVars+=1; s"${tVars-1}"}
 //  private var prettiSeed = 0
 //  private def prettifySeed():Int = {prettiSeed+=1; prettiSeed-1}
 //  private var tvars2pretty:Map[String,String] = Map()
