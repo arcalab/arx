@@ -16,21 +16,6 @@ object Prettify {
   private var prettyVars:Map[String,String] = Map()
 
   /**
-    * Return current seed and increased seeds by one
-    * @return current seed
-    */
-  def reset() = {
-    seed = 0
-    prettyVars = Map()
-  }
-
-  /**
-    * Return current seed and increased seeds by one
-    * @return current seed
-    */
-  private def prettifySeed():Int = {seed+=1; seed-1}
-
-  /**
     * Given a type expression with free variables, rename all free variables to alphabet letters, accordingly.
     * @param te type expression
     * @return prettified type expression
@@ -55,6 +40,21 @@ object Prettify {
     case BaseType(n,ps) => BaseType(n,ps.map(apply))
     case t => t
   }
+
+  /**
+    * Return current seed and increased seeds by one
+    * @return current seed
+    */
+  def reset() = {
+    seed = 0
+    prettyVars = Map()
+  }
+
+  /**
+    * Return current seed and increased seeds by one
+    * @return current seed
+    */
+  private def prettifySeed():Int = {seed+=1; seed-1}
 
   /**
     * Given an integer, return the corresponding alphabet letter or sequence of letters.

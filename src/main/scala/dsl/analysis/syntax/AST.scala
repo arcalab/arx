@@ -46,6 +46,7 @@ case class TypeDecl(name:TypeName,variants:List[Variant]) extends AST {}
 /* Assignments */
 //case class Identifier(name:String) extends AST {}
 case class Assignment(variable:Identifier, expr:Expr) extends AST {}
+case class MultAssignment(variables:List[Identifier],expr: Expr) extends AST {}
 
 /* Expressions */
 
@@ -53,5 +54,6 @@ case class Assignment(variable:Identifier, expr:Expr) extends AST {}
 //case class AdtTerm(term:String) extends AST {}
 //case class AdtConsExpr(cons:String,params:List[AST]) extends AST {}
 
+/* Connector Definition */
 
 case class ConnDef(name:String, c:Connector) extends AST {}

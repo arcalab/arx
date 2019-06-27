@@ -52,9 +52,6 @@ object TypeConn {
 
   private var tVars:Int = 0
   private def freshVar():String = {tVars+=1; s"${tVars-1}"}
-//  private var prettiSeed = 0
-//  private def prettifySeed():Int = {prettiSeed+=1; prettiSeed-1}
-//  private var tvars2pretty:Map[String,String] = Map()
 
   /**
     * Type a connector definition
@@ -62,23 +59,11 @@ object TypeConn {
     * @param connDef connector definition
     * @return the type expression of the defined connector
     */
-//  def apply(connDef: ConnDef):TypeExpr = {
-//    // initialize seeds
-//    tVars =0
-//    prettiSeed = 0
-//    // infer connector type
-//    val (tvar,const) = infer(connDef)
-//    // try to unify and substitute
-//    val substitutions:Map[TVar,TypeExpr] = Substitute(Unify(const))
-//    prettify(tvar.substitute(tvar,substitutions(tvar)))
-//  }
   def apply(connDef: ConnDef):TypeConn = {
     // initialize seeds
     tVars =0
     // reset prettifier
     Prettify.reset()
-//    prettiSeed = 0
-//    tvars2pretty = Map()
     // convert the defined connector into a network
     var network = Network(DSL.unsafeCoreConnector(connDef.c))
     // infer connector type
@@ -91,10 +76,9 @@ object TypeConn {
       network.ins.map(i=> tvar(i)).map(tv=> Prettify(tv.substitute(tv,substitutions.getOrElse(tv,tv))))
     var outs =
       network.outs.map(i=> tvar(i)).map(tv=> Prettify(tv.substitute(tv,substitutions.getOrElse(tv,tv))))
-    var res = TypeConn(ins,outs)
-    res
+    // return the type of the connector definition
+    TypeConn(ins,outs)
   }
-
 
 
   /**
@@ -208,35 +192,4 @@ object TypeConn {
     case Prim(p, ins,outs,_) =>
       throw new TypeException(s"Unknown type for primitive ${p.name}")
   }
-
-//  private def prettify(te: TypeExpr):TypeExpr = {
-////    var tvars2pretty:Map[String,String] = Map()
-//    def pretty(te: TypeExpr): TypeExpr = te match {
-//      case t@TVar(n) =>
-//        if (n.startsWith("_")) {
-//          if (tvars2pretty.contains(n))
-//            TVar(tvars2pretty(n))
-//          else {
-//            var s = intToAlph(prettifySeed())
-//            tvars2pretty+= (n->s)
-//            TVar(s)
-//          }
-//        } else t
-//      case TMap(t1, t2) => TMap(pretty(t1), pretty(t2))
-//      case TOpt(t) => TOpt(pretty(t))
-//      case TProd(t, ts) => TProd(pretty(t), ts.map(pretty))
-//      case TEithers(t, ts) => TEithers(pretty(t), ts.map(pretty))
-//      case TTuple(t, ts) => TTuple(pretty(t), ts.map(pretty))
-//      case t => t
-//    }
-//    pretty(te)
-//  }
-//
-//  private def intToAlph(i:Int):String = {
-//    var quotient = i/26
-//    var rem = i%26
-//    var res = ('a'.toInt + rem).toChar
-//    if (quotient == 0 ) res.toString else intToAlph(quotient-1)+res
-//  }
-
 }

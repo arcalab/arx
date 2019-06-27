@@ -5,9 +5,9 @@ package dsl.analysis.syntax
   */
 
 
-sealed trait Expr{}
+sealed trait Expr
 
 case class Identifier(name:String) extends Expr {}
 case class AdtTerm(name:String) extends Expr {}
 case class AdtConsExpr(name:String,params:List[Expr]) extends Expr {}
-case class ConnId(nameL:String,params:List[Expr]=List()) extends Expr {}
+case class ConnId(name:String, params:List[Expr]=List()) extends Expr {}
