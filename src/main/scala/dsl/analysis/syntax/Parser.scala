@@ -25,7 +25,6 @@ object Parser extends RegexParsers with preo.lang.Parser {
   def parseProgram(code:String):ParseResult[AST] = {
     adts = List()
     conns = List()
-//    names = List()
     sym = new SymbolsTable
     parseAll(program,code)
   }
@@ -34,7 +33,7 @@ object Parser extends RegexParsers with preo.lang.Parser {
   override val whiteSpace: Regex = "( |\t|\r|\f|\n|//.*)+".r
 
   val typeId:Parser[String] = """[A-Z][a-zA-Z0-9_]*""".r
-  val parametricTypeId:Parser[String] = """[a-z][a-zA-Z0-9_]*""".r //possible can just be represented as a regular typename
+  val absTypeId:Parser[String] = """[a-z][a-zA-Z0-9_]*""".r //possible can just be represented as a regular typename
   val identifierCapOrSmall:Parser[String] = """[a-zA-Z][a-zA-Z0-9_]*""".r
 
   /* Program */
@@ -68,12 +67,12 @@ object Parser extends RegexParsers with preo.lang.Parser {
 
   def typeName:Parser[TypeName] =
     typeId ~ opt("<"~> typeParams <~">")  ^^ {case n~opt =>  ConTypeName(n,opt.getOrElse(List()))} |
-    parametricTypeId ^^ {case n => AbsTypeName(n)}
+    absTypeId ^^ {case n => AbsTypeName(n)}
 
   // Type parameters (abstract or concrete)
   def typeParams:Parser[List[TypeName]] =
     typeId ~ opt("," ~> typeParams) ^^ {case n~par =>  ConTypeName(n)::par.getOrElse(List())} |
-    parametricTypeId ~ opt("," ~> typeParams) ^^ {case n~par =>  AbsTypeName(n)::par.getOrElse(List())}
+    absTypeId ~ opt("," ~> typeParams) ^^ {case n~par =>  AbsTypeName(n)::par.getOrElse(List())}
 
   // a list of type variants
   def typeVariants: Parser[List[Variant]] =
@@ -110,6 +109,7 @@ object Parser extends RegexParsers with preo.lang.Parser {
         case i~Nil~_~expr => sym=sym.add(i,VARNAME); Assignment(Identifier(i),expr)
         case i~ids~_~ConnId(c,ps) =>
           (i::ids).foreach(i => sym=sym.add(i,VARNAME))
+          // todo: maybe do this checking at semantic analysis
           // find the definition of the conector with name c
           val cdef = conns.find(_.name==c).get
           // reduce the connector and create a network to find inputs and outputs of c

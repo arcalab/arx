@@ -32,8 +32,9 @@ object Show {
   def apply(ast:AST): String = ast match {
     case Statements(sts) => sts.map(apply).mkString("\n")
     case Assignment(v,expr) => v + " = " + apply(expr)
-    case MultAssignment(vs,expr) => vs.map(apply).mkString(",") + " = " + apply(expr)
+    case MultAssignment(vs,conn) => vs.map(apply).mkString(",") + " = " + apply(conn)
     case TypeDecl(n,variants) => "type " + apply(n) + " = " + variants.map(apply).mkString(" | ")
+    case ConnDef(n,c) => "connector " + n + "=" + preo.frontend.Show(c)
   }
 
   def apply(tname:TypeName):String = tname match {

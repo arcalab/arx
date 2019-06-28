@@ -14,8 +14,9 @@ sealed trait AST {
     case _ => List()
   }
 
-  def getAssignments:List[Assignment] = this match {
+  def getAssignments:List[AST] = this match {
     case a@Assignment(v,e) => List(a)
+    case ma@MultAssignment(v,e) => List(ma)
     case Statements(sts) => sts.flatMap(_.getAssignments)
     case _ => List()
   }
@@ -46,7 +47,7 @@ case class TypeDecl(name:TypeName,variants:List[Variant]) extends AST {}
 /* Assignments */
 //case class Identifier(name:String) extends AST {}
 case class Assignment(variable:Identifier, expr:Expr) extends AST {}
-case class MultAssignment(variables:List[Identifier],expr: Expr) extends AST {}
+case class MultAssignment(variables:List[Identifier],connId: ConnId /*expr:Expr*/) extends AST {}
 
 /* Expressions */
 
