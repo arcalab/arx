@@ -43,6 +43,7 @@ case class TypeConn(ins:List[TypeExpr],outs:List[TypeExpr]) {
       if (ins.isEmpty) TUnit else ins.head
     }
 
+  lazy val paramSize:Int = (ins++outs).size
 }
 
 /**

@@ -106,7 +106,7 @@ object Parser extends RegexParsers with preo.lang.Parser {
     //identifierCapOrSmall ~ "=" ~ dataExpr ^^ {case i~_~expr => sym=sym.add(i,VARNAME); Assignment(Identifier(i),expr)}
   def assignment:Parser[AST] =
     identifierCapOrSmall ~ rep("," ~> identifierCapOrSmall) ~ "=" ~ dataExpr ^^ {
-        case i~Nil~_~expr => sym=sym.add(i,VARNAME); Assignment(Identifier(i),expr)
+        case i~Nil~_~expr => sym=sym.add(i,VARNAME); Assignment(List(Identifier(i)),expr)
         case i~ids~_~ConnId(c,ps) =>
           (i::ids).foreach(i => sym=sym.add(i,VARNAME))
           // todo: maybe do this checking at semantic analysis
@@ -115,7 +115,7 @@ object Parser extends RegexParsers with preo.lang.Parser {
           // reduce the connector and create a network to find inputs and outputs of c
           val net = Network(dsl.DSL.unsafeCoreConnector(cdef.c))
           // make the multiple assignment
-          var res = MultAssignment((i::ids).map(Identifier),ConnId(c,ps))
+          var res = Assignment((i::ids).map(Identifier),ConnId(c,ps))//MultAssignment((i::ids).map(Identifier),ConnId(c,ps))
           // if the number of i::ids corresponds to the number of outputs of c return the result
           if ((i::ids).size == net.outs.size)
             res

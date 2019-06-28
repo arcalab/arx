@@ -50,81 +50,85 @@ object TypeInference {
     *  this is when we allow conn defs to reference connectors from other previous defs.
     */
     // for each connector def infer its type
-//    var tConns:Map[String,(Context,TypeExpr,Set[TCons])] = conns.map(c=> c.name->infer(ctx,c,adt)).toMap
     var tConns:Map[String,TypeConn] = conns.map(c => c.name -> TypeConn(c)).toMap
-    // for each conn create a TVar
-//    var connVars:Map[String,TVar] = tConns.map(tc => tc._1->TVar(freshVar()))
-    // for each conn add a constraint from its TVar to its actual type
-//    tCons = connVars.map(cv => TCons(cv._2,tConns(cv._1)._2)).toSet
-    // add to the context the name of the connector and its type
-//    ctx = connVars.map(cv => ctx.add(cv._1,cv._2)).foldRight(ctx)(_.join(_))
     // get assignments and multi-assignments (for now are the only expressions to type)
     var assig = ast.getAssignments
     // for each (multi)assignment infer its type, using the context from previous inferred assignments
     // accumulate all the constraints from each inferred assignment
     var res:(Context,TypeExpr,Set[TCons]) = (new Context,TUnit,Set[TCons]())
     for (a <- assig) {
-      a match {
-        case a@Assignment(v,e) =>
-          res = infer(a,ctx,tConns,adt)
-          ctx = res._1
-          tCons ++= res._3
-        case a@MultAssignment(vs, c) =>
-          res = infer(a,ctx,tConns,adt)
-          ctx = res._1
-          tCons ++= res._3
-      }
+      res = infer(a,ctx,tConns,adt)
+      ctx = res._1
+      tCons ++= res._3
     }
     // return the last known context, the type of the last assignment and the accumulated set of constraints
     (res._1,tConns,res._2,tCons)
   }
 
   /**
-    * Given an assignment id = expression, finds the type of the id and the expr
-    * by means of constraint typing
+    * Given an assignment ids = expression, infer the type of the ids and the expr
+    * by means of constraint typing, and depending by the type of the assignment (simple, multi)
     *
-    * @param ctx
-    * @param asg
-    * @param adt
+    * @param asg the assignment
+    * @param ctx known variables and their types
+    * @param adt known user defined types
+    * @return a new constraint typing relation: (context, type of the assignment, set of type constraints)
+    */
+  private def infer(asg:Assignment, ctx:Context, ctxConn:Map[String,TypeConn]
+                    , adt:Map[String,TypeDecl]): (Context,TypeExpr,Set[TCons]) = {
+    // infer based on simple or multiple assignment
+    if (asg.variables.size>1)
+      inferMultAsg(asg,ctx,ctxConn,adt)
+    else
+      inferSimpleAsg(asg,ctx,ctxConn,adt)
+  }
+
+  /**
+    * Given a simple assingment infers the type of the id and the type of the expression
+    * @param asg simple assignment
+    * @param ctx known variables and their types
+    * @param tConns known connectors with their type
+    * @param adt known user defined types
     * @return a new constraint typing relation: (context, type of the id, set of type constraints)
     */
-  private def infer(asg:Assignment
-                    ,ctx:Context,ctxConn:Map[String,TypeConn]
-                    ,adt:Map[String,TypeDecl]): (Context,TypeExpr,Set[TCons]) = {
+  private def inferSimpleAsg(asg:Assignment
+                             ,ctx:Context,tConns:Map[String,TypeConn]
+                             ,adt:Map[String,TypeDecl]): (Context,TypeExpr,Set[TCons]) = {
     // asg: id = expr
-    val id:Identifier = asg.variable
-    val expr:Expr = asg.expr
+    val id:Identifier = asg.variables.head
+    val expr: Expr = asg.expr
     // create a new Type Variable for id
     val T = TVar(freshVar())
     // add to the context that id is of type T
-    var newCtx = ctx.add(id.name,T)
+    var newCtx = ctx.add(id.name, T)
     // infer the type of the expression, with the new context
-    val (ctxexp,texp,cexp) = infer(newCtx,ctxConn,expr,adt)
+    val (ctxexp, texp, cexp) = infer(expr,newCtx, tConns, adt)
     // create a new constraint for T = texp
-    val newConst = TCons(T,texp)
+    val newConst = TCons(T, texp)
     // return:
     // - the new context return by the exprs (already contains newCtx)
     // - the type of the assignment, for now is the type of the id
     // - the set of constraints with the addition of Tid = Texp
-    (ctxexp,T,cexp+newConst)
+    (ctxexp, T, cexp + newConst)
   }
 
   /**
-    * Given a multiple assginment expression, find the type of the concrete connector
+    * Given a multiple assginment expression, find the type of the expression (connector, eventually a function)?
     * and assign to each variable on the LHS the type of the corresponding output of the connector
     * @param masg multiple assignment
-    * @param ctx known context of variables
-    * @param tconns known connectors with their type
+    * @param ctx known variables and their types
+    * @param tconns known connectors and their type
     * @param adt known user defined types
     * @return a new constraint typing relation: (context, type of the expression, set of type constraints)
     *         where the type of the expression is unit, since each variable on the LHS is already typed in the new context
     */
-  private def infer(masg:MultAssignment
+  private def inferMultAsg(masg:Assignment
                     ,ctx:Context,tconns:Map[String,TypeConn]
                     ,adt:Map[String,TypeDecl]):(Context,TypeExpr,Set[TCons]) = {
     // masg: v1,...,vn = connId(...)
     val ids = masg.variables
-    val conn  = masg.connId
+    // at parsing time we know the expression of a mult-assignment is a connId todo: or a function
+    val conn  = masg.expr.asInstanceOf[ConnId]
     // infer the type of the connector
     val (ctxConn,tConn,cConn,tOuts) = inferConn(conn,ctx,tconns,adt)
     // create new constraints
@@ -151,13 +155,14 @@ object TypeInference {
     * @param adt
     * @return a new constraint typing relation: (context, type of the expression, set of type constraints)
     */
-  private def infer(ctx:Context, tConns:Map[String,TypeConn], expr:Expr, adt:Map[String,TypeDecl]):(Context,TypeExpr,Set[TCons]) = expr match {
+  private def infer(expr:Expr, ctx:Context, tConns:Map[String,TypeConn]
+                    ,adt:Map[String,TypeDecl]):(Context,TypeExpr,Set[TCons]) = expr match {
     case Identifier(n) =>
       // if id is defined already return the type of id, other wise it is undefined
       if (ctx.contains(n))
         (ctx,ctx(n),Set())
       else throw new UndefinedVarException("Unknown identifier: " + n)
-    case t@AdtTerm(n) => //try {
+    case t@AdtTerm(n) =>
       // find the type of the adt term, we know it exists because it was checked at parsing time
       var ttype = getVariantType(adt(n).name)
       // replace all parametric types with new variables accordingly
@@ -168,10 +173,7 @@ object TypeInference {
       var tcons = TCons(fresh,ttype)
       //todo: see how to handle TVar in this case
       (ctx, fresh, Set(tcons))
-//      } catch {
-//        case e:NoSuchElementException => throw new TypeException("Unknown variant name: " + n)
-//      }
-    case c@AdtConsExpr(n, ps)  =>  //try {
+    case c@AdtConsExpr(n, ps)  =>
       // find the type of the constructor, we know it exists because it was checked at parsing time
       var rctype = getVariantType(adt(n).name)
       // find the type of the parameters
@@ -180,7 +182,7 @@ object TypeInference {
       val (cctype,m) = mkNewTypeVars(ctype,Map())//._1
       rctype = mkNewTypeVar(rctype,m)._1
       // infer the types of the actual parameters
-      var pstypes = ps.map(p => infer(ctx,tConns,p,adt))
+      var pstypes = ps.map(p => infer(p,ctx,tConns,adt))
       // mk constructor constraints from each actual param to each formal param
       var paramsConst:Set[TCons] = cctype.zip(pstypes.map(pt => pt._2)).map(p => TCons(p._1,p._2)).toSet
       // mk the type of this expression:
@@ -190,14 +192,21 @@ object TypeInference {
       // mk new Context from inferred context
       var newCtx:Context = pstypes.map(pt => pt._1).foldRight(ctx)(_.join(_))
       (newCtx, T, paramsConst++pstypes.flatMap(pt=> pt._3)+(newCons))
-//      } catch {
-//        case e:NoSuchElementException => throw new TypeException("Unknown variant name: " + n)
-//      }
     case c@ConnId(n,ps) =>
       val (newCtx,tConn,newConst,tOuts) = inferConn(c,ctx,tConns,adt)
       (newCtx,tConn,newConst)
   }
 
+  /**
+    * Given a connector id and actual params, infer the concrete type of the connector
+    * and return as well the type of each of ouputs
+    * @param connId connector call
+    * @param ctx known variables and their types
+    * @param tConns known connectors and their types
+    * @param adt known user defined types
+    * @return a new constraint typing relation + type of outputs:
+    *         (context, type of the expression, set of type constraints, type of each output)
+    */
   private def inferConn(connId:ConnId
                     ,ctx:Context, tConns:Map[String,TypeConn]
                     ,adt:Map[String,TypeDecl]):(Context,TypeExpr,Set[TCons],List[TypeExpr]) = {
@@ -206,19 +215,23 @@ object TypeInference {
     val ps = connId.params
     // find the type of the connector with name n
     var tconn:TypeConn = tConns(n)
+    // if there are more actual params than formal => error
+    if (ps.size> tconn.paramSize)
+      throw new TypeException(s"Connector ${n} expects no more than ${tconn.paramSize} params but ${ps.size} found")
     // find the type of each actual parameter of the connector
     // todo: if it has no parameters, assume no concrete data is sent ~~ unit for now
-    var psTypes = ps.map(p => infer(ctx,tConns,p,adt))
+    var psTypes = ps.map(p => infer(p,ctx,tConns,adt))
     // create new variables for each abstract var type in the formal parameters (inputs)
     var renamInsTypes= mkNewTypeVars(tconn.ins,Map())
     var renamOutsTypes = mkNewTypeVars(tconn.outs,renamInsTypes._2)
     // add a constraint from each formal param to each actual param
     var paramConst:Set[TCons] = renamInsTypes._1.zip(psTypes.map(pt=>pt._2)).map(p => TCons(p._1,p._2)).toSet
+    /* todo: for each actual param which is an output, add it to the context (assume it works as an assignment)
+     *  as such, only ids are allowed in actual params that are outputs.
+    */ //var psOutputs = ps.drop(tconn.ins.size)
     // mk a fresh var for the type of this expression
     var T = TVar(freshVar())
-    // make the type of the connector
-    // inputs -> outputs : var connType = TypeConn(renamInsTypes._1,renamOutsTypes._1).getType//tconn.getType
-    // just outputs:
+    // make the type of the connector (type of the output)
     var connType = TypeConn(renamInsTypes._1,renamOutsTypes._1).getOutputType//tconn.getType
     // mk a new constraint saying that the type of this expression is of type T
     var newCons = paramConst++Set(TCons(T,connType))++psTypes.flatMap(pt=>pt._3)
@@ -230,16 +243,15 @@ object TypeInference {
   /**
     * Given a ADT variant, return the type of its formal parameters, if any
     *
-    * @param v
-    * @param adt
+    * @param v variant
+    * @param adt known user defined types
     * @return
     */
   def getFormalParamType(v:String, adt:Map[String,TypeDecl]):List[TypeExpr] = adt(v).variants.find(_.name==v).get match {
     case AdtVal(n) => List()
     case AdtConst(n,ps) =>
       //find the expected type expression of each parameter
-      var tp = ps.map(p => getVariantType(p))
-      tp
+      ps.map(p => getVariantType(p))
   }
 
   /**
@@ -256,7 +268,7 @@ object TypeInference {
 
   /**
     * Given a list of type expression (of parameters) which may have parametric types (abstract types)
-    * creates a new parametric type variable for each abstract type, and replace each
+    * creates a new type variable for each abstract type, and replace each
     * appearance of the abstract type with the corresponding variable
     * E.g.: List<a> -> List<T> for some new T
     *
@@ -274,6 +286,7 @@ object TypeInference {
     }
     (ntes,nmap)
   }
+
   /**
     * Given a type expression which may have parametric types
     * creates a new type variable for each abstract type, and replace each
@@ -330,32 +343,4 @@ object TypeInference {
       }
       (TProd(nf,nothers),current._2)
   }
-
-//  private def checkAdtParamSize(variant:Variant,numActParams:Int):Boolean = variant match {
-//    case AdtVal(n) => throw new TypeException(s"An ADT Value ($n) does not expects paramenters")
-//    case AdtConsExpr(n,ps) => if (ps.size == numActParams) true
-//      else throw new TypeException(s"Constructor $n expected ${ps.size} parameters, but $numActParams found")
-//  }
-//
-//  // given a type declaration and a variant name of that type get the full variant specification
-//  private def getVariant(n:String,adt:Map[String,TypeDecl]):Variant = adt(n).variants.find(_.name==n).get
-
-
-//  private def checkParamsSize(ce:AdtConsExpr,adt:Map[String,TypeDecl]):Boolean = {
-//    // find the declaration of the actual constructor
-//    val constr = adt(ce.name).variants.find(v => v.name == ce.name ).get.asInstanceOf[AdtConst]
-//    // check if param size match
-//    if (constr.param.size == ce.params.size) true
-//    else throw new TypeException(s"Constructor ${ce.name} expected ${constr.param.size} parameters," +
-//      s" but ${ce.params.size} found")
-//  }
-//
-//  private def checkParamsSize(cid:ConnId,ctypes:Map[String,TypeConn]):Boolean = {
-//    // find the type of the connector named cid
-//    val c = ctypes(cid)
-//    // check if the params match,
-//  }
-
-
-
 }
