@@ -1,7 +1,7 @@
 package dsl.analysis.semantics
 
 import dsl.analysis.syntax._
-import dsl.common.{TypeException, UndefinedVarException}
+import dsl.common.{InvalidParameterException, TypeException, UndefinedVarException}
 import dsl.DSL
 import dsl.backend.Show
 import preo.ast.CPrim
@@ -218,7 +218,7 @@ object TypeInference {
     var tconn:TypeConn = tConns(n)
     // if there are more actual params than formal => error
     if (ps.size> tconn.paramSize)
-      throw new TypeException(s"Connector ${n} expects no more than ${tconn.paramSize} params but ${ps.size} found")
+      throw new InvalidParameterException(s"Connector ${n} expects no more than ${tconn.paramSize} params but ${ps.size} found")
     //create new context
     var newCtx = ctx
     // find actual output params
@@ -228,7 +228,7 @@ object TypeInference {
     if (actualOuts.forall(_.isVariable)) {
       actualOutsVars = actualOuts.map(_ => TVar(freshVar())) // fresh type variables for each output
       actualOuts.zip(actualOutsVars).foreach(et => newCtx = newCtx.add(et._1.asInstanceOf[Identifier].name,et._2))
-    } else throw new TypeException(s"Output params must be variables, in: ${Show(connId)}")
+    } else throw new InvalidParameterException(s"Output params must be variables, in: ${Show(connId)}")
     // todo: if it has no parameters, assume no concrete data is sent ~~ unit  (for now they remain parametric)
     // find the type of each actual input parameter of the connector
     var psInsTypes = ps.take(tconn.ins.size).map(p => infer(p,ctx,tConns,adt))
@@ -249,7 +249,6 @@ object TypeInference {
     // return the ctx, the type of the expression, the new constraints, and the type of each output
     (newCtx,T,newCons,renameOutsTypes._1)
   }
-
 
   /**
     * Given a ADT variant, return the type of its formal parameters, if any
@@ -329,17 +328,17 @@ object TypeInference {
     case TEithers(f,os) =>
       val (nf,nmf) = mkNewTypeVar(f,map)
       var current = mkNewTypeVar(os.head,nmf)
-      val rest:List[TypeExpr] = current._1::os.map(o => {current = mkNewTypeVar(o,current._2); current._1})
+      val rest:List[TypeExpr] = current._1::os.tail.map(o => {current = mkNewTypeVar(o,current._2); current._1})
       (TEithers(nf,rest),current._2)
     case TTuple(f,os) =>
       val (nf,nmf) = mkNewTypeVar(f,map)
       var current = mkNewTypeVar(os.head,nmf)
-      val rest:List[TypeExpr] = current._1::os.map(o => {current = mkNewTypeVar(o,current._2); current._1})
+      val rest:List[TypeExpr] = current._1::os.tail.map(o => {current = mkNewTypeVar(o,current._2); current._1})
       (TTuple(nf,rest),current._2)
     case TProd(f,os) =>
       val (nf,nmf) = mkNewTypeVar(f,map)
       var current = mkNewTypeVar(os.head,nmf)
-      val rest:List[TypeExpr] = current._1::os.map(o => {current = mkNewTypeVar(o,current._2); current._1})
+      val rest:List[TypeExpr] = current._1::os.tail.map(o => {current = mkNewTypeVar(o,current._2); current._1})
       (TProd(nf,rest),current._2)
   }
 }
