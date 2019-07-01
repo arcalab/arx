@@ -42,13 +42,13 @@ class SymbolsTable {
 
 
   /**
-    * Get the type of a symbol if it is declared, otherwise throws an UndefinedException
+    * Get the type of a symbol if it is declared
     * @param sym
     * @return
     */
-  def apply(sym:String):SymbolType =
-    if (hash.contains(sym)) hash(sym)
-    else throw new UndefinedVarException(s"Unknown symbol: ${sym}")
+  def apply(sym:String):Option[SymbolType] =
+    if (hash.contains(sym)) Some(hash(sym)) else None
+//    else throw new UndefinedVarException(s"Unknown symbol: ${sym}")
 }
 
 

@@ -1,14 +1,12 @@
 package dsl.analysis.syntax
 
-import dsl.DSL
 import dsl.common.ParsingException
-import preo.ast.Connector
-import preo.{DSL, lang}
+import dsl.analysis.syntax.SymbolType._
+import dsl.backend.Show
 
 import scala.util.matching.Regex
 import scala.util.parsing.combinator.RegexParsers
-import dsl.analysis.syntax.SymbolType._
-import dsl.backend.Show
+
 import preo.backend.Network
 
 /**
@@ -88,7 +86,7 @@ object Parser extends RegexParsers with preo.lang.Parser {
   /* Connector definitions */
 
   def connDef:Parser[ConnDef] =
-  "def" ~ identifierCapOrSmall ~ "="~"{" ~ preo ~ "}" ^^ {
+    "def" ~ identifierCapOrSmall ~ "="~"{" ~ preo ~ "}" ^^ {
     case _~id~_~_~conn~_ => sym=sym.add(id,CONNNAME); conns::=ConnDef(id,conn); ConnDef(id,conn)
   }
 
@@ -117,9 +115,9 @@ object Parser extends RegexParsers with preo.lang.Parser {
           // make the multiple assignment
           var res = Assignment((i::ids).map(Identifier),ConnId(c,ps))//MultAssignment((i::ids).map(Identifier),ConnId(c,ps))
           // if the number of i::ids corresponds to the number of outputs of c return the result
-          if ((i::ids).size == net.outs.size)
-            res
-            // otherwise error
+          if ((i::ids).size == net.outs.size) {
+              res
+          } // otherwise error
           else throw new ParsingException(s"The list of variables on the LHS of ${Show(res)} " +
             s"does not correspond with the number of outputs of connector $c")
     }
@@ -135,17 +133,17 @@ object Parser extends RegexParsers with preo.lang.Parser {
   def dataExpr:Parser[Expr] =
     identifierCapOrSmall ~ opt("("~>paramExprs<~")") ^^ {
       case c ~ None => sym(c) match {
-        case ADTVAL => AdtTerm(c)
-        case VARNAME => Identifier(c)
-        case ADTCONST => throw new ParsingException(s"Missing actual parameters for constructor $c")
-        case CONNNAME => ConnId(c)}
+        case Some(ADTVAL) => AdtTerm(c)
+        case Some(VARNAME) => Identifier(c)
+        case Some(ADTCONST) => throw new ParsingException(s"Missing actual parameters for constructor $c")
+        case Some(CONNNAME) => ConnId(c)
+        case None => Identifier(c)}
       case c ~ Some(ps) => sym(c) match {
-        case ADTCONST =>
+        case Some(ADTCONST) =>
           var nparams = sizeOfParams(c)
           if (nparams == ps.size) AdtConsExpr(c, ps)
           else throw new ParsingException(s"Constructor $c expected $nparams parameters, but ${ps.size} found")
-        case CONNNAME =>
-          // todo: check number of input parameters or total parameters
+        case Some(CONNNAME) =>
           ConnId(c, ps)}
     }
 
@@ -156,8 +154,7 @@ object Parser extends RegexParsers with preo.lang.Parser {
     * @return a list containing an expression for each parameter found
     */
   def paramExprs:Parser[List[Expr]] =
-    dataExpr ~ "," ~ dataExpr ^^ {case e1~_~e2 => List(e1,e2)} |
-    dataExpr ^^ {e => List(e)}
+    dataExpr ~ rep("," ~> dataExpr) ^^ { case e1~e2 => e1::e2 }
 
   /* Auxiliary functions */
 
@@ -166,7 +163,7 @@ object Parser extends RegexParsers with preo.lang.Parser {
     * @param adtConst the name of an adt constructor
     * @return
     */
-  def sizeOfParams(adtConst:String):Int = {
+  private def sizeOfParams(adtConst:String):Int = {
     var variant =  adts.flatMap(t => t.variants).find(v => v.name == adtConst)
     if (variant.isDefined)
       variant.get match {
@@ -176,5 +173,4 @@ object Parser extends RegexParsers with preo.lang.Parser {
     else
       throw new ParsingException("Unknown Constructor: " + adtConst)
   }
-
 }

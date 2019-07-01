@@ -3,6 +3,7 @@ package dsl.analysis.semantics
 import dsl.analysis.syntax._
 import dsl.common.{TypeException, UndefinedVarException}
 import dsl.DSL
+import dsl.backend.Show
 import preo.ast.CPrim
 import preo.backend.Network
 import preo.backend.Network.Prim
@@ -218,25 +219,35 @@ object TypeInference {
     // if there are more actual params than formal => error
     if (ps.size> tconn.paramSize)
       throw new TypeException(s"Connector ${n} expects no more than ${tconn.paramSize} params but ${ps.size} found")
-    // find the type of each actual parameter of the connector
-    // todo: if it has no parameters, assume no concrete data is sent ~~ unit for now
-    var psTypes = ps.map(p => infer(p,ctx,tConns,adt))
-    // create new variables for each abstract var type in the formal parameters (inputs)
-    var renamInsTypes= mkNewTypeVars(tconn.ins,Map())
-    var renamOutsTypes = mkNewTypeVars(tconn.outs,renamInsTypes._2)
-    // add a constraint from each formal param to each actual param
-    var paramConst:Set[TCons] = renamInsTypes._1.zip(psTypes.map(pt=>pt._2)).map(p => TCons(p._1,p._2)).toSet
-    /* todo: for each actual param which is an output, add it to the context (assume it works as an assignment)
-     *  as such, only ids are allowed in actual params that are outputs.
-    */ //var psOutputs = ps.drop(tconn.ins.size)
+    //create new context
+    var newCtx = ctx
+    // find actual output params
+    var actualOuts = ps.drop(tconn.ins.size)
+    // check that they are variables, and if they are not in the context, add them with a fresh type var
+    var actualOutsVars = List[TVar]()
+    if (actualOuts.forall(_.isVariable)) {
+      actualOutsVars = actualOuts.map(_ => TVar(freshVar())) // fresh type variables for each output
+      actualOuts.zip(actualOutsVars).foreach(et => newCtx = newCtx.add(et._1.asInstanceOf[Identifier].name,et._2))
+    } else throw new TypeException(s"Output params must be variables, in: ${Show(connId)}")
+    // todo: if it has no parameters, assume no concrete data is sent ~~ unit  (for now they remain parametric)
+    // find the type of each actual input parameter of the connector
+    var psInsTypes = ps.take(tconn.ins.size).map(p => infer(p,ctx,tConns,adt))
+    // create new variables for each abstract (parametric) type in the formal parameters
+    var renameInsTypes= mkNewTypeVars(tconn.ins,Map())
+    var renameOutsTypes = mkNewTypeVars(tconn.outs,renameInsTypes._2)
+    // add a constraint from each formal param to each actual param (if actual params shorter, the rest remain parametric)
+    // inputs first
+    var paramConst:Set[TCons] = renameInsTypes._1.zip(psInsTypes.map(pt=>pt._2)).map(p => TCons(p._1,p._2)).toSet
+    // outputs then
+    paramConst ++= renameOutsTypes._1.zip(actualOutsVars).map(pt => TCons(pt._2,pt._1))
     // mk a fresh var for the type of this expression
     var T = TVar(freshVar())
     // make the type of the connector (type of the output)
-    var connType = TypeConn(renamInsTypes._1,renamOutsTypes._1).getOutputType//tconn.getType
+    var connType = TypeConn(renameInsTypes._1,renameOutsTypes._1).getOutputType//tconn.getType
     // mk a new constraint saying that the type of this expression is of type T
-    var newCons = paramConst++Set(TCons(T,connType))++psTypes.flatMap(pt=>pt._3)
+    var newCons = paramConst++Set(TCons(T,connType))++psInsTypes.flatMap(pt=>pt._3)
     // return the ctx, the type of the expression, the new constraints, and the type of each output
-    (ctx,T,newCons,renamOutsTypes._1)
+    (newCtx,T,newCons,renameOutsTypes._1)
   }
 
 
@@ -318,29 +329,17 @@ object TypeInference {
     case TEithers(f,os) =>
       val (nf,nmf) = mkNewTypeVar(f,map)
       var current = mkNewTypeVar(os.head,nmf)
-      var nothers = List(current._1)
-      for (o<-os.tail) {
-        current = mkNewTypeVar(o,current._2)
-        nothers::= current._1
-      }
-      (TEithers(nf,nothers),current._2)
+      val rest:List[TypeExpr] = current._1::os.map(o => {current = mkNewTypeVar(o,current._2); current._1})
+      (TEithers(nf,rest),current._2)
     case TTuple(f,os) =>
       val (nf,nmf) = mkNewTypeVar(f,map)
       var current = mkNewTypeVar(os.head,nmf)
-      var nothers = List(current._1)
-      for (o<-os.tail) {
-        current = mkNewTypeVar(o,current._2)
-        nothers::= current._1
-      }
-      (TTuple(nf,nothers),current._2)
+      val rest:List[TypeExpr] = current._1::os.map(o => {current = mkNewTypeVar(o,current._2); current._1})
+      (TTuple(nf,rest),current._2)
     case TProd(f,os) =>
       val (nf,nmf) = mkNewTypeVar(f,map)
       var current = mkNewTypeVar(os.head,nmf)
-      var nothers = List(current._1)
-      for (o<-os.tail) {
-        current = mkNewTypeVar(o,current._2)
-        nothers::= current._1
-      }
-      (TProd(nf,nothers),current._2)
+      val rest:List[TypeExpr] = current._1::os.map(o => {current = mkNewTypeVar(o,current._2); current._1})
+      (TProd(nf,rest),current._2)
   }
 }

@@ -5,7 +5,12 @@ package dsl.analysis.syntax
   */
 
 
-sealed trait Expr
+sealed trait Expr {
+  def isVariable:Boolean = this match {
+    case Identifier(n) => true
+    case _=> false
+  }
+}
 
 case class Identifier(name:String) extends Expr {}
 case class AdtTerm(name:String) extends Expr {}
