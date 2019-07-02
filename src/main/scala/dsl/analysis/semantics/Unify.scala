@@ -1,5 +1,6 @@
 package dsl.analysis.semantics
 
+import dsl.backend.Show
 import dsl.common.TypeException
 
 /**
@@ -13,6 +14,13 @@ object Unify {
     if (cons.isEmpty) Map() else (cons.head.l, cons.head.r) match {
       case (l, r) if l == r =>
         Unify(cons.tail)
+      /* ============ beginning new case ============ */
+//      /* todo: check if this makes sense here */
+//      case (t@TVar(n), p@TProd(h,r))  =>
+//        throw new TypeException(s"Too many arguments. Impossible to unify $t with product type ${Show(p)}")
+//      case (p@TProd(h,r), t@TVar(n))  =>
+//        throw new TypeException(s"Too many arguments. Impossible to unify $t with product type ${Show(p)}")
+      /* ============ ending new case ============ */
       case (t@TVar(n), r) if !t.occurs(r) =>
         Unify(cons.tail.map(tc => TCons(tc.l.substitute(t, r), tc.r.substitute(t, r)))) ++ Map(t -> r)
       case (l, t@TVar(n)) if !t.occurs(l) =>

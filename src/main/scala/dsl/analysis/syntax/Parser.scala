@@ -107,19 +107,8 @@ object Parser extends RegexParsers with preo.lang.Parser {
         case i~Nil~_~expr => sym=sym.add(i,VARNAME); Assignment(List(Identifier(i)),expr)
         case i~ids~_~ConnId(c,ps) =>
           (i::ids).foreach(i => sym=sym.add(i,VARNAME))
-          // todo: maybe do this checking at semantic analysis
-          // find the definition of the conector with name c
-          val cdef = conns.find(_.name==c).get
-          // reduce the connector and create a network to find inputs and outputs of c
-          val net = Network(dsl.DSL.unsafeCoreConnector(cdef.c))
           // make the multiple assignment
-          var res = Assignment((i::ids).map(Identifier),ConnId(c,ps))//MultAssignment((i::ids).map(Identifier),ConnId(c,ps))
-          // if the number of i::ids corresponds to the number of outputs of c return the result
-          if ((i::ids).size == net.outs.size) {
-              res
-          } // otherwise error
-          else throw new ParsingException(s"The list of variables on the LHS of ${Show(res)} " +
-            s"does not correspond with the number of outputs of connector $c")
+          Assignment((i::ids).map(Identifier),ConnId(c,ps))//MultAssignment((i::ids).map(Identifier),ConnId(c,ps))
     }
 
   /* Expressions */
@@ -144,7 +133,8 @@ object Parser extends RegexParsers with preo.lang.Parser {
           if (nparams == ps.size) AdtConsExpr(c, ps)
           else throw new ParsingException(s"Constructor $c expected $nparams parameters, but ${ps.size} found")
         case Some(CONNNAME) =>
-          ConnId(c, ps)}
+            ConnId(c, ps)
+      }
     }
 
   /**

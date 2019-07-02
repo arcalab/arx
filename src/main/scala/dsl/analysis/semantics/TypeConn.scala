@@ -12,7 +12,6 @@ import preo.backend.Network.Prim
   * Created by guillecledou on 2019-06-19
   */
 
-
 /**
   * // todo: probably it can be renamed and act as general function type
   * Connector type consisting of the type of its input and output parameters
@@ -146,10 +145,9 @@ object TypeConn {
     case Prim(CPrim(name,_,_,_),List(a),List(b),_) if name.matches("(sync|fifo|id)")=>
       val T = TVar(freshVar())
       Map(a->T,b->T)
-    // todo: the type of a lossy should be a -> a OR a -> Opt[a] OR some other special type?
     case Prim(CPrim("lossy",_,_,_),List(a),List(b),_) =>
       val T = TVar(freshVar())
-      Map(a->T,b->TOpt(T))
+      Map(a->T,b->T)
     case Prim(CPrim("drain",_,_,_),List(a,b),List(),_) =>
       Map(a->TVar(freshVar()),b->TVar(freshVar()))
     case Prim(CPrim("fifofull",_,_,_),List(a),List(b),_) =>
@@ -180,7 +178,6 @@ object TypeConn {
       val varsIns = ins.map(i => TVar(freshVar()))
       val Tout = TEithers(varsIns.head, varsIns.tail)
       ins.zip(varsIns).toMap++outs.map(o=> o->Tout).toMap
-    // todo: a XOR types should be a -> a x a  OR  a -> Opt[a] x Opt[a] or some other special type?
     case Prim(CPrim("node",_,_,extra), ins, outs, _) if extra.intersect(Set("xor")).nonEmpty =>
       val varsIns = ins.map(i => TVar(freshVar()))
       // val Tout = TOpt(TEithers(varsIns.head, varsIns.tail))

@@ -8,10 +8,9 @@ import dsl.analysis.syntax._
   * Created by guillecledou on 2019-06-07
   */
 
-
 object Show {
   def apply(te:TypeExpr):String = te match {
-    case TVar(n) => s"T$n"
+    case TVar(n) => s"$n"
     case TMap(f, t) => apply(f) + " -> " + apply(t)
     case BaseType(n, ps) => n + (if (ps.isEmpty) "" else ps.map(apply).mkString("<",",",">"))
     case TUnit => "()"
@@ -20,7 +19,6 @@ object Show {
     case TProd(h,t) => (h::t).map(apply).mkString(" x ")
     case TOpt(t) => "Opt[" + apply(t) +  "]"
   }
-
 
   def apply(expr:Expr): String = expr match {
     case AdtTerm(name) => name
@@ -45,5 +43,4 @@ object Show {
     case AdtVal(n) => n
     case AdtConst(n, ps) => n + ps.map(apply).mkString("(",",",")")
   }
-
 }

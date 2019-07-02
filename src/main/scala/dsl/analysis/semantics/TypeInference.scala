@@ -1,9 +1,9 @@
 package dsl.analysis.semantics
 
 import dsl.analysis.syntax._
-import dsl.common.{InvalidParameterException, TypeException, UndefinedVarException}
+import dsl.common.{InvalidParameterException, PatternMatchingException, TypeException, UndefinedVarException}
 import dsl.DSL
-import dsl.backend.Show
+import dsl.backend.{Prettify, Show}
 import preo.ast.CPrim
 import preo.backend.Network
 import preo.backend.Network.Prim
@@ -18,16 +18,6 @@ object TypeInference {
   private var tVars:Int = 0
   private def freshVar():String = {tVars+=1; (tVars-1).toString}
 
-  /* todo: how to handle cases like:
-      -----Case1-----
-      x = Nil ---> is going to say that x should be of type List<T>
-      y = Cons(Zero,x) ---> is going to say that x should be of type List<Nat>
-      z = Cons(True,x) ---> is going to say that x should be of type List<Bool>
-      PROBLEM: the unification is going to fail
-      -----Case2-----
-      x = Nil ---> is going to say that x should be of type List<T>
-      PROBLEM?: if x is never use on the rhs, T is never going to be match with a concrete type
-  */
   /**
     * Infers the type of the each assignment/expression of the AST by means of constraint typing
     * @param ast
@@ -104,6 +94,13 @@ object TypeInference {
     var newCtx = ctx.add(id.name, T)
     // infer the type of the expression, with the new context
     val (ctxexp, texp, cexp) = infer(expr,newCtx, tConns, adt)
+    // if type is a product, then error
+    texp match {
+      case TProd(h,r) =>
+        throw new PatternMatchingException(s"Impossible to match expression with multiple return values (${(h::r).size}) " +
+        s"with single assignment in ${Show(asg)}")
+      case _ => ()
+    }
     // create a new constraint for T = texp
     val newConst = TCons(T, texp)
     // return:
@@ -132,6 +129,10 @@ object TypeInference {
     val conn  = masg.expr.asInstanceOf[ConnId]
     // infer the type of the connector
     val (ctxConn,tConn,cConn,tOuts) = inferConn(conn,ctx,tconns,adt)
+    // check if the outputs match the number lhs variables, otherwise error
+    if (tOuts.size != ids.size)
+      throw new PatternMatchingException(s"Impossible to match output of size ${tOuts.size} of connector ${Show(conn)} " +
+        s"with multiple assignment of size ${ids.size} in ${Show(masg)}")
     // create new constraints
     var newConst = cConn
     // create new context
@@ -151,9 +152,9 @@ object TypeInference {
     * Given a expression, finds the type of the expression based on the kind of expression
     * (adtTerm, adtConst, or id for now) by means of constraint typing
     *
-    * @param ctx
-    * @param expr
-    * @param adt
+    * @param ctx known variables and their types
+    * @param expr an expression
+    * @param adt known user defined types
     * @return a new constraint typing relation: (context, type of the expression, set of type constraints)
     */
   private def infer(expr:Expr, ctx:Context, tConns:Map[String,TypeConn]
@@ -169,30 +170,30 @@ object TypeInference {
       // replace all parametric types with new variables accordingly
       ttype = mkNewTypeVar(ttype,Map())._1
       // create a new variable
-      var fresh = TVar(freshVar())
+      val fresh = TVar(freshVar())
       // add the corresponding constraint
-      var tcons = TCons(fresh,ttype)
+      val tcons = TCons(fresh,ttype)
       //todo: see how to handle TVar in this case
-      (ctx, fresh, Set(tcons))
+      (ctx, /*fresh*/ttype, Set(/*tcons*/))
     case c@AdtConsExpr(n, ps)  =>
       // find the type of the constructor, we know it exists because it was checked at parsing time
       var rctype = getVariantType(adt(n).name)
       // find the type of the parameters
-      var ctype = getFormalParamType(n,adt)
+      val ctype = getFormalParamType(n,adt)
       // replace all parametric types with new variables accordingly in the parameters and in the type of the constructor
       val (cctype,m) = mkNewTypeVars(ctype,Map())//._1
       rctype = mkNewTypeVar(rctype,m)._1
       // infer the types of the actual parameters
-      var pstypes = ps.map(p => infer(p,ctx,tConns,adt))
+      val pstypes = ps.map(p => infer(p,ctx,tConns,adt))
       // mk constructor constraints from each actual param to each formal param
-      var paramsConst:Set[TCons] = cctype.zip(pstypes.map(pt => pt._2)).map(p => TCons(p._1,p._2)).toSet
+      val paramsConst:Set[TCons] = cctype.zip(pstypes.map(pt => pt._2)).map(p => TCons(p._1,p._2)).toSet
       // mk the type of this expression:
-      var T = TVar(freshVar())
+      val T = TVar(freshVar())
       // mk new constrait for T and for the fresh variable
       var newCons = TCons(T,rctype)
       // mk new Context from inferred context
-      var newCtx:Context = pstypes.map(pt => pt._1).foldRight(ctx)(_.join(_))
-      (newCtx, T, paramsConst++pstypes.flatMap(pt=> pt._3)+(newCons))
+      val newCtx:Context = pstypes.map(pt => pt._1).foldRight(ctx)(_.join(_))
+      (newCtx, /*T*/ rctype, paramsConst++pstypes.flatMap(pt=> pt._3)/*+(newCons)*/)
     case c@ConnId(n,ps) =>
       val (newCtx,tConn,newConst,tOuts) = inferConn(c,ctx,tConns,adt)
       (newCtx,tConn,newConst)
@@ -214,8 +215,14 @@ object TypeInference {
     // connId: ConnId(n,ps)
     val n = connId.name
     val ps = connId.params
+//    // todo:  params cannot be other connectors, only data
+//    if (ps.exists(_.isConnector))
+//      throw new TypeException(s"Connectors can not be actual parameters of other connector - ${Show(connId)}")
     // find the type of the connector with name n
     var tconn:TypeConn = tConns(n)
+    // input parameters must be always present
+    if (ps.size < tconn.ins.size)
+      throw new InvalidParameterException(s"Connector ${n} expects ${tconn.ins.size} input parameters but ${ps.size} found")
     // if there are more actual params than formal => error
     if (ps.size> tconn.paramSize)
       throw new InvalidParameterException(s"Connector ${n} expects no more than ${tconn.paramSize} params but ${ps.size} found")
@@ -229,9 +236,11 @@ object TypeInference {
       actualOutsVars = actualOuts.map(_ => TVar(freshVar())) // fresh type variables for each output
       actualOuts.zip(actualOutsVars).foreach(et => newCtx = newCtx.add(et._1.asInstanceOf[Identifier].name,et._2))
     } else throw new InvalidParameterException(s"Output params must be variables, in: ${Show(connId)}")
-    // todo: if it has no parameters, assume no concrete data is sent ~~ unit  (for now they remain parametric)
     // find the type of each actual input parameter of the connector
     var psInsTypes = ps.take(tconn.ins.size).map(p => infer(p,ctx,tConns,adt))
+    // if some of them is a product, then error
+    if (psInsTypes.exists(p => p._2.isInstanceOf[TProd]))
+      throw new TypeException(s"Product types cannot be pass as actual parameters - in ${Show(connId)}")
     // create new variables for each abstract (parametric) type in the formal parameters
     var renameInsTypes= mkNewTypeVars(tconn.ins,Map())
     var renameOutsTypes = mkNewTypeVars(tconn.outs,renameInsTypes._2)
@@ -241,13 +250,13 @@ object TypeInference {
     // outputs then
     paramConst ++= renameOutsTypes._1.zip(actualOutsVars).map(pt => TCons(pt._2,pt._1))
     // mk a fresh var for the type of this expression
-    var T = TVar(freshVar())
+//    var T = TVar(freshVar())
     // make the type of the connector (type of the output)
     var connType = TypeConn(renameInsTypes._1,renameOutsTypes._1).getOutputType//tconn.getType
     // mk a new constraint saying that the type of this expression is of type T
-    var newCons = paramConst++Set(TCons(T,connType))++psInsTypes.flatMap(pt=>pt._3)
+    var newCons = paramConst/*++Set(TCons(T,connType))*/++psInsTypes.flatMap(pt=>pt._3)
     // return the ctx, the type of the expression, the new constraints, and the type of each output
-    (newCtx,T,newCons,renameOutsTypes._1)
+    (newCtx,/*T*/connType,newCons,renameOutsTypes._1)
   }
 
   /**
@@ -268,8 +277,8 @@ object TypeInference {
     * Given a TypeName return its type:
     * a) An abstract type name returns a type variable with the same name
     * b) A concrete type name returns a BaseType with the same name, and the corresponding type of each parameter
-    * @param tn
-    * @return
+    * @param tn type name
+    * @return the type expression of the type name
     */
   def getVariantType(tn:TypeName):TypeExpr = tn match {
     case AbsTypeName(atn) => TVar(atn)// TVar(freshVar())

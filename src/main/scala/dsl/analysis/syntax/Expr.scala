@@ -6,10 +6,17 @@ package dsl.analysis.syntax
 
 
 sealed trait Expr {
+
   def isVariable:Boolean = this match {
     case Identifier(n) => true
     case _=> false
   }
+
+  def isConnector:Boolean = this match {
+    case ConnId(n,ps) => true
+    case _ => false
+  }
+
 }
 
 case class Identifier(name:String) extends Expr {}
