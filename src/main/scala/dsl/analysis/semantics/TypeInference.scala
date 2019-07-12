@@ -2,11 +2,7 @@ package dsl.analysis.semantics
 
 import dsl.analysis.syntax._
 import dsl.common.{InvalidParameterException, PatternMatchingException, TypeException, UndefinedVarException}
-import dsl.DSL
-import dsl.backend.{Prettify, Show}
-import preo.ast.CPrim
-import preo.backend.Network
-import preo.backend.Network.Prim
+import dsl.backend.Show
 
 
 /**
@@ -42,6 +38,8 @@ object TypeInference {
     */
     // for each connector def infer its type
     var tConns:Map[String,TypeConn] = conns.map(c => c.name -> TypeConn(c)).toMap
+//    // for each function definition infer its type
+//    var tfuns:Map[String,TMap] =
     // get assignments and multi-assignments (for now are the only expressions to type)
     var assig = ast.getAssignments
     // for each (multi)assignment infer its type, using the context from previous inferred assignments
@@ -55,6 +53,31 @@ object TypeInference {
     // return the last known context, the type of the last assignment and the accumulated set of constraints
     (res._1,tConns,res._2,tCons)
   }
+
+//  /**
+//    * Infer the type of a function
+//    * @param fun function definition
+//    * @param ctx known variables from the previous context and their types
+//    * @param tConns known connectors with their type (todo: probably we don't need this here if F cannot use connectors)
+//    * @param adt known user defined types
+//    * @return the type of the function, and a set of constraints
+//    */
+//  private def infer(fun:FunDef,ctx:Context, tConns:Map[String,TypeConn],tfuns:Map[String,TMap],
+//                    adt:Map[String,TypeDecl]):(TypeExpr,Set[TCons]) = {
+//    // create new local context
+//    var funCtx = new Context
+//    // add each parameter of the function to the local context with a fresh type var
+//    fun.params.foreach(p => funCtx = funCtx.add(p.name,TVar(freshVar())))
+//    // find the type of the expression
+//    val (ctxexp, texp, cexp) = infer(fun.expr,ctx.join(funCtx), tConns, adt)
+//    // the type of the function
+//    val ft = fun.params match {
+//      case Nil => TMap(TUnit, texp)
+//      case List(p) => TMap(funCtx(p.name),texp)
+//      case p::ps =>  TMap(TProd(funCtx(p.name),ps.map(p => funCtx(p.name))),texp)
+//    }
+//    (ft,cexp)
+//  }
 
   /**
     * Given an assignment ids = expression, infer the type of the ids and the expr
@@ -169,10 +192,10 @@ object TypeInference {
       var ttype = getVariantType(adt(n).name)
       // replace all parametric types with new variables accordingly
       ttype = mkNewTypeVar(ttype,Map())._1
-      // create a new variable
-      val fresh = TVar(freshVar())
-      // add the corresponding constraint
-      val tcons = TCons(fresh,ttype)
+//      // create a new variable
+//      val fresh = TVar(freshVar())
+//      // add the corresponding constraint
+//      val tcons = TCons(fresh,ttype)
       //todo: see how to handle TVar in this case
       (ctx, /*fresh*/ttype, Set(/*tcons*/))
     case c@AdtConsExpr(n, ps)  =>

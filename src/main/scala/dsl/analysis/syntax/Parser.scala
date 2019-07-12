@@ -39,8 +39,9 @@ object Parser extends RegexParsers with preo.lang.Parser {
   def program:Parser[AST] =
     rep(typeDecl) ~
       rep(connDef) ~
+      rep(funDef) ~
       rep(assignment) ^^ {
-        case tds~conn~asg => Statements(tds ++ conn ++ asg)
+        case tds~conn~fun~asg => Statements(tds ++ conn ++ fun ++ asg)
       }
 
   /* Type declaration */
@@ -87,8 +88,18 @@ object Parser extends RegexParsers with preo.lang.Parser {
 
   def connDef:Parser[ConnDef] =
     "def" ~ identifierCapOrSmall ~ "="~"{" ~ preo ~ "}" ^^ {
-    case _~id~_~_~conn~_ => sym=sym.add(id,CONNNAME); conns::=ConnDef(id,conn); ConnDef(id,conn)
+      case _~id~_~_~conn~_ => sym=sym.add(id,CONNNAME); conns::=ConnDef(id,conn); ConnDef(id,conn)
   }
+
+  /* Function definitions */
+  def funDef: Parser[FunDef] =
+    "fun" ~ identifierCapOrSmall ~ opt("(" ~> funFormalParams <~ ")") ~ "=" ~ "{" ~ dataExpr ~ "}" ^^ {
+      case _~f~params~_~_~e~_ => FunDef(f,e,params.getOrElse(List()))}
+
+  // comma separated list of identifiers
+  def funFormalParams: Parser[List[Identifier]] =
+    identifierCapOrSmall ~ rep(","~> identifierCapOrSmall) ^^ {
+      case id~ids => (id::ids).map(i => {sym=sym.add(i,VARNAME); Identifier(i)})}
 
   /* Assignments */
 

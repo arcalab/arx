@@ -25,6 +25,12 @@ sealed trait AST {
     case Statements(sts) => sts.flatMap(_.getDefs)
     case _ => List()
   }
+
+  def getFunDefs:List[FunDef] = this match {
+    case f@FunDef(name, expr, params) => List(f)
+    case Statements(sts) => sts.flatMap(_.getFunDefs)
+    case _ => List()
+  }
 }
 
 case class Statements(sts:List[AST]) extends AST {}
@@ -57,3 +63,7 @@ case class Assignment(variables:List[Identifier], expr:Expr) extends AST {}
 /* Connector Definition */
 
 case class ConnDef(name:String, c:Connector) extends AST {}
+
+/* Function Definition */
+
+case class FunDef(name:String,expr:Expr,params:List[Identifier]=List()) extends AST {}
