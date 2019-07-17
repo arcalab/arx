@@ -1,5 +1,6 @@
 package dsl.analysis.syntax
 
+import dsl.analysis.syntax.ast.{TypeName, Variant}
 import preo.ast.Connector
 
 /**
@@ -27,7 +28,7 @@ sealed trait AST {
   }
 
   def getFunDefs:List[FunDef] = this match {
-    case f@FunDef(name, expr, params) => List(f)
+    case f@FunDef(name, expr, tps,params) => List(f)
     case Statements(sts) => sts.flatMap(_.getFunDefs)
     case _ => List()
   }
@@ -65,5 +66,11 @@ case class Assignment(variables:List[Identifier], expr:Expr) extends AST {}
 case class ConnDef(name:String, c:Connector) extends AST {}
 
 /* Function Definition */
-
-case class FunDef(name:String,expr:Expr,params:List[Identifier]=List()) extends AST {}
+/**
+  * Function definition
+  * @param name of the function
+  * @param expr the body of the function
+  * @param typeParams parametric types if the function is polymorphic
+  * @param params formal parameters
+  */
+case class FunDef(name:String,expr:Expr,typeParams:List[TypeName]=List(),params:List[Identifier]=List()) extends AST {}

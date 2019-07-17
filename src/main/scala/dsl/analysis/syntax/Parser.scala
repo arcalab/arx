@@ -1,13 +1,11 @@
 package dsl.analysis.syntax
 
 import dsl.common.ParsingException
-import dsl.analysis.syntax.SymbolType._
-import dsl.backend.Show
 
+import dsl.analysis.syntax.SymbolType._
+import dsl.analysis.syntax.ast._
 import scala.util.matching.Regex
 import scala.util.parsing.combinator.RegexParsers
-
-import preo.backend.Network
 
 /**
   * Created by guillecledou on 2019-05-31
@@ -17,7 +15,6 @@ object Parser extends RegexParsers with preo.lang.Parser {
 
   private var adts:List[TypeDecl] = List()
   private var conns:List[ConnDef] = List()
-//  private var names:List[String] = List() // no need for scopes for now.
   private var sym: SymbolsTable = new SymbolsTable
 
   def parseProgram(code:String):ParseResult[AST] = {
@@ -41,17 +38,17 @@ object Parser extends RegexParsers with preo.lang.Parser {
       rep(connDef) ~
       rep(funDef) ~
       rep(assignment) ^^ {
-        case tds~conn~fun~asg => Statements(tds ++ conn ++ fun ++ asg)
-      }
+      case tds~conn~fun~asg => Statements(tds ++ conn ++ fun ++ asg)
+    }
 
   /* Type declaration */
 
   def typeDecl:Parser[AST] =
     "data" ~ typeNameDecl ~ "=" ~ typeVariants ^^
       { case _~n~_~vs =>
-          adts++=List(TypeDecl(n,vs))
-          TypeDecl(n,vs)
-        }
+        adts++=List(TypeDecl(n,vs))
+        TypeDecl(n,vs)
+      }
 
   // Name of the type being declared
   def typeNameDecl:Parser[TypeName] =
@@ -66,12 +63,12 @@ object Parser extends RegexParsers with preo.lang.Parser {
 
   def typeName:Parser[TypeName] =
     typeId ~ opt("<"~> typeParams <~">")  ^^ {case n~opt =>  ConTypeName(n,opt.getOrElse(List()))} |
-    absTypeId ^^ {case n => AbsTypeName(n)}
+      absTypeId ^^ {case n => AbsTypeName(n)}
 
   // Type parameters (abstract or concrete)
   def typeParams:Parser[List[TypeName]] =
     typeId ~ opt("," ~> typeParams) ^^ {case n~par =>  ConTypeName(n)::par.getOrElse(List())} |
-    absTypeId ~ opt("," ~> typeParams) ^^ {case n~par =>  AbsTypeName(n)::par.getOrElse(List())}
+      absTypeId ~ opt("," ~> typeParams) ^^ {case n~par =>  AbsTypeName(n)::par.getOrElse(List())}
 
   // a list of type variants
   def typeVariants: Parser[List[Variant]] =
@@ -81,20 +78,20 @@ object Parser extends RegexParsers with preo.lang.Parser {
   def typeVariant: Parser[Variant] =
     typeId ~ "(" ~ typeNames ~ ")" ^^
       { case n~_~params~_ => sym=sym.add(n,ADTCONST);/*names::=n*/; AdtConst(n,params)} |
-    typeId ^^
-      {case n => sym=sym.add(n,ADTVAL);/*names::=n*/; AdtVal(n)}
+      typeId ^^
+        {case n => sym=sym.add(n,ADTVAL);/*names::=n*/; AdtVal(n)}
 
   /* Connector definitions */
 
   def connDef:Parser[ConnDef] =
     "def" ~ identifierCapOrSmall ~ "="~"{" ~ preo ~ "}" ^^ {
       case _~id~_~_~conn~_ => sym=sym.add(id,CONNNAME); conns::=ConnDef(id,conn); ConnDef(id,conn)
-  }
+    }
 
   /* Function definitions */
   def funDef: Parser[FunDef] =
     "fun" ~ identifierCapOrSmall ~ opt("(" ~> funFormalParams <~ ")") ~ "=" ~ "{" ~ dataExpr ~ "}" ^^ {
-      case _~f~params~_~_~e~_ => FunDef(f,e,params.getOrElse(List()))}
+      case _~f~params~_~_~e~_ => FunDef(f,e,List(),params.getOrElse(List()))}
 
   // comma separated list of identifiers
   def funFormalParams: Parser[List[Identifier]] =
@@ -112,14 +109,14 @@ object Parser extends RegexParsers with preo.lang.Parser {
     * @return the abstract syntax tree for the assignment expression
     */
   //def assignment:Parser[AST] =
-    //identifierCapOrSmall ~ "=" ~ dataExpr ^^ {case i~_~expr => sym=sym.add(i,VARNAME); Assignment(Identifier(i),expr)}
+  //identifierCapOrSmall ~ "=" ~ dataExpr ^^ {case i~_~expr => sym=sym.add(i,VARNAME); Assignment(Identifier(i),expr)}
   def assignment:Parser[AST] =
     identifierCapOrSmall ~ rep("," ~> identifierCapOrSmall) ~ "=" ~ dataExpr ^^ {
-        case i~Nil~_~expr => sym=sym.add(i,VARNAME); Assignment(List(Identifier(i)),expr)
-        case i~ids~_~ConnId(c,ps) =>
-          (i::ids).foreach(i => sym=sym.add(i,VARNAME))
-          // make the multiple assignment
-          Assignment((i::ids).map(Identifier),ConnId(c,ps))//MultAssignment((i::ids).map(Identifier),ConnId(c,ps))
+      case i~Nil~_~expr => sym=sym.add(i,VARNAME); Assignment(List(Identifier(i)),expr)
+      case i~ids~_~ConnId(c,ps) =>
+        (i::ids).foreach(i => sym=sym.add(i,VARNAME))
+        // make the multiple assignment
+        Assignment((i::ids).map(Identifier),ConnId(c,ps))//MultAssignment((i::ids).map(Identifier),ConnId(c,ps))
     }
 
   /* Expressions */
@@ -144,7 +141,7 @@ object Parser extends RegexParsers with preo.lang.Parser {
           if (nparams == ps.size) AdtConsExpr(c, ps)
           else throw new ParsingException(s"Constructor $c expected $nparams parameters, but ${ps.size} found")
         case Some(CONNNAME) =>
-            ConnId(c, ps)
+          ConnId(c, ps)
       }
     }
 
@@ -168,8 +165,8 @@ object Parser extends RegexParsers with preo.lang.Parser {
     var variant =  adts.flatMap(t => t.variants).find(v => v.name == adtConst)
     if (variant.isDefined)
       variant.get match {
-       case AdtVal(n) => throw new ParsingException("An ADT Value Variant has no Parameters: ")
-       case AdtConst(n,p) => p.size
+        case AdtVal(n) => throw new ParsingException("An ADT Value Variant has no Parameters: ")
+        case AdtConst(n,p) => p.size
       }
     else
       throw new ParsingException("Unknown Constructor: " + adtConst)

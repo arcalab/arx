@@ -1,7 +1,7 @@
 package dsl.analysis.semantics
 
 import dsl.DSL
-import dsl.analysis.syntax.{ConnDef, TypeDecl, Variant}
+import dsl.analysis.syntax.{ConnDef}
 import dsl.backend.Prettify
 import dsl.common.TypeException
 import preo.ast.CPrim

@@ -1,6 +1,7 @@
 package dsl.analysis.semantics
 
 import dsl.analysis.syntax._
+import dsl.analysis.syntax.ast._
 import dsl.common.{InvalidParameterException, PatternMatchingException, TypeException, UndefinedVarException}
 import dsl.backend.Show
 

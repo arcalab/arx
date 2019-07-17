@@ -2,6 +2,7 @@ package dsl.backend
 
 import dsl.analysis.semantics._
 import dsl.analysis.syntax._
+import dsl.analysis.syntax.ast._
 
 
 /**
