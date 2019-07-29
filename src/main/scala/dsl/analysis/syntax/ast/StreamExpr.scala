@@ -14,3 +14,6 @@ case class ParExpr(e1:StreamExpr,e2:StreamExpr) extends StreamExpr {}
 case class FunExpr(fun:StreamFun,args:List[GroundTerm]) extends StreamExpr {}
 case class Assig(vars:List[Variable],e:StreamExpr) extends StreamExpr {}
 
+sealed trait FunDefinition  extends StreamExpr {}
+case class FunSEDef(name:String,typeParams:List[TypeName],dataParams:List[Variable],params:List[Variable], body:StreamExpr) extends FunDefinition {}
+case class FunSFDef(name:String,typeParams:List[TypeName],dataParams:List[Variable],body:StreamFun) extends FunDefinition {}

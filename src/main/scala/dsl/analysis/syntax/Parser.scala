@@ -2,7 +2,7 @@ package dsl.analysis.syntax
 
 import dsl.common.ParsingException
 
-import dsl.analysis.syntax.SymbolType._
+import dsl.analysis.syntax.SymType._
 import dsl.analysis.syntax.ast._
 import scala.util.matching.Regex
 import scala.util.parsing.combinator.RegexParsers
@@ -53,7 +53,7 @@ object Parser extends RegexParsers with preo.lang.Parser {
   // Name of the type being declared
   def typeNameDecl:Parser[TypeName] =
     typeId ~ opt("<"~> typeParams <~">")  ^^ {
-      case n~opt => sym=sym.add(n,TYPENAME); ConTypeName(n,opt.getOrElse(List()))
+      case n~opt => sym=sym.add(n,TYPE); ConTypeName(n,opt.getOrElse(List()))
     }
 
   // Reference to type names abstract or concrete
@@ -77,15 +77,15 @@ object Parser extends RegexParsers with preo.lang.Parser {
   // a type variant, either value or constructor
   def typeVariant: Parser[Variant] =
     typeId ~ "(" ~ typeNames ~ ")" ^^
-      { case n~_~params~_ => sym=sym.add(n,ADTCONST);/*names::=n*/; AdtConst(n,params)} |
+      { case n~_~params~_ => sym=sym.add(n,CONST);/*names::=n*/; AdtConst(n,params)} |
       typeId ^^
-        {case n => sym=sym.add(n,ADTVAL);/*names::=n*/; AdtVal(n)}
+        {case n => sym=sym.add(n,CONST);/*names::=n*/; AdtVal(n)}
 
   /* Connector definitions */
 
   def connDef:Parser[ConnDef] =
     "def" ~ identifierCapOrSmall ~ "="~"{" ~ preo ~ "}" ^^ {
-      case _~id~_~_~conn~_ => sym=sym.add(id,CONNNAME); conns::=ConnDef(id,conn); ConnDef(id,conn)
+      case _~id~_~_~conn~_ => /*sym=sym.add(id,CONNNAME)*/; conns::=ConnDef(id,conn); ConnDef(id,conn)
     }
 
   /* Function definitions */
@@ -96,7 +96,7 @@ object Parser extends RegexParsers with preo.lang.Parser {
   // comma separated list of identifiers
   def funFormalParams: Parser[List[Identifier]] =
     identifierCapOrSmall ~ rep(","~> identifierCapOrSmall) ^^ {
-      case id~ids => (id::ids).map(i => {sym=sym.add(i,VARNAME); Identifier(i)})}
+      case id~ids => (id::ids).map(i => {sym=sym.add(i,VAR); Identifier(i)})}
 
   /* Assignments */
 
@@ -112,9 +112,9 @@ object Parser extends RegexParsers with preo.lang.Parser {
   //identifierCapOrSmall ~ "=" ~ dataExpr ^^ {case i~_~expr => sym=sym.add(i,VARNAME); Assignment(Identifier(i),expr)}
   def assignment:Parser[AST] =
     identifierCapOrSmall ~ rep("," ~> identifierCapOrSmall) ~ "=" ~ dataExpr ^^ {
-      case i~Nil~_~expr => sym=sym.add(i,VARNAME); Assignment(List(Identifier(i)),expr)
+      case i~Nil~_~expr => sym=sym.add(i,VAR); Assignment(List(Identifier(i)),expr)
       case i~ids~_~ConnId(c,ps) =>
-        (i::ids).foreach(i => sym=sym.add(i,VARNAME))
+        (i::ids).foreach(i => sym=sym.add(i,VAR))
         // make the multiple assignment
         Assignment((i::ids).map(Identifier),ConnId(c,ps))//MultAssignment((i::ids).map(Identifier),ConnId(c,ps))
     }
@@ -130,18 +130,18 @@ object Parser extends RegexParsers with preo.lang.Parser {
   def dataExpr:Parser[Expr] =
     identifierCapOrSmall ~ opt("("~>paramExprs<~")") ^^ {
       case c ~ None => sym(c) match {
-        case Some(ADTVAL) => AdtTerm(c)
-        case Some(VARNAME) => Identifier(c)
-        case Some(ADTCONST) => throw new ParsingException(s"Missing actual parameters for constructor $c")
-        case Some(CONNNAME) => ConnId(c)
+        case Some(CONST) => AdtTerm(c)
+        case Some(VAR) => Identifier(c)
+        case Some(CONST) => throw new ParsingException(s"Missing actual parameters for constructor $c")
+//        case Some(CONNNAME) => ConnId(c)
         case None => Identifier(c)}
       case c ~ Some(ps) => sym(c) match {
-        case Some(ADTCONST) =>
+        case Some(CONST) =>
           var nparams = sizeOfParams(c)
           if (nparams == ps.size) AdtConsExpr(c, ps)
           else throw new ParsingException(s"Constructor $c expected $nparams parameters, but ${ps.size} found")
-        case Some(CONNNAME) =>
-          ConnId(c, ps)
+//        case Some(CONNNAME) =>
+//          ConnId(c, ps)
       }
     }
 
