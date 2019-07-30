@@ -73,12 +73,28 @@ object NewParser extends RegexParsers with preo.lang.Parser {
 
   /* Function definitions */
   def funDef: Parser[FunDefinition] =
-    "def" ~ id ~ opt(tparams) ~ opt("<"~>dataFormalParams<~">")~ restFunDef ^^ {
-      case _~f~tps~dps~r => r match {
-        case Right(sf) => {sym=sym.add(f,FUN); FunSFDef(f,tps.getOrElse(List()),dps.getOrElse(List()),sf)}
-        case Left((ps,se)) => {sym=sym.add(f,FUN); FunSEDef(f,tps.getOrElse(List()),dps.getOrElse(List()),ps,se)}}}
+    "def" ~> restFunDef
 
-  def restFunDef:Parser[Either[(List[Variable],StreamExpr),StreamFun]] =
+
+  def restFunDef:Parser[FunDefinition] = {
+    sym = sym.addLevel()
+    id ~ opt(tparams) ~ opt("<" ~> dataFormalParams <~ ">") ~ funParamsAndBody ^^ {
+      case f ~ tps ~ dps ~ r => r match {
+        case Right(sf) => {
+          sym = sym.rmLevel()
+          sym = sym.add(f, FUN);
+          FunSFDef(f, tps.getOrElse(List()), dps.getOrElse(List()), sf)
+        }
+        case Left((ps, se)) => {
+          sym = sym.rmLevel()
+          sym = sym.add(f, FUN);
+          FunSEDef(f, tps.getOrElse(List()), dps.getOrElse(List()), ps, se)
+        }
+      }
+    }
+  }
+
+  def funParamsAndBody:Parser[Either[(List[Variable],StreamExpr),StreamFun]] =
     "(" ~ opt(funFormalParams) ~ ")" ~ "=" ~"{"~ streamExpr ~ "}" ^^ { case _~ps~_~_~_~e~_ => Left((ps.getOrElse(List()),e))} |
     "=" ~ "{" ~ streamFun ~ "}" ^^ {case _~_~sf~_ => Right(sf)}
 
@@ -87,7 +103,7 @@ object NewParser extends RegexParsers with preo.lang.Parser {
   // comma separated list of identifiers
   def funFormalParams: Parser[List[Variable]] =
     id ~ rep(","~> id) ^^ {
-      case id~ids => println(s"params of fun: ${id::ids}") ;(id::ids).map(i => {sym=sym.add(i,INPUT); Variable(i)})}
+      case id~ids => (id::ids).map(i => {sym=sym.add(i,INPUT); Variable(i)})}
 
   def dataFormalParams: Parser[List[Variable]] =
     id ~ rep(","~> id) ^^ {
@@ -103,25 +119,13 @@ object NewParser extends RegexParsers with preo.lang.Parser {
         Assig((i::ids).map(Variable),e)
     }
 
-  /* Expressions */
-
-//  def assigExpr:Parser[StreamExpr] =
-//    simpleAssigExpr ~ assigExpr ^^ {case e1~e2 => ParExpr(e1,e2)} |
-//    simpleAssigExpr
-//
-//  def simpleAssigExpr:Parser[StreamExpr] =
-//    id ~ groundParams ^^ {
-//      case n~ps if sym.contains(n) && sym(n).get == ADTCONST => ConstExpr(n,ps)
-//      case n~ps  => FunExpr(FunName(n),ps)
-//    } |
-//    id ^^ (n => sym(n) match {
-//      case Some(ADTCONST) => ConstExpr(n)
-//      case _ => Variable(n)
-//    })
+  /* Stream Expressions */
 
   def streamExpr:Parser[StreamExpr] =
-    simpleStreamExpr ~ streamExpr ^^ {case e1~e2 => ParExpr(e1,e2)} |
-    simpleStreamExpr
+    simpleStreamExpr ~ opt(streamExpr) ^^ {
+      case e1 ~ Some(e2) => ParExpr(e1, e2)
+      case e1 ~ None => e1
+    }
 
   def simpleStreamExpr:Parser[StreamExpr] =
     funDef |
@@ -129,47 +133,50 @@ object NewParser extends RegexParsers with preo.lang.Parser {
       case n~ps if sym.contains(n) && sym(n).get == CONST => ConstExpr(n,ps)
       case n~ps  => FunExpr(FunName(n),ps)
     } |
-//    matchExpr |
     streamFun ~ groundParams ^^ {case sf~ps => FunExpr(sf,ps)} |
     assignment |
     id ^^ (n => sym(n) match {
       case Some(CONST) => ConstExpr(n)
-      case _ => Variable(n)
+      case _ => sym =sym.add(n,VAR) ;Variable(n)
     })
 
+  /* Stream Functions */
+
+  /**
+    * Parses a stream function: sequence of functions, functions in parallel,
+    * or a simple stream function [[simpleStreamFun]]
+    * @return a stream function
+    */
   def streamFun:Parser[StreamFun] =
     simpleStreamFun ~ ";" ~ streamFun ^^ {case sf1~_~sf2 => SeqFun(sf1,sf2)} |
     simpleStreamFun ~ streamFun ^^ {case sf1~sf2 => ParFun(sf1,sf2)}|
     simpleStreamFun
 
+  /**
+    * Parses a simple stream function: match, build or a fun name
+    * todo: check that the fun name is not register as a variable or constructor
+    * @return a stream function
+    */
   def simpleStreamFun:Parser[StreamFun] =
     "build" ~ opt("<" ~> tname <~ ">") ^^ {case _~ps => Build(ps)} |
     "match" ~ opt("<" ~> tname <~ ">") ^^ {case _~ps => Match(ps)} |
     id ^^ (n => FunName(n))
 
-//    def buildFun:Parser[StreamFun] =
-//    "build" ~ opt("<" ~> tname <~ ">") ^^ {case _~ps => Build(ps.getOrElse(List()))} |
-////    "match" ~ opt("<"~> typeName <~">") ~ "{" ~ rep(option) ~ "}" ^^ {
-////      case _~Some(ps)~_~os~_ => Match(List(ps),os)
-////      case _~None~_~os~_ => Match(List(),os)} |
-//    id ^^ (n => FunName(n))
-//
-//  def matchFun:Parser[StreamExpr] =
-//    "match" ~ opt("<"~> tname <~">") ~ groundParams  ~ "{" ~ rep1(option) ~ "}" ^^ {
-//      case _~Some(ps)~e~_~os~_ => FunExpr(Match(List(ps),os),e)
-//      case _~None~e~_~os~_ => FunExpr(Match(List(),os),e)}
+  /* Ground terms */
 
+  /**
+    * Parses a ground term: either a constructor or a variable
+    * todo: could check if the constructor exists, otherwise error
+    * @return a ground term
+    */
   def groundTerm:Parser[GroundTerm] =
     capitalId ~ groundParams  ^^ { case n~ps => ConstExpr(n,ps)} |
-    id ^^ (i => Variable(i))
+    id ^^ { i => sym=sym.add(i,VAR); Variable(i)}
 
+  /**
+    * Parses parameters which can be ground terms only
+    * @return list of ground terms
+    */
   def groundParams:Parser[List[GroundTerm]] =
     "(" ~ groundTerm ~ rep("," ~> groundTerm) ~ ")" ^^ {case _~g~gs~_ => g::gs}
-
-//  def option:Parser[Opt] =
-//    pattern ~ "=>" ~ streamExpr ~ "." ^^ {case p~_~e~_ => Opt(p,e)}
-//
-//  def pattern:Parser[Pattern] =
-//    "_" ^^ (_ => Wildcard) |
-//    groundTerm ^^ (g => GroundPattern(g))
 }

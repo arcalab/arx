@@ -11,7 +11,9 @@ import dsl.common.ParsingException
 class SymbolsTable {
 
   // for now only one scope
-  protected val hash: Map[String, SymType] = Map()
+//  protected var hash: Map[String, SymType] = Map()
+
+  protected val tables:List[Map[String,SymType]] = List(Map())
 
   /**
     * Get the type of a symbol if it is declared
@@ -19,14 +21,14 @@ class SymbolsTable {
     * @return
     */
   def apply(sym:String):Option[SymType] =
-    if (hash.contains(sym)) Some(hash(sym)) else None
+    if (tables.last.contains(sym)) Some(tables.last(sym)) else None
 
   /**
     * Check if a symbol exists
     * @param sym
     * @return
     */
-  def contains(sym:String):Boolean = hash.contains(sym)
+  def contains(sym:String):Boolean = tables.last.contains(sym)
 
   /**
     * Add a new symbol and the type of symbol to the table
@@ -37,17 +39,37 @@ class SymbolsTable {
     */
   def add(sym: String, symType: SymType): SymbolsTable =  {
     if (this.conflict(sym,symType)) {
-      println("Symbols table:"+ hash)
+      println("Symbols table:"+ tables.last)
       println(s"trying to add symbol $sym as $symType")
       throw new ParsingException(s"Symbol name $sym is already used within the scope")
     }
     else {
-      val old = hash
-      new SymbolsTable {
-        override val hash = old + (sym -> symType)
+      if ((symType == VAR) && this.contains(sym))
+        this
+      else {
+
+        val old = tables
+        new SymbolsTable {
+          override val tables = old.init++List((old.last + (sym -> symType)))
+        }
       }
     }
   }
+
+  def addLevel():SymbolsTable = {
+    val old = tables
+    new SymbolsTable {
+      override val tables = old++List(old.last)
+    }
+  }
+
+  def rmLevel():SymbolsTable = {
+    val old = tables.init
+    new SymbolsTable {
+      override val tables = old
+    }
+  }
+
 
   /**
     * Checks if there is a conflict when adding a new symbol:
