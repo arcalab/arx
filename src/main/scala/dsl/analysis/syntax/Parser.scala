@@ -1,26 +1,22 @@
 package dsl.analysis.syntax
 
-import dsl.common.ParsingException
-
 import dsl.analysis.syntax.SymType._
 import dsl.analysis.syntax.ast._
+
+
 import scala.util.matching.Regex
 import scala.util.parsing.combinator.RegexParsers
 
 /**
-  * Created by guillecledou on 2019-05-31
+  * Created by guillecledou on 2019-07-16
   */
 
-
-object Parser extends RegexParsers with preo.lang.Parser {
-
-  private var adts:List[TypeDecl] = List()
-  private var conns:List[ConnDef] = List()
+object Parser extends RegexParsers {
+  private var adts:List[TD] = List()
+  private var constr:List[String] = List()
   private var sym: SymbolsTable = new SymbolsTable
 
-  def parseProgram(code:String):ParseResult[AST] = {
-    adts = List()
-    conns = List()
+  def parseProgram(code:String):ParseResult[Prog] = {
     sym = new SymbolsTable
     parseAll(program,code)
   }
@@ -28,148 +24,154 @@ object Parser extends RegexParsers with preo.lang.Parser {
   override def skipWhitespace = true
   override val whiteSpace: Regex = "( |\t|\r|\f|\n|//.*)+".r
 
-  val typeId:Parser[String] = """[A-Z][a-zA-Z0-9_]*""".r
-  val absTypeId:Parser[String] = """[a-z][a-zA-Z0-9_]*""".r //possible can just be represented as a regular typename
-  val identifierCapOrSmall:Parser[String] = """[a-zA-Z][a-zA-Z0-9_]*""".r
+  val capitalId:Parser[String] = """[A-Z][a-zA-Z0-9_]*""".r
+  val lowerCaseId:Parser[String] = """[a-z][a-zA-Z0-9_]*""".r //possible can just be represented as a regular typename
+  val id:Parser[String] = """[a-zA-Z][a-zA-Z0-9_]*""".r
+
+//  val keywords: Set[String] = Set("def","match","build","True","False","Left","Right","U")
 
   /* Program */
 
-  def program:Parser[AST] =
-    rep(typeDecl) ~
-      rep(connDef) ~
-      rep(funDef) ~
-      rep(assignment) ^^ {
-      case tds~conn~fun~asg => Statements(tds ++ conn ++ fun ++ asg)
-    }
+  def program:Parser[Prog] =
+    rep(dt) ~ se ^^ { case tds~e => Prog(tds, e) }
 
-  /* Type declaration */
+  /* Type declaration and type parameters */
 
-  def typeDecl:Parser[AST] =
-    "data" ~ typeNameDecl ~ "=" ~ typeVariants ^^
-      { case _~n~_~vs =>
-        adts++=List(TypeDecl(n,vs))
-        TypeDecl(n,vs)
-      }
+  def dt:Parser[TD] =
+    "data" ~ capitalId ~ opt(tparams) ~ "=" ~ constructors ^^ {
+      case _~n~tps~_~vs => sym=sym.add(n,TYPE);TD(ConTN(n,tps.getOrElse(List())),vs)}
 
-  // Name of the type being declared
-  def typeNameDecl:Parser[TypeName] =
-    typeId ~ opt("<"~> typeParams <~">")  ^^ {
-      case n~opt => sym=sym.add(n,TYPE); ConTypeName(n,opt.getOrElse(List()))
-    }
+  // constructors
+  def constructors: Parser[List[Constructor]] =
+    constructor ~ opt("|" ~> constructors) ^^ {case v~vs => v::vs.getOrElse(List())}
 
-  // Reference to type names abstract or concrete
-  def typeNames:Parser[List[TypeName]] =
-    typeName ~ "," ~ typeNames ^^ {case n~_~ns => n::ns} |
-      typeName ^^ {case n => List(n)}
+  // constructor
+  def constructor:Parser[Constructor] =
+    capitalId ~ opt("(" ~> tnames <~ ")")^^ {
+      case n~tps => sym=sym.add(n,CONST); Constructor(n,tps.getOrElse(List()))}
 
-  def typeName:Parser[TypeName] =
-    typeId ~ opt("<"~> typeParams <~">")  ^^ {case n~opt =>  ConTypeName(n,opt.getOrElse(List()))} |
-      absTypeId ^^ {case n => AbsTypeName(n)}
+  // a non empty sequence of type names
+  def tnames:Parser[List[TypeName]] =
+    tname ~ rep("," ~> tname) ^^ {case n~ns => n::ns}
 
-  // Type parameters (abstract or concrete)
-  def typeParams:Parser[List[TypeName]] =
-    typeId ~ opt("," ~> typeParams) ^^ {case n~par =>  ConTypeName(n)::par.getOrElse(List())} |
-      absTypeId ~ opt("," ~> typeParams) ^^ {case n~par =>  AbsTypeName(n)::par.getOrElse(List())}
+  // a type name
+  def tname:Parser[TypeName] =
+    capitalId ~ opt(tparams)  ^^ {case n~opt =>  ConTN(n,opt.getOrElse(List()))} |
+      lowerCaseId ^^ {case n => AbsTN(n)}
 
-  // a list of type variants
-  def typeVariants: Parser[List[Variant]] =
-    typeVariant ~ opt("|" ~> typeVariants) ^^ {case v~vs => v::vs.getOrElse(List())}
-
-  // a type variant, either value or constructor
-  def typeVariant: Parser[Variant] =
-    typeId ~ "(" ~ typeNames ~ ")" ^^
-      { case n~_~params~_ => sym=sym.add(n,CONST);/*names::=n*/; AdtConst(n,params)} |
-      typeId ^^
-        {case n => sym=sym.add(n,CONST);/*names::=n*/; AdtVal(n)}
-
-  /* Connector definitions */
-
-  def connDef:Parser[ConnDef] =
-    "def" ~ identifierCapOrSmall ~ "="~"{" ~ preo ~ "}" ^^ {
-      case _~id~_~_~conn~_ => /*sym=sym.add(id,CONNNAME)*/; conns::=ConnDef(id,conn); ConnDef(id,conn)
-    }
+  // type parameters
+  def tparams:Parser[List[TypeName]] =
+    "<" ~> tnames <~ ">"
 
   /* Function definitions */
-  def funDef: Parser[FunDef] =
-    "fun" ~ identifierCapOrSmall ~ opt("(" ~> funFormalParams <~ ")") ~ "=" ~ "{" ~ dataExpr ~ "}" ^^ {
-      case _~f~params~_~_~e~_ => FunDef(f,e,List(),params.getOrElse(List()))}
 
-  // comma separated list of identifiers
-  def funFormalParams: Parser[List[Identifier]] =
-    identifierCapOrSmall ~ rep(","~> identifierCapOrSmall) ^^ {
-      case id~ids => (id::ids).map(i => {sym=sym.add(i,VAR); Identifier(i)})}
+  def funDef: Parser[SE] =
+    "def" ~>  restFunDef
+
+  def restFunDef:Parser[SE] = {
+    sym = sym.addLevel()
+    id ~ opt(tparams) ~ opt("<" ~> dataFormalParams <~ ">") ~ funParamsAndBody ^^ {
+      case f ~ tps ~ dps ~ r =>
+        sym = sym.add(f, FUN) // quick hack to see if function name is not used/delared inside the function todo: fix it
+        sym = sym.rmLevel()
+        sym = sym.add(f, FUN) // actually added it to the current scope
+        r match {
+        case Right(sf) => SFDef(f, tps.getOrElse(List()), dps.getOrElse(List()), sf)
+        case Left((ps, se)) => SEDef(f, tps.getOrElse(List()), dps.getOrElse(List()), ps, se)}}
+  }
+
+  def funParamsAndBody:Parser[Either[(List[Id],SE),SF]] =
+    "(" ~ opt(formalParams) ~ ")" ~ "=" ~"{"~ se ~ "}" ^^ {
+      case _~ps~_~_~_~e~_ => println("found sed");Left((ps.getOrElse(List()),e))} |
+    "=" ~ "{" ~ sf ~ "}" ^^ {
+      case _~_~sf~_ => println("found sfd");Right(sf)}
+
+  def formalParams: Parser[List[Id]] =
+    id ~ rep(","~> id) ^^ { case id~ids => (id::ids).map(i => {sym=sym.add(i,INPUT); Id(i)})}
+
+  def dataFormalParams: Parser[List[Id]] =
+    id ~ rep(","~> id) ^^ { case id~ids => (id::ids).map(i => {sym=sym.add(i,DATA); Id(i)})}
 
   /* Assignments */
 
-  /**
-    * An assignment expression
-    * id = dataExpr |
-    * id = connExpr |
-    * idList = connExpr
-    *
-    * @return the abstract syntax tree for the assignment expression
-    */
-  //def assignment:Parser[AST] =
-  //identifierCapOrSmall ~ "=" ~ dataExpr ^^ {case i~_~expr => sym=sym.add(i,VARNAME); Assignment(Identifier(i),expr)}
-  def assignment:Parser[AST] =
-    identifierCapOrSmall ~ rep("," ~> identifierCapOrSmall) ~ "=" ~ dataExpr ^^ {
-      case i~Nil~_~expr => sym=sym.add(i,VAR); Assignment(List(Identifier(i)),expr)
-      case i~ids~_~ConnId(c,ps) =>
+  def assignment:Parser[SE] =
+    id ~ rep("," ~> id) ~ ":=" ~ se ~ "." ^^ {
+      case i~Nil~_~e~_ => sym=sym.add(i,VAR); Asg(List(Id(i)),e)
+      case i~ids~_~e~_ =>
         (i::ids).foreach(i => sym=sym.add(i,VAR))
-        // make the multiple assignment
-        Assignment((i::ids).map(Identifier),ConnId(c,ps))//MultAssignment((i::ids).map(Identifier),ConnId(c,ps))
+        Asg((i::ids).map(Id),e)
     }
 
-  /* Expressions */
+  /* Stream Expressions */
+
+  def se:Parser[SE] =
+    oneSe ~ opt(se) ^^ {
+      case e1 ~ Some(e2) => ParSE(e1, e2)
+      case e1 ~ None => e1
+    }
+
+  def oneSe:Parser[SE] =
+    funDef |
+    assignment |
+    fbuild ~ "("~ groundParams ~ ")" ^^ {case b~_~ps~_ => SFExpr(b,ps)} |
+    fmatch ~ "("~ groundParams ~ ")" ^^ {case b~_~ps~_ => SFExpr(b,ps)} |
+    id ~ "("~ groundParams ~ ")" ^^ {case i~_~ps~_ => IdArgs(i,ps)} |
+    id ^^ {i => if (!sym(i).contains(CONST)) sym=sym.add(i,VAR); Id(i)} | // if n is not a constructor, add it to the context
+    sf ~ "("~ groundParams ~ ")" ^^ {case i~_~ps~_ => SFExpr(i,ps)}
+
+  /* Stream Functions */
 
   /**
-    * A data expression
-    * identifier |
-    * identifier(paramExprs)
-    * @return the parsed expression
+    * Parses a stream function: sequence of functions, functions in parallel,
+    * or a simple stream function
+    * @return a stream function
     */
-  def dataExpr:Parser[Expr] =
-    identifierCapOrSmall ~ opt("("~>paramExprs<~")") ^^ {
-      case c ~ None => sym(c) match {
-        case Some(CONST) => AdtTerm(c)
-        case Some(VAR) => Identifier(c)
-        case Some(CONST) => throw new ParsingException(s"Missing actual parameters for constructor $c")
-//        case Some(CONNNAME) => ConnId(c)
-        case None => Identifier(c)}
-      case c ~ Some(ps) => sym(c) match {
-        case Some(CONST) =>
-          var nparams = sizeOfParams(c)
-          if (nparams == ps.size) AdtConsExpr(c, ps)
-          else throw new ParsingException(s"Constructor $c expected $nparams parameters, but ${ps.size} found")
-//        case Some(CONNNAME) =>
-//          ConnId(c, ps)
-      }
+  def sf:Parser[SF] =
+    oneSf ~ ";" ~ sf ^^ {case f1~_~f2 => SeqSF(f1,f2)} |
+    oneSf ~ opt(sf) ^^ {
+      case f1~Some(f2) => ParSF(f1,f2)
+      case f1~None => f1
+    }
+
+  //group expression
+  def grExp:Parser[SF] =
+    "{" ~> sf <~ "}" ^^ {case f => GExpr(f)}
+
+  /**
+    * Parses a simple stream function: match, build or a fun name
+    * @return a stream function
+    */
+  def oneSf:Parser[SF] =
+    grExp |
+    fbuild |
+    fmatch |
+    id ~ opt(tparams) ~ opt("<"~> groundParams <~ ">") ^^ {
+      case i ~ tps ~ gps => FName(i,tps.getOrElse(List()),gps.getOrElse(List()))
+    }
+
+  def fbuild: Parser[SF] =
+    "build" ~ opt("<" ~> tname <~ ">") ^^ {case _~ps => FBuild(ps)}
+
+  def fmatch:Parser[SF] =
+    "match" ~ opt("<" ~> tname <~ ">") ^^ {case _~ps => FMatch(ps)}
+
+  /* Ground terms */
+
+  /**
+    * Parses a ground term: either a constructor or a variable
+    * todo: could check if the constructor exists, otherwise error
+    * @return a ground term
+    */
+  def groundTerm:Parser[GT] =
+    id ~ opt("(" ~> groundParams <~ ")")  ^^ {
+      case n~Some(ps) => IdArgs(n,ps)
+      case n~None => if (!sym(n).contains(CONST)) sym=sym.add(n,VAR); Id(n) // if n is not a constructor, add it to the context
     }
 
   /**
-    * Expressions that can appear in actual parameters
-    * dataExpr |
-    * dataExpr, dataExpr+
-    * @return a list containing an expression for each parameter found
+    * Parses parameters which can be ground terms only
+    * @return list of ground terms
     */
-  def paramExprs:Parser[List[Expr]] =
-    dataExpr ~ rep("," ~> dataExpr) ^^ { case e1~e2 => e1::e2 }
-
-  /* Auxiliary functions */
-
-  /**
-    * Number of parameters for a given ADT constructor
-    * @param adtConst the name of an adt constructor
-    * @return
-    */
-  private def sizeOfParams(adtConst:String):Int = {
-    var variant =  adts.flatMap(t => t.variants).find(v => v.name == adtConst)
-    if (variant.isDefined)
-      variant.get match {
-        case AdtVal(n) => throw new ParsingException("An ADT Value Variant has no Parameters: ")
-        case AdtConst(n,p) => p.size
-      }
-    else
-      throw new ParsingException("Unknown Constructor: " + adtConst)
-  }
+  def groundParams:Parser[List[GT]] =
+    groundTerm ~ rep("," ~> groundTerm) ^^ {case g~gs => g::gs}
 }

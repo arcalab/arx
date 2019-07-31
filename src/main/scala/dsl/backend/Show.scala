@@ -36,8 +36,8 @@ object Show {
   }
 
   def apply(tname:TypeName):String = tname match {
-    case AbsTypeName(n) => n
-    case ConTypeName(n,ps) => n + (if (ps.isEmpty) "" else  ps.map(apply).mkString("<",",",">"))
+    case AbsTN(n) => n
+    case ConTN(n,ps) => n + (if (ps.isEmpty) "" else  ps.map(apply).mkString("<",",",">"))
   }
 
   def apply(variant:Variant):String = variant match {

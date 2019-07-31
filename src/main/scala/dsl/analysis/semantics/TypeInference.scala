@@ -305,8 +305,8 @@ object TypeInference {
     * @return the type expression of the type name
     */
   def getVariantType(tn:TypeName):TypeExpr = tn match {
-    case AbsTypeName(atn) => TVar(atn)// TVar(freshVar())
-    case ConTypeName(ctn,ps) => BaseType(ctn,ps.map(p => getVariantType(p)))
+    case AbsTN(atn) => TVar(atn)// TVar(freshVar())
+    case ConTN(ctn,ps) => BaseType(ctn,ps.map(p => getVariantType(p)))
   }
 
   /**
