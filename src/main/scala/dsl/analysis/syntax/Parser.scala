@@ -11,6 +11,7 @@ import scala.util.parsing.combinator.RegexParsers
   * Created by guillecledou on 2019-05-31
   */
 
+
 object Parser extends RegexParsers with preo.lang.Parser {
 
   private var adts:List[TypeDecl] = List()

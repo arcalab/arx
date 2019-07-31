@@ -5,7 +5,7 @@ package dsl.analysis.syntax.ast
   */
 
 
-sealed trait StreamFun {}
+trait StreamFun {}
 
 case class FunName(name:String) extends StreamFun {}
 case class ParFun(f1:StreamFun,f2:StreamFun) extends StreamFun {}

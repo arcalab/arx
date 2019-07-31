@@ -3,8 +3,8 @@ package dsl
 import dsl.common.{ParsingException, TypeException}
 import dsl.analysis.semantics.Context
 import dsl.analysis.semantics._
-import dsl.analysis.syntax.ast.Program
-import dsl.analysis.syntax.{AST, Parser,NewParser}
+import dsl.analysis.syntax.ast.NewProg
+import dsl.analysis.syntax.{AST, Parser,RParser}
 import dsl.backend.Prettify
 import preo.DSL
 import preo.ast.{Connector, CoreConnector}
@@ -22,9 +22,9 @@ object DSL {
     case f:Parser.NoSuccess => throw new ParsingException("Parser failed: "+f.msg)
   }
 
-  def newParse(code:String):Program = NewParser.parseProgram(code) match {
-    case NewParser.Success(result, _) => result
-    case f:NewParser.NoSuccess => throw new ParsingException("Parser failed: "+f.msg)
+  def newParse(code:String):NewProg = RParser.parseProgram(code) match {
+    case RParser.Success(result, _) => result
+    case f:RParser.NoSuccess => throw new ParsingException("Parser failed: "+f.msg)
   }
 
   def unify(cons:Set[TCons]):Map[TVar,TypeExpr] = Unify(cons)
