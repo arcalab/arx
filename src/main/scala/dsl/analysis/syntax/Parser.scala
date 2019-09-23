@@ -109,6 +109,7 @@ object Parser extends RegexParsers with preo.lang.Parser {
           (i::ids).foreach(i => sym=sym.add(i,VARNAME))
           // make the multiple assignment
           Assignment((i::ids).map(Identifier),ConnId(c,ps))//MultAssignment((i::ids).map(Identifier),ConnId(c,ps))
+        case x => throw new ParsingException(s"Parser failed - $x")
     }
 
   /* Expressions */
@@ -126,6 +127,8 @@ object Parser extends RegexParsers with preo.lang.Parser {
         case Some(VARNAME) => Identifier(c)
         case Some(ADTCONST) => throw new ParsingException(s"Missing actual parameters for constructor $c")
         case Some(CONNNAME) => ConnId(c)
+          //TODO: @Guille - some symbols were not captured. Check what you had in mind.
+        case Some(x) => throw new ParsingException(s"Unexpected identifier $c with symbol $x")
         case None => Identifier(c)}
       case c ~ Some(ps) => sym(c) match {
         case Some(ADTCONST) =>
@@ -134,6 +137,11 @@ object Parser extends RegexParsers with preo.lang.Parser {
           else throw new ParsingException(s"Constructor $c expected $nparams parameters, but ${ps.size} found")
         case Some(CONNNAME) =>
             ConnId(c, ps)
+        //TODO: @Guille - some symbols were not captured. Check what you had in mind.
+        case Some(x) => throw new ParsingException(s"Unexpected identifier $c with symbol $x")
+        //TODO: @Guille - None was not captured. Check what you had in mind.
+        case None => throw new ParsingException(s"No symbol found for identifer $c.")
+
       }
     }
 
