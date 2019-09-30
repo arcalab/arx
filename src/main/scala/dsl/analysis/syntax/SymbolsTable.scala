@@ -47,7 +47,8 @@ class SymbolsTable {
     * @return
     */
   def apply(sym:String):Option[SymbolType] =
-    if (hash.contains(sym)) Some(hash(sym)) else None
+    //if (hash.contains(sym)) Some(hash(sym)) else None
+    hash.get(sym)
 //    else throw new UndefinedVarException(s"Unknown symbol: ${sym}")
 }
 

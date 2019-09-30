@@ -1,11 +1,9 @@
 package dsl
 
-import dsl.common.{ParsingException, TypeException}
-import dsl.analysis.semantics.Context
-import dsl.analysis.semantics._
+import dsl.analysis.semantics.{Context, _}
 import dsl.analysis.syntax.{AST, Parser}
 import dsl.backend.Prettify
-import preo.DSL
+import dsl.common.{ParsingException, TypeException}
 import preo.ast.{Connector, CoreConnector}
 import preo.frontend.{Eval, Show, Simplify}
 
