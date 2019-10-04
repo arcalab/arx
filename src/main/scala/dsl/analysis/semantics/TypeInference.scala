@@ -14,45 +14,45 @@ object TypeInference {
   private var tVars:Int = 0
   private def freshVar():String = {tVars+=1; (tVars-1).toString}
 
-  /**
-    * Infers the type of the each assignment/expression of the AST by means of constraint typing
-    * @param ast
-    * @param adt
-    * @return a constraint typing relation: (context, type of the last expression, set of type constraints)
-    */
-  def infer(ast:AST):(Context,Map[String,TypeConn],TypeExpr,Set[TCons]) = {
-    // find known adt from the ast
-    var adt:Map[String,TypeDecl] = ast.getTypes.flatMap(td => td.variants.map(v => v.name -> td)).toMap
-    // initialize type variables
-    tVars = 0
-    // initialize context
-    var ctx = new Context
-    // initialize constraints
-    var tCons:Set[TCons] = Set()
-    // get all connector definitions
-    var conns = ast.getDefs
-    /*
-    * todo:
-    *  eventually we will have to pass to the next definition the previous context
-    *  this is when we allow conn defs to reference connectors from other previous defs.
-    */
-    // for each connector def infer its type
-    var tConns:Map[String,TypeConn] = conns.map(c => c.name -> TypeConn(c)).toMap
-//    // for each function definition infer its type
-//    var tfuns:Map[String,TMap] =
-    // get assignments and multi-assignments (for now are the only expressions to type)
-    var assig = ast.getAssignments
-    // for each (multi)assignment infer its type, using the context from previous inferred assignments
-    // accumulate all the constraints from each inferred assignment
-    var res:(Context,TypeExpr,Set[TCons]) = (new Context,TUnit,Set[TCons]())
-    for (a <- assig) {
-      res = infer(a,ctx,tConns,adt)
-      ctx = res._1
-      tCons ++= res._3
-    }
-    // return the last known context, the type of the last assignment and the accumulated set of constraints
-    (res._1,tConns,res._2,tCons)
-  }
+//  /**
+//    * Infers the type of the each assignment/expression of the AST by means of constraint typing
+//    * @param ast
+//    * @param adt
+//    * @return a constraint typing relation: (context, type of the last expression, set of type constraints)
+//    */
+//  def infer(ast:AST):(Context,Map[String,TypeConn],TypeExpr,Set[TCons]) = {
+//    // find known adt from the ast
+//    var adt:Map[String,TypeDecl] = ast.getTypes.flatMap(td => td.variants.map(v => v.name -> td)).toMap
+//    // initialize type variables
+//    tVars = 0
+//    // initialize context
+//    var ctx = new Context
+//    // initialize constraints
+//    var tCons:Set[TCons] = Set()
+//    // get all connector definitions
+//    var conns = ast.getDefs
+//    /*
+//    * todo:
+//    *  eventually we will have to pass to the next definition the previous context
+//    *  this is when we allow conn defs to reference connectors from other previous defs.
+//    */
+//    // for each connector def infer its type
+//    var tConns:Map[String,TypeConn] = conns.map(c => c.name -> TypeConn(c)).toMap
+////    // for each function definition infer its type
+////    var tfuns:Map[String,TMap] =
+//    // get assignments and multi-assignments (for now are the only expressions to type)
+//    var assig = ast.getAssignments
+//    // for each (multi)assignment infer its type, using the context from previous inferred assignments
+//    // accumulate all the constraints from each inferred assignment
+//    var res:(Context,TypeExpr,Set[TCons]) = (new Context,TUnit,Set[TCons]())
+//    for (a <- assig) {
+//      res = infer(a,ctx,tConns,adt)
+//      ctx = res._1
+//      tCons ++= res._3
+//    }
+//    // return the last known context, the type of the last assignment and the accumulated set of constraints
+//    (res._1,tConns,res._2,tCons)
+//  }
 
 //  /**
 //    * Infer the type of a function
@@ -335,7 +335,7 @@ object TypeInference {
     * appearance of the abstract type with the corresponding variable.
     * E.g.: List<a> -> List<T> for some new T
     *
-    * @param tes
+    * @param te
     * @param map
     * @return
     */

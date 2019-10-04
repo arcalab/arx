@@ -31,7 +31,7 @@ object Show {
     case Statements(sts) => sts.map(apply).mkString("\n")
     case Assignment(vs,expr) => vs.map(apply).mkString(",") + " = " + apply(expr)
     case TypeDecl(n,variants) => "type " + apply(n) + " = " + variants.map(apply).mkString(" | ")
-    case ConnDef(n,c) => "connector " + n + "=" + preo.frontend.Show(c)
+    //case ConnDef(n,c) => "connector " + n + "=" + preo.frontend.Show(c)
   }
 
   def apply(tname:TypeName):String = tname match {
@@ -43,4 +43,45 @@ object Show {
     case AdtVal(n) => n
     case AdtConst(n, ps) => n + ps.map(apply).mkString("(",",",")")
   }
+
+
+  //////////////////
+  def apply(p:Program): String =
+    p.types.map(apply).mkString("\n") +
+      (if (p.types.nonEmpty) "\n\n" else "") +
+      p.block.map(apply).mkString("\n")
+
+  def apply(td: TypeDecl2): String =
+    "data " + apply(td.name) + " = " + td.variants.map(apply).mkString(" | ")
+
+  def apply(s: Statement)(implicit ind:Int = 0): String = fwd(ind) + (s match {
+    case Assignment2(variables, expr) =>
+      variables.mkString(",")+" := "+apply(expr)(0)
+    case FunDef2(name, params, typ, block) =>
+      "def "+name+"("+params.map(apply).mkString(",")+")"+
+        (if (typ.isDefined) " : "+apply(typ.get) else "")+
+        " = {\n"+block.map(s=>apply(s)(ind+1)+"\n").mkString+
+        fwd(ind)+"}"
+    case expr: StreamExpr => expr match {
+      case FunctionApp(sfun, args) => apply(sfun)+"("+args.map(s=>apply(s)(0)).mkString(",")+")"
+      case term: GroundTerm => term match {
+        case Const(q, args) => q+(if (args.nonEmpty) "("+args.map(s=>apply(s)(0)).mkString(",")+")" else "")
+        case Port(x) => x
+      }
+    }
+  })
+
+  def apply(tv:TypedVar): String =
+    tv.name+(tv.typ match {
+      case Some(t) => ":"+apply(t)
+      case None => ""
+    })
+  def apply(fun: StreamFun): String = fun match {
+    case FunName(f) => f
+    case Build => "build"
+    case Match => "match"
+  }
+
+
+  private def fwd(i: Int): String = "  "*i
 }

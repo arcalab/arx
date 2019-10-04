@@ -1,6 +1,6 @@
 package dsl.analysis.syntax
 
-import preo.ast.Connector
+//import preo.ast.Connector
 
 /**
   * Created by guillecledou on 2019-05-31
@@ -20,11 +20,11 @@ sealed trait AST {
     case _ => List()
   }
 
-  def getDefs:List[ConnDef] =  this match {
-    case c@ConnDef(name, con) => List(c)
-    case Statements(sts) => sts.flatMap(_.getDefs)
-    case _ => List()
-  }
+//  def getDefs:List[ConnDef] =  this match {
+//    case c@ConnDef(name, con) => List(c)
+//    case Statements(sts) => sts.flatMap(_.getDefs)
+//    case _ => List()
+//  }
 
   def getFunDefs:List[FunDef] = this match {
     case f@FunDef(name, expr, params) => List(f)
@@ -62,7 +62,7 @@ case class Assignment(variables:List[Identifier], expr:Expr) extends AST {}
 
 /* Connector Definition */
 
-case class ConnDef(name:String, c:Connector) extends AST {}
+//case class ConnDef(name:String, c:Connector) extends AST {}
 
 /* Function Definition */
 
