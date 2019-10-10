@@ -20,7 +20,7 @@ case class FunDef2(name:String,
 case class Assignment2(variables:List[String],
                        expr:StreamExpr) extends Statement
 
-sealed abstract class GroundTerm                      extends StreamExpr
+sealed abstract class GroundTerm               extends StreamExpr
 case class FunctionApp(sfun: StreamFun,
                        args: List[GroundTerm]) extends StreamExpr
 
