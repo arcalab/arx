@@ -28,7 +28,7 @@ object Net {
 
   case class Connector(name: String, ins: Interface, out: Interface)
   type IPort = Int
-  type Interface = List[IPort]
+  type Interface = Set[IPort]
   type FunBlock = (List[String],Block)
 
 
@@ -51,7 +51,7 @@ object Net {
   }
 
   def apply(b: Block)(implicit gm: BuildContext): Net = b match {
-    case Nil => Net(Nil, Nil, Nil)
+    case Nil => Net(Nil, Set(), Set())
     case st :: tail =>
       //println(s"[[${st}]] ")
       st match {
@@ -76,7 +76,7 @@ object Net {
       case Port(nm) =>
         val x = gm.getPort(nm,In)
         val out = gm.getPort(vars.head,Out) // vars must be singleton to type check
-        Net(List(Connector("id",List(x),List(out))),List(x),Nil)
+        Net(List(Connector("id",Set(x),Set(out))),Set(x),Set())
       case _ => apply(List(expr))
     }
     val sigma: Map[IPort,IPort] = vars.zip(netE.outs)
@@ -88,7 +88,7 @@ object Net {
         })
         .toMap
     val netAssg = replace(sigma)(netE)
-    Net(netAssg.prims,netAssg.ins,Nil) // clean outs
+    Net(netAssg.prims,netAssg.ins,Set()) // clean outs
 //    vars.foreach(p => gm.getPort(p,Out))
 //    Net(netE.prims,Nil,Nil)
   }
@@ -128,13 +128,13 @@ object Net {
             case Some((netFun,_,out)) =>
               val (ins,nets) = args.map(mkPort).unzip
               val outs = List.fill(out)(gm.fresh)
-              val netArgs = nets.fold(Net(Nil,Nil,Nil))(_++_)
-              netArgs ++ netFun(ins,outs) ++ apply(rest)
+              val netArgs = nets.fold(Net(Nil,Set(),Set()))(_++_)
+              netArgs ++ netFun(ins.toSet,outs.toSet) ++ apply(rest)
             // UNKNOWN - must be an ID channel
             case None =>
               val (ins,nets) = args.map(mkPort).unzip
-              val netArgs = nets.fold(Net(Nil,Nil,Nil))(_++_)
-              netArgs ++ mkNet(name,ins,List(gm.fresh)) ++ apply(rest)
+              val netArgs = nets.fold(Net(Nil,Set(),Set()))(_++_)
+              netArgs ++ mkNet(name,ins.toSet,Set(gm.fresh)) ++ apply(rest)
           }
 
 
@@ -146,8 +146,8 @@ object Net {
         }
       case Build =>
         val (ins,nets) = args.map(mkPort).unzip
-        val netArgs = nets.fold(Net(Nil,Nil,Nil))(_++_)
-        netArgs ++ mkNet("BUILD",ins,List(gm.fresh)) ++ apply(rest)
+        val netArgs = nets.fold(Net(Nil,Set(),Set()))(_++_)
+        netArgs ++ mkNet("BUILD",ins.toSet,Set(gm.fresh)) ++ apply(rest)
       case Match => throw new RuntimeException("Match not supported yet.")
     }
   }
@@ -163,7 +163,7 @@ object Net {
     // (the dev can still use "build" to create complex data structures.
     val name = Show(Const(q,args))
     val ins: Interface = getPorts(args)
-    val outs: Interface = List(gm.fresh)
+    val outs: Interface = Set(gm.fresh)
     mkNet(name,ins,outs)
 //    Net(List(Connector(Show(Const(q,args))
 //                      ,args.count(_.isInstanceOf[Port])
@@ -174,8 +174,8 @@ object Net {
   }
 
   def getPorts(args: List[GroundTerm])(implicit gm:BuildContext): Interface = args match {
-    case Nil => Nil
-    case Port(x)::tl => gm.getPort(x,In) :: getPorts(tl)
+    case Nil => Set()
+    case Port(x)::tl => getPorts(tl) + gm.getPort(x,In)
     case Const(_,args2)::tl => getPorts(args2:::tl)
   }
 
@@ -185,7 +185,7 @@ object Net {
   def portToNet(p: String)//,t:PType)
                (implicit gm: BuildContext): Net = {
     val x = gm.getPort(p,Out)
-    Net(Nil,List(),List(x))
+    Net(Nil,Set(),Set(x))
   }
 //    gm.ports.get(p) match {
 //      case Some((x, In)) =>
@@ -203,14 +203,14 @@ object Net {
 
 
   def mkPort(gt:GroundTerm)(implicit gm:BuildContext): (IPort,Net) = gt match {
-    case Port(x) => (gm.getPort(x,In),Net(Nil,Nil,Nil))
+    case Port(x) => (gm.getPort(x,In),Net(Nil,Set(),Set()))
     case Const(q, args) =>
       val nc = constToNet(q,args)
       (nc.outs.head,nc)
   }
 
-  def mkNet(nm:String,in:IPort,out:IPort): Net = mkNet(nm,List(in),List(out))
-  def mkNet(nm:String,ins:List[IPort],outs:List[IPort]): Net =
+  def mkNet(nm:String,in:IPort,out:IPort): Net = mkNet(nm,Set(in),Set(out))
+  def mkNet(nm:String,ins:Interface,outs:Interface): Net =
     Net(List(Connector(nm,ins,outs)),ins,outs)
 
 
