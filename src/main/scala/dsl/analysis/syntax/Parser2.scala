@@ -29,8 +29,8 @@ object Parser2 extends RegexParsers {
   override val whiteSpace: Regex = "( |\t|\r|\f|\n|//.*)+".r
 
   val typeId:Parser[String] = """[A-Z][a-zA-Z0-9_]*""".r
-  val absTypeId:Parser[String] = """[a-z][a-zA-Z0-9_]*""".r //possible can just be represented as a regular typename
-  val identifierCapOrSmall:Parser[String] = """[a-zA-Z][a-zA-Z0-9_]*""".r
+  val identifierSmallCap:Parser[String] = """[a-z][a-zA-Z0-9_]*""".r //possible can just be represented as a regular typename
+//  val identifierCapOrSmall:Parser[String] = """[a-zA-Z][a-zA-Z0-9_]*""".r
 
   /* Program */
 
@@ -55,7 +55,7 @@ object Parser2 extends RegexParsers {
     "("~>repsep(ground,",")<~")"
 
   def ground: Parser[GroundTerm] =
-    absTypeId ^^ Port |
+    identifierSmallCap ^^ Port |
     typeId ~ opt(args) ^^ {
       case q~as => Const(q,as.getOrElse(Nil))
     }
@@ -63,7 +63,7 @@ object Parser2 extends RegexParsers {
   def strFun: Parser[StreamFun] =
     "build" ^^^ Build |
     "match" ^^^ Match |
-      identifierCapOrSmall ^^ FunName
+    identifierSmallCap ^^ FunName
     // TODO: sequential and parallel composition
 
 //      rep(connDef) ~
@@ -94,12 +94,12 @@ object Parser2 extends RegexParsers {
 
   def typeName:Parser[TypeName] =
     typeId ~ opt("<"~> typeParams <~">")  ^^ {case n~opt =>  ConTypeName(n,opt.getOrElse(List()))} |
-    absTypeId ^^ (n => AbsTypeName(n))
+    identifierSmallCap ^^ (n => AbsTypeName(n))
 
   // Type parameters (abstract or concrete)
   def typeParams:Parser[List[TypeName]] =
     typeId ~ opt("," ~> typeParams) ^^ {case n~par =>  ConTypeName(n)::par.getOrElse(List())} |
-    absTypeId ~ opt("," ~> typeParams) ^^ {case n~par =>  AbsTypeName(n)::par.getOrElse(List())}
+    identifierSmallCap ~ opt("," ~> typeParams) ^^ {case n~par =>  AbsTypeName(n)::par.getOrElse(List())}
 
   // a list of type variants
   def typeVariants: Parser[List[Variant]] =
@@ -122,7 +122,7 @@ object Parser2 extends RegexParsers {
 
   /* Function definitions */
   def funDef: Parser[FunDef2] =
-    "def" ~ identifierCapOrSmall ~ opt("(" ~> funFormalParams <~ ")") ~
+    "def" ~ identifierSmallCap ~ opt("(" ~> funFormalParams <~ ")") ~
       opt(":"~>typeName)~
       "=" ~ "{" ~ block ~ "}" ^^ {
       case _~f~params~typ~_~_~bl~_ => FunDef2(f,params.getOrElse(Nil),typ,bl)}
@@ -135,7 +135,7 @@ object Parser2 extends RegexParsers {
     }
 
   def typedVar: Parser[TypedVar] =
-    identifierCapOrSmall~opt(":"~>typeName) ^^ {
+    identifierSmallCap~opt(":"~>typeName) ^^ {
       case v~t => TypedVar(v,t)
     }
 
@@ -151,7 +151,7 @@ object Parser2 extends RegexParsers {
     * @return the abstract syntax tree for the assignment expression
     */
   def assignment:Parser[Assignment2] =
-    repsep(identifierCapOrSmall,",")~":="~strExpr ^^ {
+    repsep(identifierSmallCap,",")~":="~strExpr ^^ {
       case ids~_~expr =>
         ids.foreach(id => sym = sym.add(id,VARNAME))
         Assignment2(ids,expr)
@@ -168,7 +168,7 @@ object Parser2 extends RegexParsers {
     * @return the parsed expression
     */
   def dataExpr:Parser[Expr] =
-    identifierCapOrSmall ~ opt("("~>paramExprs<~")") ^^ {
+    identifierSmallCap ~ opt("("~>paramExprs<~")") ^^ {
       case c ~ None => sym(c) match {
         case Some(ADTVAL) => AdtTerm(c)
         case Some(VARNAME) => Identifier(c)

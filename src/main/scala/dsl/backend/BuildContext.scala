@@ -70,6 +70,12 @@ class BuildContext {
     }
   }
   /** Updates state based on the context after evaluating an  */
-  def updAppl(other:BuildContext): Unit =
+  def updAppl(other:BuildContext, interface: Interface): Unit = {
     seed = other.seed
+    for (p <- other.ports)
+      if (interface contains p._2._1) ports += p
+  }
+  /** Maximum value for port used. */
+  def maxPort: IPort = seed
+
 }

@@ -4,15 +4,10 @@ import dsl.analysis.syntax.Program.Block
 import dsl.analysis.syntax._
 import dsl.backend.Net.{Connector, Interface}
 
-import scala.collection.mutable
-
 
 /**
   * Network of primitives - to be translated as a preo.Network, that can in turn be
   * simplified, translated into a preo.Circuit, and depicted using a JS library.
-  * @param prims
-  * @param ins
-  * @param outs
   */
 case class Net(prims:List[Connector], ins:Interface, outs:Interface) {
   def ++(other:Net): Net =
@@ -44,10 +39,19 @@ object Net {
 
   //private var seed = 0
 
-  def apply(prog: Program): Net = {
-    println(s"--- starting prog-to-net --- ")
+  def apply(prog: Program): (Net,Int) = {
+//    println(s"--- starting prog-to-net --- ")
     val gamma = new BuildContext()
-    apply(prog.block)(gamma)
+    val net = apply(prog.block)(gamma)
+    (cleanInputs(net)(gamma),gamma.maxPort)
+  }
+
+  private def cleanInputs(net: Net)(implicit gm: BuildContext): Net = {
+    val portTypes = gm.ports.values.toMap
+//    println(s"CLEANing inputs: ${gm.ports.mkString(",")} -> ${
+//      net.ins.filter(p => portTypes.get(p) contains In).mkString(",")}")
+//    println(s"out ports: ${net.outs}")
+    Net(net.prims,net.ins.filter(p => portTypes.get(p) contains In),net.outs)
   }
 
   def apply(b: Block)(implicit gm: BuildContext): Net = b match {
@@ -62,7 +66,9 @@ object Net {
         case Assignment2(vars, expr) =>
           assgnToNet(vars, expr) ++ apply(tail)
         case FunctionApp(sfun, args) =>
-          funAppToNet(sfun, args, tail)
+          val res = funAppToNet(sfun, args, tail)
+          //println(s"got funAppToNet - $res")
+          res
         case FunDef2(name, params, _, block) =>
           gm.fun += name -> (params.map(_.name), block)
           apply(tail)
@@ -81,7 +87,9 @@ object Net {
     }
     val sigma: Map[IPort,IPort] = vars.zip(netE.outs)
         .map((pair:(String,IPort)) => gm.ports.get(pair._1) match {
-          case Some((ip,_)) => pair._2 -> ip
+          case Some((ip,io)) =>
+            if (io==In) gm.ports += pair._1 -> (ip,Mix)
+            pair._2 -> ip
           case None =>
             gm.ports += pair._1 -> (pair._2,Out)
             pair._2 -> pair._2
@@ -102,11 +110,16 @@ object Net {
         val hide = nm.lastOption.contains('_')
         val name = if (hide) nm.dropRight(1) else nm
         gm.fun.get(name) match {
+
           // KNOWN FUNCTION with a Block - evaluate it
           case Some((formalArgs, block)) =>
             //print(s"FN-$name($formalArgs,$block ")
-            val block2 = replace(formalArgs.zip(args).toMap, block)
-            //print(s"recursive-${block2} ")
+//            val block1 = replace(...)
+            val varsInArgs =
+              for (a<-args if a.isInstanceOf[Port])
+              yield a.asInstanceOf[Port].x
+            val block1 = replace(varsInArgs.zip(varsInArgs.map(v=>Port(v+"$"))).toMap,block)
+            val block2 = replace(formalArgs.zip(args).toMap, block1)
             val net1 = apply(block2)(gm2) // gm2 will have updated seed, new internal funs, new ports
             def isArg(x:IPort): Boolean = args.exists {
               case Port(name) => gm2.ports.get(name).map(_._1) contains x
@@ -119,24 +132,26 @@ object Net {
                 net1.prims
 
             val net2 = Net(prims2,ins2,net1.outs)
-            //print(s"net-$net1 ")
-            gm.updAppl(gm2) // import relevant aspects from gm2
+            gm.updAppl(gm2,net2.ins) // import relevant aspects from gm2
             val restNet = apply(rest)(gm)
-            net2 ++ restNet
+            val res = net2 ++ restNet
+            res
+
           // PRIMITIVE FUNCTION
           case None => gm.prims.get(name) match {
             case Some((netFun,_,out)) =>
-              val (ins,nets) = args.map(mkPort).unzip
-              val outs = List.fill(out)(gm.fresh)
-              val netArgs = nets.fold(Net(Nil,Set(),Set()))(_++_)
-              netArgs ++ netFun(ins.toSet,outs.toSet) ++ apply(rest)
+              val outs = List.fill(out)(gm.fresh).toSet
+              val (netArgs,newIns) = processArgs(args)
+              netArgs ++ netFun(newIns , outs) ++ apply(rest)
             // UNKNOWN - must be an ID channel
             case None =>
-              val (ins,nets) = args.map(mkPort).unzip
-              val netArgs = nets.fold(Net(Nil,Set(),Set()))(_++_)
-              netArgs ++ mkNet(name,ins.toSet,Set(gm.fresh)) ++ apply(rest)
+//              val (newPorts,nets) = args.map(mkPort).unzip
+//              val newIns = newPorts.filter(_._2!=Out).map(_._1)
+////              val newOuts = newPorts.filter(_._2!=In).map(_._1)
+  //              val netArgs = nets.fold(Net(Nil,Set(),Set()))(_++_)
+              val (netArgs,newIns) = processArgs(args)
+              netArgs ++ mkNet(name,newIns,Set(gm.fresh)) ++ apply(rest)
           }
-
 
             // if type checks, it must be a named-ID channel
             //            Net(List(Connector(name,1,1)),...)
@@ -145,13 +160,24 @@ object Net {
 //            Net(List(Connector(name,1,1)), args.flatMap(a=>gm.getPorts(a,In)), List(gm.fresh))
         }
       case Build =>
-        val (ins,nets) = args.map(mkPort).unzip
-        val netArgs = nets.fold(Net(Nil,Set(),Set()))(_++_)
-        netArgs ++ mkNet("BUILD",ins.toSet,Set(gm.fresh)) ++ apply(rest)
+        val (netArgs,newIns) = processArgs(args)
+        netArgs ++ mkNet("BUILD",newIns,Set(gm.fresh)) ++ apply(rest)
       case Match => throw new RuntimeException("Match not supported yet.")
     }
   }
 
+  private def processArgs(args: List[GroundTerm])(implicit gm:BuildContext): (Net,Interface) = {
+    val (newPorts,nets) = args.map(mkPort).unzip
+    var newIns = newPorts.filter(_._2!=Out).map(_._1)
+    val outNets = newPorts.filter(_._2==Out).map(_._1).map(p => {
+      val i = gm.fresh
+      newIns ::= i
+      Net(List(Connector("idd",Set(p),Set(i))),Set(),Set())
+    })
+    //val newOuts = newPorts.filter(_._2!=In).map(_._1)
+    ( (nets++outNets).fold(Net(Nil,Set(),Set()))(_++_) ,
+      newIns.toSet)
+  }
 
   // constructor (constant stream) to a Net
   def constToNet(q: String, args: List[GroundTerm])
@@ -161,6 +187,7 @@ object Net {
     //   find variables in the
     // OR!!! assume only values in args, and build a single output and a connector pointing to it (a writer)
     // (the dev can still use "build" to create complex data structures.
+    //println(s"Building constructor ${q} [${args.mkString("/")}]")
     val name = Show(Const(q,args))
     val ins: Interface = getPorts(args)
     val outs: Interface = Set(gm.fresh)
@@ -202,11 +229,13 @@ object Net {
 //    }
 
 
-  def mkPort(gt:GroundTerm)(implicit gm:BuildContext): (IPort,Net) = gt match {
-    case Port(x) => (gm.getPort(x,In),Net(Nil,Set(),Set()))
+  def mkPort(gt:GroundTerm)(implicit gm:BuildContext): ((IPort,PType),Net) = gt match {
+    case Port(x) =>
+      gm.getPort(x,In)
+      (gm.ports(x),Net(Nil,Set(),Set()))
     case Const(q, args) =>
       val nc = constToNet(q,args)
-      (nc.outs.head,nc)
+      ((nc.outs.head,Out),Net(nc.prims,Set(),Set()))
   }
 
   def mkNet(nm:String,in:IPort,out:IPort): Net = mkNet(nm,Set(in),Set(out))
