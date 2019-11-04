@@ -72,10 +72,15 @@ class BuildContext {
   /** Updates state based on the context after evaluating an  */
   def updAppl(other:BuildContext, interface: Interface): Unit = {
     seed = other.seed
-    for (p <- other.ports)
-      if (interface contains p._2._1) ports += p
+//    for (p <- other.ports)
+//      if (interface contains p._2._1) ports += p
   }
   /** Maximum value for port used. */
   def maxPort: IPort = seed
 
+  override def toString: String = {
+    s"{$seed} - ports: "+ports.mkString(",")+
+      " / funs: "+fun.map("<"+_._1+">").mkString(",")//+
+      //" / prims: "+prims.map(x=>s"${x._1}:${x._2._2}->${x._2._3}").mkString(",")
+  }
 }

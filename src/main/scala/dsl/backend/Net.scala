@@ -14,6 +14,10 @@ case class Net(prims:List[Connector], ins:Interface, outs:Interface) {
     Net(prims++other.prims, ins++other.ins, outs++other.outs)
 
   override def toString: String =
+    prims.map(c => s"${c.name}:${c.ins.mkString(",")}->${c.out.mkString(",")}").mkString("; ") +
+      s" [${ins.mkString(",")}->${outs.mkString(",")}]"
+
+  def pretty: String =
     prims.map(c => "  "+c.name+" ["+c.ins.mkString(",")+"] -> ["+c.out.mkString(",")+"]\n").mkString +
       "IN : "+ins.mkString(",")+"\n"+
       "OUT: "+outs.mkString(",")
@@ -26,18 +30,10 @@ object Net {
   type Interface = Set[IPort]
   type FunBlock = (List[String],Block)
 
-
-
-//  class BuildContext() {
-//
-//  }
-
   sealed abstract class PType
   case object In extends PType
   case object Out extends PType
   case object Mix extends PType
-
-  //private var seed = 0
 
   def apply(prog: Program): (Net,Int) = {
 //    println(s"--- starting prog-to-net --- ")
@@ -97,14 +93,20 @@ object Net {
         .toMap
     val netAssg = replace(sigma)(netE)
     Net(netAssg.prims,netAssg.ins,Set()) // clean outs
-//    vars.foreach(p => gm.getPort(p,Out))
-//    Net(netE.prims,Nil,Nil)
   }
 
   def funAppToNet(fun: StreamFun, args: List[GroundTerm], rest: Block)
                  (implicit gm: BuildContext): Net = {
+//    println(s"<${fun}> ")
+//    println(s"  * processed Args ${args.mkString(",")}")
+//    println(s"  * (pre) $gm")
+    val (netArgs,newIns) = processArgs(args)
+//    println(s"  * net: $netArgs")
+//    println(s"  * ins: $newIns")
+//    println(s"  * (pos) $gm")
+
     val gm2 = gm.cleanedPorts
-    //println(s"<$fun> ")
+
     fun match {
       case FunName(nm) =>
         val hide = nm.lastOption.contains('_')
@@ -114,18 +116,12 @@ object Net {
           // KNOWN FUNCTION with a Block - evaluate it
           case Some((formalArgs, block)) =>
             //print(s"FN-$name($formalArgs,$block ")
-//            val block1 = replace(...)
-            val varsInArgs =
-              for (a<-args if a.isInstanceOf[Port])
-              yield a.asInstanceOf[Port].x
-            val block1 = replace(varsInArgs.zip(varsInArgs.map(v=>Port(v+"$"))).toMap,block)
-            val block2 = replace(formalArgs.zip(args).toMap, block1)
-            val net1 = apply(block2)(gm2) // gm2 will have updated seed, new internal funs, new ports
-            def isArg(x:IPort): Boolean = args.exists {
-              case Port(name) => gm2.ports.get(name).map(_._1) contains x
-              case _ => false
-            }
-            val ins2 = net1.ins.filter(isArg)
+            // add to context each formal argument var "y" using new ports from processArgs
+            for ((a,port) <- formalArgs zip newIns)
+              gm2.ports += (a -> port)
+
+            val net1 = apply(block)(gm2) // gm2 will have updated seed, new internal funs, new ports
+            val ins2 = newIns.map(_._1).toSet
             val prims2 = if (hide)
                 List(Connector(name,ins2,net1.outs))
               else
@@ -134,49 +130,34 @@ object Net {
             val net2 = Net(prims2,ins2,net1.outs)
             gm.updAppl(gm2,net2.ins) // import relevant aspects from gm2
             val restNet = apply(rest)(gm)
-            val res = net2 ++ restNet
+            val res = netArgs ++ net2 ++ restNet
             res
 
           // PRIMITIVE FUNCTION
           case None => gm.prims.get(name) match {
             case Some((netFun,_,out)) =>
               val outs = List.fill(out)(gm.fresh).toSet
-              val (netArgs,newIns) = processArgs(args)
-              netArgs ++ netFun(newIns , outs) ++ apply(rest)
+              netArgs ++ netFun(newIns.map(_._1).toSet , outs) ++ apply(rest)
             // UNKNOWN - must be an ID channel
             case None =>
-//              val (newPorts,nets) = args.map(mkPort).unzip
-//              val newIns = newPorts.filter(_._2!=Out).map(_._1)
-////              val newOuts = newPorts.filter(_._2!=In).map(_._1)
-  //              val netArgs = nets.fold(Net(Nil,Set(),Set()))(_++_)
-              val (netArgs,newIns) = processArgs(args)
-              netArgs ++ mkNet(name,newIns,Set(gm.fresh)) ++ apply(rest)
+              netArgs ++ mkNet(name,newIns.map(_._1).toSet,Set(gm.fresh)) ++ apply(rest)
           }
-
-            // if type checks, it must be a named-ID channel
-            //            Net(List(Connector(name,1,1)),...)
-//            val block2 = replaceIP(Map("in"->args.head),)
-//            val cs =
-//            Net(List(Connector(name,1,1)), args.flatMap(a=>gm.getPorts(a,In)), List(gm.fresh))
         }
       case Build =>
-        val (netArgs,newIns) = processArgs(args)
-        netArgs ++ mkNet("BUILD",newIns,Set(gm.fresh)) ++ apply(rest)
+        //val (netArgs,newIns) = processArgs(args)
+        netArgs ++ mkNet("BUILD",newIns.map(_._1).toSet,Set(gm.fresh)) ++ apply(rest)
       case Match => throw new RuntimeException("Match not supported yet.")
     }
   }
 
-  private def processArgs(args: List[GroundTerm])(implicit gm:BuildContext): (Net,Interface) = {
+  /** From actual arguments, eg, (x,True), build:
+    *  - Net([id1: []->True_p] , Nil, Nil ) - for the generated port True_p for "True" (and other constructors if they exist)
+    *  - [x_p, True_p] - the port numbers of each actual argument.
+    */
+  private def processArgs(args: List[GroundTerm])(implicit gm:BuildContext): (Net,List[(IPort,PType)]) = {
     val (newPorts,nets) = args.map(mkPort).unzip
-    var newIns = newPorts.filter(_._2!=Out).map(_._1)
-    val outNets = newPorts.filter(_._2==Out).map(_._1).map(p => {
-      val i = gm.fresh
-      newIns ::= i
-      Net(List(Connector("idd",Set(p),Set(i))),Set(),Set())
-    })
-    //val newOuts = newPorts.filter(_._2!=In).map(_._1)
-    ( (nets++outNets).fold(Net(Nil,Set(),Set()))(_++_) ,
-      newIns.toSet)
+    ( nets.fold(Net(Nil,Set(),Set()))(_++_) ,
+      newPorts)
   }
 
   // constructor (constant stream) to a Net
@@ -192,12 +173,6 @@ object Net {
     val ins: Interface = getPorts(args)
     val outs: Interface = Set(gm.fresh)
     mkNet(name,ins,outs)
-//    Net(List(Connector(Show(Const(q,args))
-//                      ,args.count(_.isInstanceOf[Port])
-//                      ,1))
-//       ,for(a<-args if a.isInstanceOf[Port])
-//         yield gm.getPort(a.asInstanceOf[Port].x,In)
-//       ,Nil)
   }
 
   def getPorts(args: List[GroundTerm])(implicit gm:BuildContext): Interface = args match {
@@ -214,20 +189,6 @@ object Net {
     val x = gm.getPort(p,Out)
     Net(Nil,Set(),Set(x))
   }
-//    gm.ports.get(p) match {
-//      case Some((x, In)) =>
-//        gm.ports += p -> (x, Mix)
-//        Net(Nil, List(x), List(x))
-//      case Some((x, Mix)) =>
-//        Net(Nil, List(x), List(x))
-//      case Some((x, Out)) =>
-//        Net(Nil, List(x), List(x))
-//      case None =>
-//        val x = gm.fresh
-//        gm.ports += p -> (x, Out)
-//        Net(Nil, List(x), List(x))
-//    }
-
 
   def mkPort(gt:GroundTerm)(implicit gm:BuildContext): ((IPort,PType),Net) = gt match {
     case Port(x) =>
@@ -245,34 +206,40 @@ object Net {
 
   ////////////////////////
 
-  def replace(sigma: Map[String, GroundTerm], block: Block): Block =
-    block.map(replace(sigma,_))
-  def replace(sigma: Map[String,GroundTerm], gt: GroundTerm): GroundTerm = gt match {
-    case Port(x) => sigma.getOrElse(x,Port(x))
-    case Const(q, args) =>Const(q,args.map(replace(sigma,_)))
-  }
-  def replace(sigma: Map[String,GroundTerm], se: StreamExpr): StreamExpr = se match {
-    case term: GroundTerm => replace(sigma,term)
-    case FunctionApp(sfun, args) =>
-      FunctionApp(sfun,args.map(replace(sigma,_)))
-  }
-  def replace(sigma: Map[String,GroundTerm], st: Statement): Statement = st match {
-    case se: StreamExpr => replace(sigma,se)
-    case FunDef2(name, params, typ, block) =>
-      FunDef2(name,params,typ,replace(sigma -- params.map(_.name),block))
-    case Assignment2(variables, expr) =>
-      Assignment2(variables.map(v => sigma.get(v) match {
-        case Some(Port(x)) => x
-        case Some(c@Const(_,_)) =>
-          throw new RuntimeException(s"Cannot replace a sink variable $v by a constant ($c)")
-        case None => v
-      }), replace(sigma,expr))
-  }
+//  @deprecated
+//  def replace(sigma: Map[String, GroundTerm], block: Block): Block =
+//    block.map(replace(sigma,_))
+//  @deprecated
+//  def replace(sigma: Map[String,GroundTerm], gt: GroundTerm): GroundTerm = gt match {
+//    case Port(x) => sigma.getOrElse(x,Port(x))
+//    case Const(q, args) =>Const(q,args.map(replace(sigma,_)))
+//  }
+//  @deprecated
+//  def replace(sigma: Map[String,GroundTerm], se: StreamExpr): StreamExpr = se match {
+//    case term: GroundTerm => replace(sigma,term)
+//    case FunctionApp(sfun, args) =>
+//      FunctionApp(sfun,args.map(replace(sigma,_)))
+//  }
+//  @deprecated
+//  def replace(sigma: Map[String,GroundTerm], st: Statement): Statement = st match {
+//    case se: StreamExpr => replace(sigma,se)
+//    case FunDef2(name, params, typ, block) =>
+//      FunDef2(name,params,typ,replace(sigma -- params.map(_.name),block))
+//    case Assignment2(variables, expr) =>
+//      Assignment2(variables.map(v => sigma.get(v) match {
+//        case Some(Port(x)) => x
+//        case Some(c@Const(_,_)) =>
+//          throw new RuntimeException(s"Cannot replace a sink variable $v by a constant ($c)")
+//        case None => v
+//      }), replace(sigma,expr))
+//  }
+
+  ///
 
   def replace(sigma:Map[IPort,IPort])(n:Net): Net =
     Net(n.prims.map(replaceC(sigma)),n.ins.map(replaceIP(sigma)),n.outs.map(replaceIP(sigma)))
-  def replaceIP(sigma:Map[IPort,IPort])(p:IPort): IPort =
+  private def replaceIP(sigma:Map[IPort,IPort])(p:IPort): IPort =
     sigma.getOrElse(p,p)
-  def replaceC(sigma:Map[IPort,IPort])(c:Connector): Connector =
+  private def replaceC(sigma:Map[IPort,IPort])(c:Connector): Connector =
     Connector(c.name,c.ins.map(replaceIP(sigma)),c.out.map(replaceIP(sigma)))
 }
