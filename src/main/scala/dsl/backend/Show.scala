@@ -31,6 +31,7 @@ object Show {
     case Statements(sts) => sts.map(apply).mkString("\n")
     case Assignment(vs,expr) => vs.map(apply).mkString(",") + " = " + apply(expr)
     case TypeDecl(n,variants) => "type " + apply(n) + " = " + variants.map(apply).mkString(" | ")
+    case FunDef(name, expr, params) => s"$name<${params.map(_.name).mkString(",")}> = ${apply(expr)}"
     //case ConnDef(n,c) => "connector " + n + "=" + preo.frontend.Show(c)
   }
 
