@@ -68,6 +68,7 @@ object Net {
         case FunDef2(name, params, _, block) =>
           gm.fun += name -> (params.map(_.name), block)
           apply(tail)
+        //TODO: add SFunDef
       }
   }
 

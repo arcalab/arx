@@ -17,6 +17,10 @@ case class FunDef2(name:String,
                    params:List[TypedVar],
                    typ: TypeName2,
                    block:Block)         extends Statement
+case class SFunDef(name:String,
+                   typ: TypeName2,
+                   block:StreamFun)     extends Statement
+
 case class Assignment2(variables:List[String],
                        expr:StreamExpr) extends Statement
 
@@ -32,7 +36,17 @@ sealed abstract class StreamFun
 case class FunName(f:String) extends StreamFun
 case object Build            extends StreamFun
 case object Match            extends StreamFun
+case class SeqFun(f1:StreamFun, f2:StreamFun) extends StreamFun
+case class ParFun(f1:StreamFun, f2:StreamFun) extends StreamFun
 
 case class TypedVar(name:String,typ:TypeName2)
 
-case class TypeDecl2(name:TypeName,variants:List[Variant])
+// Data Type Declarations
+
+sealed trait TypeName {val name:String}
+case class AbsTypeName(name:String) extends TypeName
+case class ConTypeName(name:String,param:List[TypeName]=List()) extends TypeName
+
+case class TypeDecl2(name:TypeName, constructors:List[Constructor])
+
+case class Constructor(name:String, param:List[TypeName]=List()) {}

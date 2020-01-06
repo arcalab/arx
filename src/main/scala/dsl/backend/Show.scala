@@ -45,6 +45,9 @@ object Show {
     case AdtConst(n, ps) => n + ps.map(apply).mkString("(",",",")")
   }
 
+  def apply(variant:Constructor):String =
+    variant.name + variant.param.map(apply).mkString("(",",",")")
+
 
   //////////////////
   def apply(p:Program): String =
@@ -53,7 +56,7 @@ object Show {
       p.block.map(apply).mkString("\n")
 
   def apply(td: TypeDecl2): String =
-    "data " + apply(td.name) + " = " + td.variants.map(apply).mkString(" | ")
+    "data " + apply(td.name) + " = " + td.constructors.map(apply).mkString(" | ")
 
   def apply(s: Statement)(implicit ind:Int = 0): String = fwd(ind) + (s match {
     case Assignment2(variables, expr) =>
