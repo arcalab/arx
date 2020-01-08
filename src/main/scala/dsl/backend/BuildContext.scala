@@ -3,7 +3,8 @@ package dsl.backend
 import dsl.analysis.syntax.{Const, GroundTerm, Port}
 import dsl.analysis.syntax.Program.Block
 import dsl.backend.BuildContext.NetBuilder
-import dsl.backend.Net.{FunBlock, IPort, In, Interface, Mix, Out, PType}
+import dsl.backend.Net.{FunBlock, IPort, Interface}
+import dsl.backend.PType
 
 import scala.collection.mutable
 

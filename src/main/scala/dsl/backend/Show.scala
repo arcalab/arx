@@ -1,7 +1,8 @@
 package dsl.backend
 
-import dsl.analysis.semantics._
+//import dsl.analysis.semantics._
 import dsl.analysis.syntax._
+import dsl.analysis.types._
 
 
 /**
@@ -9,15 +10,24 @@ import dsl.analysis.syntax._
   */
 
 object Show {
-  def apply(te:TypeExpr):String = te match {
+//  def apply(te:TypeExpr):String = te match {
+//    case TVar(n) => s"$n"
+//    case TMap(f, t) => apply(f) + " -> " + apply(t)
+//    case BaseType(n, ps) => n + (if (ps.isEmpty) "" else ps.map(apply).mkString("<",",",">"))
+//    case TUnit => "()"
+//    case TEithers(h,t) => "Either" + (h::t).map(apply).mkString("<",",",">")
+//    case TTuple(h,t) => (h::t).map(apply).mkString("(",",",")")
+//    case TProd(h,t) => (h::t).map(apply).mkString(" x ")
+//    case TOpt(t) => "Opt[" + apply(t) +  "]"
+//  }
+
+  def apply(te:TExp):String = te match {
     case TVar(n) => s"$n"
-    case TMap(f, t) => apply(f) + " -> " + apply(t)
-    case BaseType(n, ps) => n + (if (ps.isEmpty) "" else ps.map(apply).mkString("<",",",">"))
+    //    case TMap(f, t) => apply(f) + " -> " + apply(t)
+    case TFun(ins,outs) => apply(ins) + " -> " + apply(outs)
+    case TInterface(l) => l.map(apply).mkString(" x ")
+    case TBase(n, ps) => n + (if (ps.isEmpty) "" else ps.map(apply).mkString("<",",",">"))
     case TUnit => "()"
-    case TEithers(h,t) => "Either" + (h::t).map(apply).mkString("<",",",">")
-    case TTuple(h,t) => (h::t).map(apply).mkString("(",",",")")
-    case TProd(h,t) => (h::t).map(apply).mkString(" x ")
-    case TOpt(t) => "Opt[" + apply(t) +  "]"
   }
 
   def apply(expr:Expr): String = expr match {

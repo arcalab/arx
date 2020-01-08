@@ -3,6 +3,7 @@ package dsl.backend
 import dsl.analysis.syntax.Program.Block
 import dsl.analysis.syntax._
 import dsl.backend.Net.{Connector, Interface}
+import dsl.backend.PType
 
 
 /**
@@ -30,10 +31,10 @@ object Net {
   type Interface = Set[IPort]
   type FunBlock = (List[String],Block)
 
-  sealed abstract class PType
-  case object In extends PType
-  case object Out extends PType
-  case object Mix extends PType
+//  sealed abstract class PType
+//  case object In extends PType
+//  case object Out extends PType
+//  case object Mix extends PType
 
   def apply(prog: Program): (Net,Int) = {
 //    println(s"--- starting prog-to-net --- ")

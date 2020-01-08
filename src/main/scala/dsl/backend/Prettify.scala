@@ -1,7 +1,6 @@
 package dsl.backend
 
-import dsl.analysis.semantics.TypeConn
-import dsl.analysis.semantics._
+import dsl.analysis.types._
 
 /**
   * Created by guillecledou on 2019-06-19
@@ -20,21 +19,18 @@ object Prettify {
     * @param te type expression
     * @return prettified type expression
     */
-  def apply(te: TypeExpr):TypeExpr = te match {
+  def apply(te: TExp):TExp = te match {
     case TVar(n) if n.matches("[0-9]") =>
-        if (prettyVars.contains(n)) TVar(prettyVars(n))
-        else {
-          var s = intToAlpha(prettifySeed())
-          prettyVars+= (n->s)
-          TVar(s)
-        }
+      if (prettyVars.contains(n)) TVar(prettyVars(n))
+      else {
+        var s = intToAlpha(prettifySeed())
+        prettyVars+= (n->s)
+        TVar(s)
+      }
     case t@TVar(_) => t
-    case TMap(t1, t2) => TMap(apply(t1), apply(t2))
-    case TOpt(t) => TOpt(apply(t))
-    case TProd(t, ts) => TProd(apply(t), ts.map(apply))
-    case TEithers(t, ts) => TEithers(apply(t), ts.map(apply))
-    case TTuple(t, ts) => TTuple(apply(t), ts.map(apply))
-    case BaseType(n,ps) => BaseType(n,ps.map(apply))
+    case TInterface(l) => TInterface(l.map(apply))
+    case TFun(i,o) => TFun(apply(i).asInstanceOf[TInterface],apply(o).asInstanceOf[TInterface])
+    case TBase(n,ps) => TBase(n,ps.map(apply))
     case t => t
   }
 
