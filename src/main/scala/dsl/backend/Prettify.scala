@@ -29,7 +29,7 @@ object Prettify {
       }
     case t@TVar(_) => t
     case TInterface(l) => TInterface(l.map(apply))
-    case TFun(i,o) => TFun(apply(i).asInstanceOf[TInterface],apply(o).asInstanceOf[TInterface])
+    case TFun(i,o) => TFun(apply(i)/*.asInstanceOf[TInterface]*/,apply(o)/*.asInstanceOf[TInterface]*/)
     case TBase(n,ps) => TBase(n,ps.map(apply))
     case t => t
   }

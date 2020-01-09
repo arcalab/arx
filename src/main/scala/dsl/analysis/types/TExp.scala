@@ -25,6 +25,14 @@ sealed trait TExp {
     case t@TInterface(l) => l
     case t@TFun(_,outs) => outs.outputs
   }
+
+  def inputs:List[TExp] = this match {
+    case t@TUnit => List()
+    case t@TVar(_) => List(t)
+    case t@TBase(_,_) => List(t)
+    case t@TInterface(l) => l
+    case t@TFun(ins,_) => ins.inputs
+  }
 }
 
 /* Interface Unit Type : () */
@@ -34,7 +42,7 @@ case object TUnit extends TExp {
 
 /* Interface Type : T [* T] */
 //case class TInterface(t1:TExp,t2:TExp) extends TExp {
-//  def substitute(tVar: TVar,tExp:TExp):TExp = TInterface(t1.substitute(tVar,tExp),t2.substitute(tVar,tExp))
+//  def substitute(tVar: TVar,tExp:TExp):TExp = TInterface1(t1.substitute(tVar,tExp),t2.substitute(tVar,tExp))
 //}
 
 case class TInterface(list:List[TExp]) extends TExp {
@@ -42,7 +50,7 @@ case class TInterface(list:List[TExp]) extends TExp {
 }
 
 /* Function Type : T -> T */
-case class TFun(tIn:TInterface,tOut:TInterface) extends TExp {
+case class TFun(tIn:TExp,tOut:TExp) extends TExp {
   def substitute(tVar: TVar,tExp:TExp):TExp = TFun(tIn.substitute(tVar,tExp),tOut.substitute(tVar,tExp))
 }
 

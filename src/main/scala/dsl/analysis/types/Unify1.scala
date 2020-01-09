@@ -17,8 +17,10 @@ object Unify1 {
         Unify1(cons.tail)
       case (t@TVar(n), r) if !t.occurs(r) =>
         Unify1(cons.tail.map(tc => TCons(tc.l.substitute(t, r), tc.r.substitute(t, r)))) ++ Map(t -> r)
+//        Unify1(cons.tail) ++ Map(t -> r)
       case (l, t@TVar(n)) if !t.occurs(l) =>
         Unify1(cons.tail.map(tc => TCons(tc.l.substitute(t, l), tc.r.substitute(t, l)))) ++ Map(t -> l)
+//        Unify1(cons.tail) ++ Map(t -> l)
       case (TFun(i1,o1),TFun(i2,o2)) =>
         Unify1(cons.tail ++ List(TCons(i1,i2),TCons(o1,o2)))
       case (TInterface(l1),TInterface(l2)) if l1.size == l2.size =>

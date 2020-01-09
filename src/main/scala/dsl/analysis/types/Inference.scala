@@ -4,7 +4,7 @@ import dsl.analysis.syntax.Program.Block
 import dsl.analysis.syntax._
 import dsl.common.{TypeException, UndefinedNameException}
 import dsl.analysis.syntax.SymbolType._
-import dsl.backend.{In, Out}
+import dsl.backend.{In, Out, Show, Simplify}
 
 /**
   * Created by guillerminacledou on 2020-01-07
@@ -30,7 +30,6 @@ object Inference {
     var ctx = TContext()
     // initialize it with the predefine types and functions (perhaps this is done before? and the context is received?
     // add primitive functions
-    // add primitive functions
     ctx = TContext(ctx.adts,mkPrimFunctions(),ctx.ports)
     // add the user defined types
     prog.types.foreach(t => ctx = addUserTypes(t,ctx))
@@ -41,7 +40,7 @@ object Inference {
 //      throw new TypeException(s"Input/Output Typing Context not closed in main program")
     // match input/output context
     val inOutTCons = portsMatch(pctx.ports)
-    (pctx,pt,ptcons++inOutTCons)
+    (pctx,Simplify(pt),ptcons++inOutTCons)
   }
 
 
@@ -110,7 +109,7 @@ object Inference {
 
   private def infer(st:Statement,ctx:TContext):TypeResult = st match {
     case se:StreamExpr => infer(se,ctx)
-    case Assignment2(variables, expr) =>
+    case a@Assignment2(variables, expr) =>
       //check that each variable on the lhs, if it exists, is a variable (VAR) and names don't repeat
       Check.lhsAssigAreVars(variables,ctx)
       // new context
@@ -123,6 +122,8 @@ object Inference {
       val (ectx,et,etcons) = infer(expr,nctx)
       // check that et has as many outputs as ids on the lhs of the assignment
       val exprOutTypes = et.outputs
+      println(Show(et))
+      println(s"Assignment - num params expected: ${variables.size}, found ${exprOutTypes.size} in ${Show(a)} ")
       Check.numParams(exprOutTypes.size,variables.size)
       // create a type constraint from each returned type to each lhs variable
       val tcons = lhsTypes.zip(exprOutTypes).map(p => TCons(p._1,p._2))
@@ -140,7 +141,7 @@ object Inference {
       // get the type of the block
       val (bctx,bt,btcons) = infer(block,fctx)
       // check the type of the block is not a funtion (must be any interface type)
-      val btInterfaceType = Check.isInterfaceType(bt)
+      val btInterfaceType = Check.isInterfaceType(Simplify(bt))
       // create the function type
       var tfun = TFun(TInterface(insTypes),btInterfaceType)
       // create a function entry
@@ -192,8 +193,9 @@ object Inference {
       // get the type of each actual param
       var apType:List[TypeResult] = List()
       for (a <- args) {
-        apType ::= infer(a,nctx)
-        nctx = apType.head._1
+        val aType = infer(a,nctx)
+        apType :+= aType
+        nctx = aType._1
       }
       // get a fresh type for the constructor
       val subst = Substitution((qentry.params.flatMap(_.vars)++qentry.tExp.vars)
@@ -211,16 +213,17 @@ object Inference {
       val sfTypeRes = infer(sfun,ctx)
       val sfType = Check.isFunType(sfTypeRes._2)
       //check the number of expected parameters match
-      Check.numParams(args.size,sfType.tIn.list.size)
+      Check.numParams(args.size,sfType.tIn.inputs.size)
       // get the type of each actual param
       var nctx = ctx
       var apType:List[TypeResult] = List()
       for (a <- args) {
-        apType ::= infer(a,nctx)
-        nctx = apType.head._1
+        val aType = infer(a,nctx)
+        apType :+= aType
+        nctx = aType._1
       }
       // get type constraints from actual to formal params
-      val tcons = apType.map(r => r._2).zip(sfType.tIn.list).map(p => TCons(p._1,p._2))
+      val tcons = apType.map(r => r._2).zip(sfType.tIn.inputs).map(p => TCons(p._1,p._2))
       // return the result
       (nctx,sfType.tOut,apType.flatMap(r=> r._3).toSet++tcons)
   }
@@ -248,17 +251,17 @@ object Inference {
       val tf1:TFun = Check.isFunType(f1t)
       val tf2:TFun = Check.isFunType(f2t)
       // check number outputs from f1 match number of inputs from f2
-      Check.numParams(tf1.tOut.list.size,tf2.tIn.list.size)
+      Check.numParams(tf1.tOut.outputs.size,tf2.tIn.inputs.size)
       // create a type constraint from each out type to each in type
-      val tcons = tf1.tOut.list.zip(tf2.tIn.list).map(p=> TCons(p._1,p._2))
-      val ft = TFun(TInterface(tf1.tIn.list),TInterface(tf2.tOut.list))
+      val tcons = tf1.tOut.outputs.zip(tf2.tIn.inputs).map(p=> TCons(p._1,p._2))
+      val ft = TFun(TInterface(tf1.tIn.inputs),TInterface(tf2.tOut.outputs))
       (f2ctx,ft,f1tcons++f2tcons++tcons)
     case ParFun(f1,f2) =>
       val (f1ctx,f1t,f1tcons) = infer(f1,ctx)
       val (f2ctx,f2t,f2tcons) = infer(f2,f1ctx)
       val tf1 = Check.isFunType(f1t)
       val tf2 = Check.isFunType(f2t)
-      val ft = TFun(TInterface(tf1.tIn.list++tf2.tIn.list),TInterface(tf1.tOut.list++tf2.tOut.list))
+      val ft = TFun(TInterface(tf1.tIn.inputs++tf2.tIn.inputs),TInterface(tf1.tOut.outputs++tf2.tOut.outputs))
       (f2ctx,ft,f1tcons++f2tcons)
     //TODO: Build and Match
   }

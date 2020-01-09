@@ -23,7 +23,6 @@ object Show {
 
   def apply(te:TExp):String = te match {
     case TVar(n) => s"$n"
-    //    case TMap(f, t) => apply(f) + " -> " + apply(t)
     case TFun(ins,outs) => apply(ins) + " -> " + apply(outs)
     case TInterface(l) => l.map(apply).mkString(" x ")
     case TBase(n, ps) => n + (if (ps.isEmpty) "" else ps.map(apply).mkString("<",",",">"))
@@ -58,6 +57,8 @@ object Show {
   def apply(variant:Constructor):String =
     variant.name + variant.param.map(apply).mkString("(",",",")")
 
+  def apply(tcons:TCons):String =
+    Show(tcons.l) + " = " + Show(tcons.r)
 
   //////////////////
   def apply(p:Program): String =
