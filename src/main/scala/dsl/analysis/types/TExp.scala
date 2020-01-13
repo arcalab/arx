@@ -15,14 +15,14 @@ sealed trait TExp {
     case t@TVar(n) => Set(t)
     case TBase(n,ps) => ps.flatMap(_.vars).toSet
     case TFun(ins,outs) => ins.vars ++ outs.vars
-    case TInterface(l) => l.flatMap(_.vars).toSet
+    case TInterface(t1,t2) => t1.vars ++ t2.vars
   }
 
   def outputs:List[TExp] = this match {
     case t@TUnit => List()
     case t@TVar(_) => List(t)
     case t@TBase(_,_) => List(t)
-    case t@TInterface(l) => l
+    case t@TInterface(t1,t2) => t1.outputs ++ t2.outputs
     case t@TFun(_,outs) => outs.outputs
   }
 
@@ -30,7 +30,7 @@ sealed trait TExp {
     case t@TUnit => List()
     case t@TVar(_) => List(t)
     case t@TBase(_,_) => List(t)
-    case t@TInterface(l) => l
+    case t@TInterface(t1,t2) => t1.inputs ++ t2.inputs
     case t@TFun(ins,_) => ins.inputs
   }
 }
@@ -41,13 +41,13 @@ case object TUnit extends TExp {
 }
 
 /* Interface Type : T [* T] */
-//case class TInterface(t1:TExp,t2:TExp) extends TExp {
-//  def substitute(tVar: TVar,tExp:TExp):TExp = TInterface1(t1.substitute(tVar,tExp),t2.substitute(tVar,tExp))
-//}
-
-case class TInterface(list:List[TExp]) extends TExp {
-  def substitute(tVar: TVar, tExp: TExp): TInterface = TInterface(list.map(_.substitute(tVar,tExp)))
+case class TInterface(t1:TExp,t2:TExp) extends TExp {
+  def substitute(tVar: TVar,tExp:TExp):TExp = TInterface(t1.substitute(tVar,tExp),t2.substitute(tVar,tExp))
 }
+
+//case class TInterface(list:List[TExp]) extends TExp {
+//  def substitute(tVar: TVar, tExp: TExp): TInterface = TInterface(list.map(_.substitute(tVar,tExp)))
+//}
 
 /* Function Type : T -> T */
 case class TFun(tIn:TExp,tOut:TExp) extends TExp {

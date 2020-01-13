@@ -19,12 +19,9 @@ object Check {
     case e => throw new TypeException(s"Function type expected but ${e.getClass} found")
   }
 
-  def isInterfaceType(expr:TExp):TInterface = expr match {
+  def isInterfaceType(expr:TExp):TExp = expr match {
     case TFun(_,_) => throw new TypeException(s"Interface type expected but Function type found")
-    case t@TBase(_,_) => TInterface(List(t))
-    case TUnit => TInterface(List(TUnit))
-    case t@TVar(_) => TInterface(List(t))
-    case t@TInterface(_) => t
+    case _ => expr
   }
 
   def lhsAssigAreVars(vars:List[String],ctx:TContext):Unit = {

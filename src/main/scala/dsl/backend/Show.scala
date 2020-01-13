@@ -24,7 +24,7 @@ object Show {
   def apply(te:TExp):String = te match {
     case TVar(n) => s"$n"
     case TFun(ins,outs) => apply(ins) + " -> " + apply(outs)
-    case TInterface(l) => l.map(apply).mkString(" x ")
+    case TInterface(t1,t2) => apply(t1) + " x " + apply(t2)
     case TBase(n, ps) => n + (if (ps.isEmpty) "" else ps.map(apply).mkString("<",",",">"))
     case TUnit => "()"
   }
@@ -55,7 +55,7 @@ object Show {
   }
 
   def apply(variant:Constructor):String =
-    variant.name + variant.param.map(apply).mkString("(",",",")")
+    variant.name + (if (variant.param.nonEmpty) variant.param.map(apply).mkString("(",",",")") else "")
 
   def apply(tcons:TCons):String =
     Show(tcons.l) + " = " + Show(tcons.r)

@@ -27,13 +27,14 @@ object DSL {
   def typeCheck(prog:Program):Map[String,TExp] = {
     // mk type constraints
     val (ctx,t,cons) = infer(prog)
-    println("About to typecheck")
-    println("Type constraints:\n"+cons.map(c=>Show(c)).mkString("\n"))
+//    println("About to typecheck")
+//    println("Type constraints:\n"+cons.map(c=>Show(c)).mkString("\n"))
     // try to unify them
     val subst:Map[TVar,TExp] = Substitute(unify(cons))
     val substitution = Substitution(subst)
     // for each name in the context that is a fun return its type
     val functions:Map[String, ContextEntry] = ctx.functions
+      .filterNot(f=> Set("fifo","dupl","lossy","merger","xor","drain","writer","reader").contains(f._1))
     val rawFunctionTypes = functions.map(f=>f._1-> Simplify(substitution(f._2.tExp)))
     var functionTypes = Map[String,TExp]()
     for((id,t) <- rawFunctionTypes) {
@@ -43,15 +44,17 @@ object DSL {
     // ports types
     val rawPortsTypes:Map[String,TExp] = ctx.ports.map(p=>p._1->p._2.head.tExp).map(p=>p._1->Simplify(substitution(p._2)))
     var portsTypes = Map[String,TExp]()
+    Prettify.reset()
     for((id,t) <- rawPortsTypes) {
-      Prettify.reset()
+
       portsTypes += id -> Prettify(t)
     }
     // program types
-    Prettify.reset()
+//    Prettify.reset()
     val programType = Map("program" -> Prettify(Simplify(substitution(t))))
 
-    programType++portsTypes++functionTypes
+    programType++functionTypes++portsTypes
+    //rawFunctionTypes++rawPortsTypes
   }
 
 }

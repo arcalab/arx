@@ -20,7 +20,7 @@ object Prettify {
     * @return prettified type expression
     */
   def apply(te: TExp):TExp = te match {
-    case TVar(n) if n.matches("[0-9]") =>
+    case TVar(n) if n.matches("[0-9]*") =>
       if (prettyVars.contains(n)) TVar(prettyVars(n))
       else {
         var s = intToAlpha(prettifySeed())
@@ -28,7 +28,7 @@ object Prettify {
         TVar(s)
       }
     case t@TVar(_) => t
-    case TInterface(l) => TInterface(l.map(apply))
+    case TInterface(t1,t2) => TInterface(apply(t1),apply(t2))
     case TFun(i,o) => TFun(apply(i)/*.asInstanceOf[TInterface]*/,apply(o)/*.asInstanceOf[TInterface]*/)
     case TBase(n,ps) => TBase(n,ps.map(apply))
     case t => t

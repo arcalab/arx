@@ -7,9 +7,8 @@ import dsl.analysis.syntax.SymbolType._
 import dsl.backend.{In, Out, Show, Simplify}
 
 /**
-  * Created by guillerminacledou on 2020-01-07
+  * Created by guillecledou on 2019-08-01
   */
-
 
 object Inference {
 
@@ -58,8 +57,8 @@ object Inference {
 
   private def mkPrimFunction(name:String,ins:Int,outs:Int):(String,FunEntry) = {
     val tVar = TVar(freshVar())
-    val insT =  TInterface((1 to ins).map(_=>tVar).toList)
-    val outsT = TInterface((1 to outs).map(_=>tVar).toList)
+    val insT = (1 to ins).map(_=>tVar).foldRight[TExp](TUnit)(TInterface(_,_))
+    val outsT =(1 to outs).map(_=>tVar).foldRight[TExp](TUnit)(TInterface(_,_))
     val funT = TFun(insT,outsT)
     (name,FunEntry(funT,TContext()))
   }
@@ -104,7 +103,7 @@ object Inference {
     case b::bs =>
       val (bCtx,bT,bTCons) = infer(b,ctx)
       val (bsCtx,bsT,bsTCons) = infer(bs,bCtx)
-      (bsCtx,TInterface(List(bT,bsT)),bTCons++bsTCons)
+      (bsCtx,TInterface(bT,bsT),bTCons++bsTCons)
   }
 
   private def infer(st:Statement,ctx:TContext):TypeResult = st match {
@@ -122,8 +121,6 @@ object Inference {
       val (ectx,et,etcons) = infer(expr,nctx)
       // check that et has as many outputs as ids on the lhs of the assignment
       val exprOutTypes = et.outputs
-      println(Show(et))
-      println(s"Assignment - num params expected: ${variables.size}, found ${exprOutTypes.size} in ${Show(a)} ")
       Check.numParams(exprOutTypes.size,variables.size)
       // create a type constraint from each returned type to each lhs variable
       val tcons = lhsTypes.zip(exprOutTypes).map(p => TCons(p._1,p._2))
@@ -143,19 +140,26 @@ object Inference {
       // check the type of the block is not a funtion (must be any interface type)
       val btInterfaceType = Check.isInterfaceType(Simplify(bt))
       // create the function type
-      var tfun = TFun(TInterface(insTypes),btInterfaceType)
-      // create a function entry
-      val funEntry = FunEntry(tfun,fctx) //todo: update if we eventually have recursion
+      var tfun = TFun(insTypes.foldRight[TExp](TUnit)(TInterface),btInterfaceType)
+//      // create a function entry
+//      val funEntry = FunEntry(tfun,fctx) //todo: update if we eventually have recursion
+//      println(s"Function type defined ${name}: "+ tfun)
       // create a fresh type for the function where inputs type variables are replace by the specified type, if any
       // TODO: add this later
       //val subst = Substitution(insTypes.zip(params).map(i => if (i._2.typ.isDefined) ))
       //val insTCons = insTypes.zip(params).map(i => if (i._2.typ.isDefined) TCons(i._1,i._2.typ.get)
       // check the ports context is closed
       Check.isClosed(fd,bctx.ports.filterNot(p=> insNames.contains(p._1)))
-//        throw new TypeException(s"Input/Output Typing Context not closed in function ${name}")
       // match input/output context
       val inOutTCons = portsMatch(bctx.ports)
-      (ctx.add(name,funEntry),TUnit,btcons++inOutTCons)
+      // unify constraints from body
+      val subst:Map[TVar,TExp] = Substitute(Unify1(btcons++inOutTCons))
+      val substitution = Substitution(subst)
+      val subsTFun = TFun(substitution(tfun.tIn),substitution(tfun.tOut))
+      // create a function entry
+      val funEntry = FunEntry(subsTFun,substitution(fctx)) //todo: update if we eventually have recursion
+//      val subsCtx = fctx.map(e=>e._1-> Simplify(substitution(f._2.tExp)))
+      (ctx.add(name,funEntry),TUnit,Set())//btcons++inOutTCons)
     case FunDef2(name, params, typ, block)  => // already defined
       throw new RuntimeException(s"Name $name already defined in the context")
 //    TODO: case SFunDef(name, typ, sfun) =>
@@ -211,6 +215,7 @@ object Inference {
     case FunctionApp(sfun, args) =>
       // get the type of the stream function
       val sfTypeRes = infer(sfun,ctx)
+//      println("Function type: "+ sfTypeRes._2)
       val sfType = Check.isFunType(sfTypeRes._2)
       //check the number of expected parameters match
       Check.numParams(args.size,sfType.tIn.inputs.size)
@@ -224,6 +229,7 @@ object Inference {
       }
       // get type constraints from actual to formal params
       val tcons = apType.map(r => r._2).zip(sfType.tIn.inputs).map(p => TCons(p._1,p._2))
+//      println(s"Type constraints for function application "+tcons)
       // return the result
       (nctx,sfType.tOut,apType.flatMap(r=> r._3).toSet++tcons)
   }
@@ -233,14 +239,16 @@ object Inference {
       // get function entry
       val fEntry = ctx.functions(f)
       // get fresh type for the function
+//      println(s"Function type ${f}: "+ fEntry.tExp)
       val subst = Substitution(fEntry.tExp.vars.map(v => v->TVar(freshVar())).toMap)
       val fFType = subst(fEntry.tExp)
+//      println(s"Fresh Function type ${f}: "+ fFType)
       (ctx,fFType,Set())
     case FunName(f) => //TODO: Check if it makes sense
       // special case, if it doesn't exists asumme it has to be a 1->1 sync with a name
       val tVar = TVar(freshVar())
       // create dummy function type
-      val ftype = TFun(TInterface(List(tVar)),TInterface(List(tVar)))
+      val ftype = TFun(tVar,tVar)
       // add dummy function to the context?
       val funEntry = FunEntry(ftype,TContext(ctx.adts,ctx.functions,Map()))
       (ctx.add(f,funEntry),ftype,Set())
@@ -254,14 +262,16 @@ object Inference {
       Check.numParams(tf1.tOut.outputs.size,tf2.tIn.inputs.size)
       // create a type constraint from each out type to each in type
       val tcons = tf1.tOut.outputs.zip(tf2.tIn.inputs).map(p=> TCons(p._1,p._2))
-      val ft = TFun(TInterface(tf1.tIn.inputs),TInterface(tf2.tOut.outputs))
+      val ft = TFun(tf1.tIn.inputs.foldRight[TExp](TUnit)(TInterface),tf2.tOut.outputs.foldRight[TExp](TUnit)(TInterface))
       (f2ctx,ft,f1tcons++f2tcons++tcons)
     case ParFun(f1,f2) =>
       val (f1ctx,f1t,f1tcons) = infer(f1,ctx)
       val (f2ctx,f2t,f2tcons) = infer(f2,f1ctx)
       val tf1 = Check.isFunType(f1t)
       val tf2 = Check.isFunType(f2t)
-      val ft = TFun(TInterface(tf1.tIn.inputs++tf2.tIn.inputs),TInterface(tf1.tOut.outputs++tf2.tOut.outputs))
+      val nInType = tf1.tIn.inputs.foldRight[TExp](tf2.tIn.inputs.foldRight[TExp](TUnit)(TInterface))(TInterface)
+      val nOutType = tf1.tOut.outputs.foldRight[TExp](tf2.tOut.outputs.foldRight[TExp](TUnit)(TInterface))(TInterface)
+      val ft = TFun(nInType,nOutType)
       (f2ctx,ft,f1tcons++f2tcons)
     //TODO: Build and Match
   }
