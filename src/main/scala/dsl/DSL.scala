@@ -2,7 +2,7 @@ package dsl
 
 //import dsl.analysis.semantics.{Context, _}
 import dsl.analysis.types._
-import dsl.analysis.syntax.{AST, Parser2, Program}
+import dsl.analysis.syntax.{Parser, Program}
 import dsl.backend.{Prettify, Show, Simplify}
 import dsl.common.{ParsingException, TypeException}
 //import preo.ast.{Connector, CoreConnector}
@@ -15,14 +15,14 @@ import dsl.analysis.types.TVar
 
 object DSL {
 
-  def parse(code:String):Program = Parser2.parseProgram(code) match {
-    case Parser2.Success(result, next) => result
-    case f:Parser2.NoSuccess => throw new ParsingException("Parser failed: "+f)
+  def parse(code:String):Program = Parser.parseProgram(code) match {
+    case Parser.Success(result, next) => result
+    case f:Parser.NoSuccess => throw new ParsingException("Parser failed: "+f)
   }
 
-  def unify(cons:Set[TCons]):Map[TVar,TExp] = Unify1(cons)
+  def unify(cons:Set[TCons]):Map[TVar,TExp] = Unify(cons)
 
-  def infer(program: Program):(TContext,TExp,Set[TCons]) = Inference(program)
+  def infer(program: Program):(TContext,TExp,Set[TCons]) = Infer(program)
 
   def typeCheck(prog:Program):Map[String,TExp] = {
     // mk type constraints

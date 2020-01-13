@@ -29,30 +29,30 @@ object Show {
     case TUnit => "()"
   }
 
-  def apply(expr:Expr): String = expr match {
-    case AdtTerm(name) => name
-    case AdtConsExpr(name, params) => name + params.map(apply).mkString("(",",",")")
-    case Identifier(name) => name
-    case ConnId(name,ps) => name + (if (ps.isEmpty) "" else ps.map(apply).mkString("(",",",")"))
-  }
-
-  def apply(ast:AST): String = ast match {
-    case Statements(sts) => sts.map(apply).mkString("\n")
-    case Assignment(vs,expr) => vs.map(apply).mkString(",") + " = " + apply(expr)
-    case TypeDecl(n,variants) => "type " + apply(n) + " = " + variants.map(apply).mkString(" | ")
-    case FunDef(name, expr, params) => s"$name<${params.map(_.name).mkString(",")}> = ${apply(expr)}"
-    //case ConnDef(n,c) => "connector " + n + "=" + preo.frontend.Show(c)
-  }
+//  def apply(expr:Expr): String = expr match {
+//    case AdtTerm(name) => name
+//    case AdtConsExpr(name, params) => name + params.map(apply).mkString("(",",",")")
+//    case Identifier(name) => name
+//    case ConnId(name,ps) => name + (if (ps.isEmpty) "" else ps.map(apply).mkString("(",",",")"))
+//  }
+//
+//  def apply(ast:AST): String = ast match {
+//    case Statements(sts) => sts.map(apply).mkString("\n")
+//    case Assignment(vs,expr) => vs.map(apply).mkString(",") + " = " + apply(expr)
+//    case TypeDecl(n,variants) => "type " + apply(n) + " = " + variants.map(apply).mkString(" | ")
+//    case FunDef(name, expr, params) => s"$name<${params.map(_.name).mkString(",")}> = ${apply(expr)}"
+//    //case ConnDef(n,c) => "connector " + n + "=" + preo.frontend.Show(c)
+//  }
 
   def apply(tname:TypeName):String = tname match {
     case AbsTypeName(n) => n
     case ConTypeName(n,ps) => n + (if (ps.isEmpty) "" else  ps.map(apply).mkString("<",",",">"))
   }
 
-  def apply(variant:Variant):String = variant match {
-    case AdtVal(n) => n
-    case AdtConst(n, ps) => n + ps.map(apply).mkString("(",",",")")
-  }
+//  def apply(variant:Variant):String = variant match {
+//    case AdtVal(n) => n
+//    case AdtConst(n, ps) => n + ps.map(apply).mkString("(",",",")")
+//  }
 
   def apply(variant:Constructor):String =
     variant.name + (if (variant.param.nonEmpty) variant.param.map(apply).mkString("(",",",")") else "")

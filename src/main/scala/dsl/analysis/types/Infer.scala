@@ -10,7 +10,7 @@ import dsl.backend.{In, Out, Show, Simplify}
   * Created by guillecledou on 2019-08-01
   */
 
-object Inference {
+object Infer {
 
   type TypeResult = (TContext,TExp,Set[TCons])
 
@@ -153,7 +153,7 @@ object Inference {
       // match input/output context
       val inOutTCons = portsMatch(bctx.ports)
       // unify constraints from body
-      val subst:Map[TVar,TExp] = Substitute(Unify1(btcons++inOutTCons))
+      val subst:Map[TVar,TExp] = Substitute(Unify(btcons++inOutTCons))
       val substitution = Substitution(subst)
       val subsTFun = TFun(substitution(tfun.tIn),substitution(tfun.tOut))
       // create a function entry

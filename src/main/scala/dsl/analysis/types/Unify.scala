@@ -9,24 +9,24 @@ import dsl.common.TypeException
   */
 
 
-object Unify1 {
+object Unify {
 
   def apply(cons:Set[TCons]):Map[TVar,TExp] =
     if (cons.isEmpty) Map() else (cons.head.l, cons.head.r) match {
       case (l, r) if l == r =>
-        Unify1(cons.tail)
+        Unify(cons.tail)
       case (t@TVar(n), r) if !t.occurs(r) =>
-        Unify1(cons.tail.map(tc => TCons(tc.l.substitute(t, r), tc.r.substitute(t, r)))) ++ Map(t -> r)
+        Unify(cons.tail.map(tc => TCons(tc.l.substitute(t, r), tc.r.substitute(t, r)))) ++ Map(t -> r)
 //        Unify1(cons.tail) ++ Map(t -> r)
       case (l, t@TVar(n)) if !t.occurs(l) =>
-        Unify1(cons.tail.map(tc => TCons(tc.l.substitute(t, l), tc.r.substitute(t, l)))) ++ Map(t -> l)
+        Unify(cons.tail.map(tc => TCons(tc.l.substitute(t, l), tc.r.substitute(t, l)))) ++ Map(t -> l)
 //        Unify1(cons.tail) ++ Map(t -> l)
       case (TFun(i1,o1),TFun(i2,o2)) =>
-        Unify1(cons.tail ++ List(TCons(i1,i2),TCons(o1,o2)))
+        Unify(cons.tail ++ List(TCons(i1,i2),TCons(o1,o2)))
       case (TInterface(t1,t2),TInterface(t3,t4)) /*if t1.size == t3.size && t2.size == t4.size */=>
-        Unify1(cons.tail ++ List(TCons(t1,t3),TCons(t2,t4)))
+        Unify(cons.tail ++ List(TCons(t1,t3),TCons(t2,t4)))
       case (TBase(n1, ps1), TBase(n2, ps2)) if (ps1.size == ps2.size) && (n1 == n2) =>
-        Unify1(cons.tail ++ ps1.zip(ps2).map(p => TCons(p._1, p._2)))
+        Unify(cons.tail ++ ps1.zip(ps2).map(p => TCons(p._1, p._2)))
       case (t1,t2) => throw new TypeException(s"Impossible to unify $t1 with $t2")
     }
 
