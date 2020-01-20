@@ -60,13 +60,13 @@ object Net {
           portToNet(x) ++ apply(tail)
         case Const(q, args) =>
           constToNet(q, args) ++ apply(tail)
-        case Assignment2(vars, expr) =>
+        case Assignment(vars, expr) =>
           assgnToNet(vars, expr) ++ apply(tail)
         case FunctionApp(sfun, args) =>
           val res = funAppToNet(sfun, args, tail)
           //println(s"got funAppToNet - $res")
           res
-        case FunDef2(name, params, _, block) =>
+        case FunDef(name, params, _, block) =>
           gm.fun += name -> (params.map(_.name), block)
           apply(tail)
         //TODO: add SFunDef

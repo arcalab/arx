@@ -28,7 +28,7 @@ object Prettify {
         TVar(s)
       }
     case t@TVar(_) => t
-    case TInterface(t1,t2) => TInterface(apply(t1),apply(t2))
+    case TTensor(t1,t2) => TTensor(apply(t1),apply(t2))
     case TFun(i,o) => TFun(apply(i)/*.asInstanceOf[TInterface]*/,apply(o)/*.asInstanceOf[TInterface]*/)
     case TBase(n,ps) => TBase(n,ps.map(apply))
     case t => t

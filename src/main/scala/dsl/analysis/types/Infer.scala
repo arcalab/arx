@@ -57,9 +57,9 @@ object Infer {
 
   private def mkPrimFunction(name:String,ins:Int,outs:Int):(String,FunEntry) = {
     val tVar = TVar(freshVar())
-    val insT = (1 to ins).map(_=>tVar).foldRight[TExp](TUnit)(TInterface(_,_))
-    val outsT =(1 to outs).map(_=>tVar).foldRight[TExp](TUnit)(TInterface(_,_))
-    val funT = TFun(insT,outsT)
+    val insT = (1 to ins).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
+    val outsT =(1 to outs).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
+    val funT = TFun(Simplify(insT),Simplify(outsT))
     (name,FunEntry(funT,TContext()))
   }
 
@@ -70,8 +70,8 @@ object Infer {
     * @param ctx current context
     * @return
     */
-  private def  addUserTypes(typeDecl:TypeDecl2, ctx:TContext):TContext = {
-    def mkUserType(typDecl:TypeDecl2):(TBase,List[ConstEntry]) = {
+  private def  addUserTypes(typeDecl:TypeDecl, ctx:TContext):TContext = {
+    def mkUserType(typDecl:TypeDecl):(TBase,List[ConstEntry]) = {
       val tn = typeName2TExp(typDecl.name)
       val const = typDecl.constructors.map(c => ConstEntry(c.name,c.param.map(p=>typeName2TExp(p)),tn))
       (tn.asInstanceOf[TBase],const)
@@ -103,12 +103,12 @@ object Infer {
     case b::bs =>
       val (bCtx,bT,bTCons) = infer(b,ctx)
       val (bsCtx,bsT,bsTCons) = infer(bs,bCtx)
-      (bsCtx,TInterface(bT,bsT),bTCons++bsTCons)
+      (bsCtx,TTensor(bT,bsT),bTCons++bsTCons)
   }
 
   private def infer(st:Statement,ctx:TContext):TypeResult = st match {
     case se:StreamExpr => infer(se,ctx)
-    case a@Assignment2(variables, expr) =>
+    case a@Assignment(variables, expr) =>
       //check that each variable on the lhs, if it exists, is a variable (VAR) and names don't repeat
       Check.lhsAssigAreVars(variables,ctx)
       // new context
@@ -125,7 +125,7 @@ object Infer {
       // create a type constraint from each returned type to each lhs variable
       val tcons = lhsTypes.zip(exprOutTypes).map(p => TCons(p._1,p._2))
       (ectx,TUnit /*et*/,etcons++tcons)
-    case fd@FunDef2(name, params, typ, block) if !ctx.context.contains(name) =>
+    case fd@FunDef(name, params, typ, block) if !ctx.context.contains(name) =>
       val insNames = params.map(i=> i.name).toSet
       if (insNames.size != params.size)
         new TypeException(s"Cannot repeat input variables on a function definition ${insNames.mkString(",")} found")
@@ -140,7 +140,7 @@ object Infer {
       // check the type of the block is not a funtion (must be any interface type)
       val btInterfaceType = Check.isInterfaceType(Simplify(bt))
       // create the function type
-      var tfun = TFun(insTypes.foldRight[TExp](TUnit)(TInterface),btInterfaceType)
+      var tfun = TFun(Simplify(insTypes.foldRight[TExp](TUnit)(TTensor)),btInterfaceType)
 //      // create a function entry
 //      val funEntry = FunEntry(tfun,fctx) //todo: update if we eventually have recursion
 //      println(s"Function type defined ${name}: "+ tfun)
@@ -155,12 +155,12 @@ object Infer {
       // unify constraints from body
       val subst:Map[TVar,TExp] = Substitute(Unify(btcons++inOutTCons))
       val substitution = Substitution(subst)
-      val subsTFun = TFun(substitution(tfun.tIn),substitution(tfun.tOut))
+      val subsTFun = TFun(Simplify(substitution(tfun.tIn)),Simplify(substitution(tfun.tOut)))
       // create a function entry
       val funEntry = FunEntry(subsTFun,substitution(fctx)) //todo: update if we eventually have recursion
 //      val subsCtx = fctx.map(e=>e._1-> Simplify(substitution(f._2.tExp)))
       (ctx.add(name,funEntry),TUnit,Set())//btcons++inOutTCons)
-    case FunDef2(name, params, typ, block)  => // already defined
+    case FunDef(name, params, typ, block)  => // already defined
       throw new RuntimeException(s"Name $name already defined in the context")
 //    TODO: case SFunDef(name, typ, sfun) =>
 //      _
@@ -218,7 +218,7 @@ object Infer {
 //      println("Function type: "+ sfTypeRes._2)
       val sfType = Check.isFunType(sfTypeRes._2)
       //check the number of expected parameters match
-      Check.numParams(args.size,sfType.tIn.inputs.size)
+//      Check.numParams(args.size,sfType.tIn.inputs.size)
       // get the type of each actual param
       var nctx = ctx
       var apType:List[TypeResult] = List()
@@ -228,7 +228,8 @@ object Infer {
         nctx = aType._1
       }
       // get type constraints from actual to formal params
-      val tcons = apType.map(r => r._2).zip(sfType.tIn.inputs).map(p => TCons(p._1,p._2))
+//      val tcons = apType.map(r => r._2).zip(sfType.tIn.inputs).map(p => TCons(p._1,p._2))
+      val tcons  = Set(TCons(Simplify(apType.map(r => r._2).foldRight[TExp](TUnit)(TTensor)),sfType.tIn))
 //      println(s"Type constraints for function application "+tcons)
       // return the result
       (nctx,sfType.tOut,apType.flatMap(r=> r._3).toSet++tcons)
@@ -258,22 +259,33 @@ object Infer {
       val (f2ctx,f2t,f2tcons) = infer(f2,f1ctx)
       val tf1:TFun = Check.isFunType(f1t)
       val tf2:TFun = Check.isFunType(f2t)
-      // check number outputs from f1 match number of inputs from f2
-      Check.numParams(tf1.tOut.outputs.size,tf2.tIn.inputs.size)
+      // If either the output from tf1 or the input from tf2 is not a destructor
+//      if (!Check.isDestr(tf1.tOut) && !Check.isDestr(tf2.tIn))
+        // check number outputs from f1 match number of inputs from f2
+//      Check.numParams(tf1.tOut.outputs.size,tf2.tIn.inputs.size)
       // create a type constraint from each out type to each in type
-      val tcons = tf1.tOut.outputs.zip(tf2.tIn.inputs).map(p=> TCons(p._1,p._2))
-      val ft = TFun(tf1.tIn.inputs.foldRight[TExp](TUnit)(TInterface),tf2.tOut.outputs.foldRight[TExp](TUnit)(TInterface))
+      val tcons = Set(TCons(tf1.tOut,tf2.tIn))//tf1.tOut.outputs.zip(tf2.tIn.inputs).map(p=> TCons(p._1,p._2))
+      val ft = TFun(tf1.tIn,tf2.tOut)//TFun(tf1.tIn.inputs.foldRight[TExp](TUnit)(TTensor),tf2.tOut.outputs.foldRight[TExp](TUnit)(TTensor))
       (f2ctx,ft,f1tcons++f2tcons++tcons)
     case ParFun(f1,f2) =>
       val (f1ctx,f1t,f1tcons) = infer(f1,ctx)
       val (f2ctx,f2t,f2tcons) = infer(f2,f1ctx)
       val tf1 = Check.isFunType(f1t)
       val tf2 = Check.isFunType(f2t)
-      val nInType = tf1.tIn.inputs.foldRight[TExp](tf2.tIn.inputs.foldRight[TExp](TUnit)(TInterface))(TInterface)
-      val nOutType = tf1.tOut.outputs.foldRight[TExp](tf2.tOut.outputs.foldRight[TExp](TUnit)(TInterface))(TInterface)
-      val ft = TFun(nInType,nOutType)
+//      val nInType = tf1.tIn.inputs.foldRight[TExp](tf2.tIn.inputs.foldRight[TExp](TUnit)(TTensor))(TTensor)
+      val nInType = TTensor(tf1.tIn,tf2.tIn)
+//      val nOutType = tf1.tOut.outputs.foldRight[TExp](tf2.tOut.outputs.foldRight[TExp](TUnit)(TTensor))(TTensor)
+      val nOutType = TTensor(tf1.tOut,tf2.tOut)
+      val ft = Simplify(TFun(nInType,nOutType))
       (f2ctx,ft,f1tcons++f2tcons)
-    //TODO: Build and Match
+    case Match =>
+      val tVar = TVar(freshVar())
+      val mtype = TFun(tVar,TDestr(tVar))
+      (ctx,mtype,Set())
+    case Build =>
+      val tVar = TVar(freshVar())
+      val btype = TFun(TDestr(tVar),tVar)
+      (ctx,btype,Set())
   }
 
 }

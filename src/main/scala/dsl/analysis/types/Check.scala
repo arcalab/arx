@@ -34,8 +34,13 @@ object Check {
       throw new TypeException(s"Cannot repeat variables on the LHS of an assignment but ${vars.mkString(",")} found")
   }
 
+  def isDestr(t:TExp):Boolean = t match {
+    case TDestr(t1) => true
+    case _ => false
+  }
+
   def isClosed(s:Statement,ports:Map[String,List[PortEntry]]):Unit = {
-//    ports.forall(p=> isClosedPort(p._2))
+    //ports.forall(p=> isClosedPort(p._2))
     var err: Option[String] = None
     ports.forall(p=> if (isClosedPort(p._2)) true else {err=Some(p._1);false})
     if (err.isDefined)
@@ -46,5 +51,7 @@ object Check {
     val out = occurrences.find(p=> p.pType == Out)
     in.isDefined && out.isDefined
   }
+
+
 
 }

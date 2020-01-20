@@ -37,14 +37,15 @@ object DSL {
       .filterNot(f=> Set("fifo","dupl","lossy","merger","xor","drain","writer","reader").contains(f._1))
     val rawFunctionTypes = functions.map(f=>f._1-> Simplify(substitution(f._2.tExp)))
     var functionTypes = Map[String,TExp]()
+    Prettify.reset()
     for((id,t) <- rawFunctionTypes) {
-      Prettify.reset()
+//      Prettify.reset()
       functionTypes += id -> Prettify(t)
     }
     // ports types
     val rawPortsTypes:Map[String,TExp] = ctx.ports.map(p=>p._1->p._2.head.tExp).map(p=>p._1->Simplify(substitution(p._2)))
     var portsTypes = Map[String,TExp]()
-    Prettify.reset()
+//    Prettify.reset()
     for((id,t) <- rawPortsTypes) {
 
       portsTypes += id -> Prettify(t)

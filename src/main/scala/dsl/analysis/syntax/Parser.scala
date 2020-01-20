@@ -92,9 +92,9 @@ object Parser extends RegexParsers {
   /* Type declaration and type parameters */
 
 
-  def dt:Parser[TypeDecl2] =
+  def dt:Parser[TypeDecl] =
     "data" ~ capitalId ~ opt(tparams) ~ "=" ~ constructors ^^ {
-      case _~n~tps~_~vs => sym=sym.add(n,TYPE);TypeDecl2(ConTypeName(n,tps.getOrElse(List())),vs)}
+      case _~n~tps~_~vs => sym=sym.add(n,TYPE);TypeDecl(ConTypeName(n,tps.getOrElse(List())),vs)}
 
   // constructors
   def constructors: Parser[List[Constructor]] =
@@ -185,7 +185,7 @@ object Parser extends RegexParsers {
         sym = sym.add(f, FUN) // actually added it to the current scope
         rest match {
           case Right((typ,sf)) => SFunDef(f, typ, sf)
-          case Left((ps,typ, bl)) => FunDef2(f,ps, typ, bl)}},
+          case Left((ps,typ, bl)) => FunDef(f,ps, typ, bl)}},
       {case f~_ => sym=sym.rmLevel(); s"Cannot use the reserve word $f as a function name"})
   }
 
@@ -211,84 +211,13 @@ object Parser extends RegexParsers {
       case v~t => TypedVar(v,t)
     }
 
-
   /* Assignments */
 
-  /**
-    * An assignment expression
-    * id = dataExpr |
-    * id = connExpr |
-    * idList = connExpr
-    *
-    * @return the abstract syntax tree for the assignment expression
-    */
-  def assignment:Parser[Assignment2] =
+  def assignment:Parser[Assignment] =
     repsep(lowerCaseId,",")~":="~strExpr ^^ {
       case ids~_~expr =>
         ids.foreach(id => sym = sym.add(id,VAR))
-        Assignment2(ids,expr)
+        Assignment(ids,expr)
     }
 
-
-
-//  /* Expressions */
-//
-//  /**
-//    * A data expression
-//    * identifier |
-//    * identifier(paramExprs)
-//    * @return the parsed expression
-//    */
-//  def dataExpr:Parser[Expr] =
-//    lowerCaseId ~ opt("("~>paramExprs<~")") ^^ {
-//      case c ~ None => sym(c) match {
-//        case Some(ADTVAL) => AdtTerm(c)
-//        case Some(VARNAME) => Identifier(c)
-//        case Some(ADTCONST) => throw new ParsingException(s"Missing actual parameters for constructor $c")
-//        case Some(CONNNAME) => ConnId(c)
-//          //TODO: @Guille - some symbols were not captured. Check what you had in mind.
-//        case Some(x) => throw new ParsingException(s"Unexpected identifier $c with symbol $x")
-//        case None => Identifier(c)}
-//      case c ~ Some(ps) => sym(c) match {
-//        case Some(ADTCONST) =>
-//          var nparams = sizeOfParams(c)
-//          if (nparams == ps.size) AdtConsExpr(c, ps)
-//          else throw new ParsingException(s"Constructor $c expected $nparams parameters, but ${ps.size} found")
-//        case Some(CONNNAME) =>
-//            ConnId(c, ps)
-//        //TODO: @Guille - some symbols were not captured. Check what you had in mind.
-//        case Some(x) => throw new ParsingException(s"Unexpected identifier $c with symbol $x")
-//        //TODO: @Guille - None was not captured. Check what you had in mind.
-//        case None => throw new ParsingException(s"No symbol found for identifer $c.")
-//
-//      }
-//    }
-//
-//  /**
-//    * Expressions that can appear in actual parameters
-//    * dataExpr |
-//    * dataExpr, dataExpr+
-//    * @return a list containing an expression for each parameter found
-//    */
-//  def paramExprs:Parser[List[Expr]] =
-//    dataExpr ~ rep("," ~> dataExpr) ^^ { case e1~e2 => e1::e2 }
-//
-//  /* Auxiliary functions */
-//
-//  /**
-//    * Number of parameters for a given ADT constructor
-//    * @param adtConst the name of an adt constructor
-//    * @return
-//    */
-//  private def sizeOfParams(adtConst:String):Int = {
-//    var variant =  adts.flatMap(t => t.constructors).find(v => v.name == adtConst)
-//    if (variant.isDefined)
-//      variant.get.param.size
-////      variant.get match {
-////       case AdtVal(n) => throw new ParsingException("An ADT Value Variant has no Parameters: ")
-////       case AdtConst(n,p) => p.size
-////      }
-//    else
-//      throw new ParsingException("Unknown Constructor: " + adtConst)
-//  }
 }

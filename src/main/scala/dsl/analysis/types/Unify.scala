@@ -23,11 +23,17 @@ object Unify {
 //        Unify1(cons.tail) ++ Map(t -> l)
       case (TFun(i1,o1),TFun(i2,o2)) =>
         Unify(cons.tail ++ List(TCons(i1,i2),TCons(o1,o2)))
-      case (TInterface(t1,t2),TInterface(t3,t4)) /*if t1.size == t3.size && t2.size == t4.size */=>
+      case (TTensor(t1,t2),TTensor(t3,t4)) /*if t1.size == t3.size && t2.size == t4.size */=>
         Unify(cons.tail ++ List(TCons(t1,t3),TCons(t2,t4)))
       case (TBase(n1, ps1), TBase(n2, ps2)) if (ps1.size == ps2.size) && (n1 == n2) =>
         Unify(cons.tail ++ ps1.zip(ps2).map(p => TCons(p._1, p._2)))
+      // new, unify destructors
+      case (TDestr(t1),TDestr(t2)) =>
+        Unify(cons.tail ++ List(TCons(t1,t2)))
+      case (TDestr(t1),t2@TBase(n1,ps1)) => //TODO: check if it makes sense
+        Unify(cons.tail ++ List(TCons(t1,t2)))
       case (t1,t2) => throw new TypeException(s"Impossible to unify $t1 with $t2")
     }
+
 
 }

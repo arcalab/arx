@@ -63,11 +63,15 @@ object Substitute {
       val (ci1,k1) = substitute(i1,sols,known)
       val (ci2,k2) = substitute(i2,sols,k1)
       (TFun(ci1/*.asInstanceOf[TInterface]*/,ci2/*.asInstanceOf[TInterface]*/),k2)
-    case TInterface(t1,t2) =>
+    case TTensor(t1,t2) =>
       // substitute t1 nad t2
       val (ct1,k1) = substitute(t1,sols,known)
       val (ct2,k2) = substitute(t2,sols,k1)
-      (TInterface(ct1,ct2),k2)
+      (TTensor(ct1,ct2),k2)
+    case TDestr(t1) =>
+      val (ct1,k1) = substitute(t1,sols,known)
+      (TDestr(ct1),k1)
+
   }
 
 }
