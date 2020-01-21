@@ -1,7 +1,7 @@
 package dsl.analysis.types
 
 import dsl.analysis.syntax.SymbolType._
-import dsl.backend.{Mix,In,Out,PType}
+import dsl.backend.PType
 
 
 /**

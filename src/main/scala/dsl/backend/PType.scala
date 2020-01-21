@@ -5,7 +5,7 @@ package dsl.backend
   */
 
 
-sealed abstract class PType
+sealed trait PType
 
 case object In extends PType
 case object Out extends PType

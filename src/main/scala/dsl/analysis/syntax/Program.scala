@@ -1,6 +1,7 @@
 package dsl.analysis.syntax
 
-import dsl.analysis.syntax.Program.{Block, MaybeTypeName}
+import dsl.analysis.syntax.Program.{Block, MaybeReactType, MaybeTypeName}
+import dsl.analysis.types.ReactiveType
 import dsl.backend.Show
 
 case class Program(types: List[TypeDecl], block: Block) {
@@ -9,6 +10,7 @@ case class Program(types: List[TypeDecl], block: Block) {
 object Program {
   type Block = List[Statement]
   type MaybeTypeName = Option[TypeName]
+  type MaybeReactType = Option[ReactiveType]
 }
 
 sealed abstract class Statement
@@ -39,7 +41,7 @@ case object Match            extends StreamFun
 case class SeqFun(f1:StreamFun, f2:StreamFun) extends StreamFun
 case class ParFun(f1:StreamFun, f2:StreamFun) extends StreamFun
 
-case class TypedVar(name:String,typ:MaybeTypeName)
+case class TypedVar(name:String,typ:MaybeTypeName,rtype:MaybeReactType)
 
 // Data Type Declarations
 

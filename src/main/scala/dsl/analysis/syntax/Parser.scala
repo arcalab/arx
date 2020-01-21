@@ -2,6 +2,7 @@ package dsl.analysis.syntax
 
 import dsl.analysis.syntax.Program.Block
 import dsl.analysis.syntax.SymbolType._
+import dsl.analysis.types.{Pull, Push}
 import dsl.common.ParsingException
 
 import scala.util.matching.Regex
@@ -118,61 +119,6 @@ object Parser extends RegexParsers {
   def tparams:Parser[List[TypeName]] =
     "<" ~> tnames <~ ">"
 
-//  def dt:Parser[TypeDecl2] =
-//    "data" ~ typeNameDecl ~ "=" ~ typeVariants ^^
-//      { case _~n~_~vs =>
-//          adts++=List(TypeDecl2(n,vs))
-//          TypeDecl2(n,vs)
-//        }
-
-//  // Name of the type being declared
-//  def typeNameDecl:Parser[TypeName] =
-//    capitalId ~ opt("<"~> typeParams <~">")  ^^ {
-//      case n~opt => sym=sym.add(n,TYPENAME); ConTypeName(n,opt.getOrElse(List()))
-//    }
-
-//  // Reference to type names abstract or concrete
-//  def typeNames:Parser[List[TypeName]] =
-//    typeName ~ "," ~ typeNames ^^ {case n~_~ns => n::ns} |
-//      typeName ^^ (n => List(n))
-//
-//  def typeName:Parser[TypeName] =
-//    typeId ~ opt("<"~> typeParams <~">")  ^^ {case n~opt =>  ConTypeName(n,opt.getOrElse(List()))} |
-//    lowerCaseId ^^ (n => AbsTypeName(n))
-//
-//  // Type parameters (abstract or concrete)
-//  def typeParams:Parser[List[TypeName]] =
-//    typeId ~ opt("," ~> typeParams) ^^ {case n~par =>  ConTypeName(n)::par.getOrElse(List())} |
-//    lowerCaseId ~ opt("," ~> typeParams) ^^ {case n~par =>  AbsTypeName(n)::par.getOrElse(List())}
-//
-//  // a list of type variants
-//  def typeVariants: Parser[List[Constructor]] =
-//    typeVariant ~ opt("|" ~> typeVariants) ^^ {case v~vs => v::vs.getOrElse(List())}
-//
-//  // a type variant, either value or constructor
-//  def typeVariant: Parser[Constructor] =
-//    typeId ~ "(" ~ typeNames ~ ")" ^^
-//      { case n~_~params~_ => sym=sym.add(n,ADTCONST);/*names::=n*/; Constructor(n,params)} |
-//    typeId ^^
-//      { n => sym = sym.add(n, ADTVAL); /*names::=n*/ ; Constructor(n) }
-
-
-  /* Connector definitions */
-
-//  def connDef:Parser[ConnDef] =
-//    "def" ~ identifierCapOrSmall ~ "="~"{" ~ preo ~ "}" ^^ {
-//      case _~id~_~_~conn~_ => sym=sym.add(id,CONNNAME); conns::=ConnDef(id,conn); ConnDef(id,conn)
-//  }
-
-  /* Function definitions */
-
-  //  def funDef: Parser[FunDef2] =
-  //    "def" ~ lowerCaseId ~ opt("(" ~> funFormalParams <~ ")") ~
-  //      opt(":"~>tname)~
-  //      "=" ~ "{" ~ block ~ "}" ^^ {
-  //      case _~f~params~typ~_~_~bl~_ => FunDef2(f,params.getOrElse(Nil),typ,bl)}
-
-
   def funDef: Parser[Statement] =
     "def" ~>  restFunDef
 
@@ -207,8 +153,9 @@ object Parser extends RegexParsers {
     }
 
   def typedVar: Parser[TypedVar] =
-    lowerCaseId~opt(":"~>tname) ^^ {
-      case v~t => TypedVar(v,t)
+    lowerCaseId~opt(":"~>tname)~opt("[!|?]".r) ^^ {
+      case v~t~None => TypedVar(v,t,None)
+      case v~t~Some(r) => TypedVar(v,t,if (r.matches("!")) Some(Push) else Some(Pull))
     }
 
   /* Assignments */

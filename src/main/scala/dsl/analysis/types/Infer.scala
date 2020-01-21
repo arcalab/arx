@@ -138,7 +138,14 @@ object Infer {
           else throw new UndefinedNameException(s"Name ${p.typ.get.name} doesn't correspond to an existing type")
         else TVar(freshVar())))
       // create a fresh type variable for each specified ports whose specified type is a type variable
-      val substParams = Substitution(insPorts.flatMap(p=> p._2.vars).map(v => v->TVar(freshVar())).toMap)
+      val substParams = Substitution((insPorts.flatMap(p=> p._2.vars)).map(v => v->TVar(freshVar())).toMap)
+//        ++(
+//        if (typ.isDefined)
+//          if (ctx.adts.contains(typ.get.name))
+//            Set(ctx.adts(typ.get.name).tExp)
+//          else throw new UndefinedNameException(s"Name ${typ.get.name} doesn't correspond to an existing type")
+//        else Set()
+//      )
       val freshInsPorts = insPorts.map(p=>(p._1,substParams(p._2)))
       // add to the context the data params (NOT FOR NOW) and input params
       val insTypes:List[TExp] = freshInsPorts.map(p => {fctx = fctx.add(p._1,PortEntry(p._2,In)); p._2})
@@ -161,6 +168,11 @@ object Infer {
       val subsTFun = TFun(Simplify(substitution(tfun.tIn)),Simplify(substitution(tfun.tOut)))
       // create a function entry
       val funEntry = FunEntry(subsTFun,substitution(fctx)) //todo: update if we eventually have recursion
+//      // if user specified type, mk a type constraint
+//      val tcons = if (typ.isDefined) {
+//        val utfun = substParams(ctx.adts(typ.get.name).tExp)
+//        Set(TCons(utfun,funEntry.tExp.tOut))
+//      }
 //      val subsCtx = fctx.map(e=>e._1-> Simplify(substitution(f._2.tExp)))
       (ctx.add(name,funEntry),TUnit,Set())//btcons++inOutTCons)
     case FunDef(name, params, typ, block)  => // already defined
