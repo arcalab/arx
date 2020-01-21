@@ -32,6 +32,10 @@ object Unify {
         Unify(cons.tail ++ List(TCons(t1,t2)))
       case (TDestr(t1),t2@TBase(n1,ps1)) => //TODO: check if it makes sense
         Unify(cons.tail ++ List(TCons(t1,t2)))
+//      case (TDestr(t1),TTensor(t2,t3)) =>
+//        Unify(cons.tail)
+//      case (TTensor(t2,t3),TDestr(t1)) =>
+//        Unify(cons.tail)
       case (t1,t2) => throw new TypeException(s"Impossible to unify $t1 with $t2")
     }
 

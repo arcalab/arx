@@ -22,7 +22,7 @@ object DSL {
 
   def unify(cons:Set[TCons]):Map[TVar,TExp] = Unify(cons)
 
-  def infer(program: Program):(TContext,TExp,Set[TCons]) = Infer(program)
+  def infer(program: Program):(Context,TExp,Set[TCons]) = Infer(program)
 
   def typeCheck(prog:Program):Map[String,TExp] = {
     // mk type constraints

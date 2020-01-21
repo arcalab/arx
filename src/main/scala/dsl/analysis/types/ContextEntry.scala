@@ -12,7 +12,7 @@ sealed trait ContextEntry {
   val tExp:TExp
 }
 
-case class FunEntry(/*tParams:List[TExp] , dps:List[TExp],*/ tExp:TFun, funCtx:TContext) extends ContextEntry
+case class FunEntry(/*tParams:List[TExp] , dps:List[TExp],*/ tExp:TFun, funCtx:Context) extends ContextEntry
 
 case class TypeEntry(tExp:TBase, constructors:List[ConstEntry]) extends ContextEntry
 

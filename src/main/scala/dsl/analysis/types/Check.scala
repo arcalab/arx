@@ -24,7 +24,7 @@ object Check {
     case _ => expr
   }
 
-  def lhsAssigAreVars(vars:List[String],ctx:TContext):Unit = {
+  def lhsAssigAreVars(vars:List[String],ctx:Context):Unit = {
     var err: Option[ContextEntry] = None
     vars.exists(v =>
       if (ctx.context.contains(v) && !ctx.ports.contains(v)) {err = Some(ctx.context(v)); true} else false)

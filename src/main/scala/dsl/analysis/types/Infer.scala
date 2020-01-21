@@ -12,7 +12,7 @@ import dsl.backend.{In, Out, Show, Simplify}
 
 object Infer {
 
-  type TypeResult = (TContext,TExp,Set[TCons])
+  type TypeResult = (Context,TExp,Set[TCons])
 
   private var tVars:Int = 0
   private def freshVar():String = {tVars+=1; (tVars-1).toString}
@@ -26,10 +26,10 @@ object Infer {
     */
   def apply(prog:Program):TypeResult = {
     // create a new context
-    var ctx = TContext()
+    var ctx = Context()
     // initialize it with the predefine types and functions (perhaps this is done before? and the context is received?
     // add primitive functions
-    ctx = TContext(ctx.adts,mkPrimFunctions(),ctx.ports)
+    ctx = Context(ctx.adts,mkPrimFunctions(),ctx.ports)
     // add the user defined types
     prog.types.foreach(t => ctx = addUserTypes(t,ctx))
     // infer the type of the program block
@@ -60,7 +60,7 @@ object Infer {
     val insT = (1 to ins).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
     val outsT =(1 to outs).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
     val funT = TFun(Simplify(insT),Simplify(outsT))
-    (name,FunEntry(funT,TContext()))
+    (name,FunEntry(funT,Context()))
   }
 
 
@@ -70,7 +70,7 @@ object Infer {
     * @param ctx current context
     * @return
     */
-  private def  addUserTypes(typeDecl:TypeDecl, ctx:TContext):TContext = {
+  private def  addUserTypes(typeDecl:TypeDecl, ctx:Context):Context = {
     def mkUserType(typDecl:TypeDecl):(TBase,List[ConstEntry]) = {
       val tn = typeName2TExp(typDecl.name)
       val const = typDecl.constructors.map(c => ConstEntry(c.name,c.param.map(p=>typeName2TExp(p)),tn))
@@ -98,7 +98,7 @@ object Infer {
     case AbsTypeName(n) => TVar(n)
   }
 
-  private def infer(block:Block,ctx:TContext):TypeResult = block match  {
+  private def infer(block:Block,ctx:Context):TypeResult = block match  {
     case Nil => (ctx,TUnit,Set())
     case b::bs =>
       val (bCtx,bT,bTCons) = infer(b,ctx)
@@ -106,7 +106,7 @@ object Infer {
       (bsCtx,TTensor(bT,bsT),bTCons++bsTCons)
   }
 
-  private def infer(st:Statement,ctx:TContext):TypeResult = st match {
+  private def infer(st:Statement,ctx:Context):TypeResult = st match {
     case se:StreamExpr => infer(se,ctx)
     case a@Assignment(variables, expr) =>
       //check that each variable on the lhs, if it exists, is a variable (VAR) and names don't repeat
@@ -130,24 +130,27 @@ object Infer {
       if (insNames.size != params.size)
         new TypeException(s"Cannot repeat input variables on a function definition ${insNames.mkString(",")} found")
       //create a new context for the function that knows only function names and type names - no variable names
-      var fctx = TContext(ctx.adts,ctx.functions,Map())
-      // create new type variables for each input port
-      val insPorts = params.map(p=> (p.name, TVar(freshVar())))
+      var fctx = Context(ctx.adts,ctx.functions,Map())
+      // create a type for each input port (specified or new type variable)
+      val insPorts:List[(String,TExp)] = params.map(p=> (p.name,
+        if (p.typ.isDefined)
+          if (ctx.adts.contains(p.typ.get.name)) ctx.adts(p.typ.get.name).tExp
+          else throw new UndefinedNameException(s"Name ${p.typ.get.name} doesn't correspond to an existing type")
+        else TVar(freshVar())))
+      // create a fresh type variable for each specified ports whose specified type is a type variable
+      val substParams = Substitution(insPorts.flatMap(p=> p._2.vars).map(v => v->TVar(freshVar())).toMap)
+      val freshInsPorts = insPorts.map(p=>(p._1,substParams(p._2)))
       // add to the context the data params (NOT FOR NOW) and input params
-      val insTypes:List[TExp] = insPorts.map(p => {fctx = fctx.add(p._1,PortEntry(p._2,In)); p._2})
+      val insTypes:List[TExp] = freshInsPorts.map(p => {fctx = fctx.add(p._1,PortEntry(p._2,In)); p._2})
       // get the type of the block
       val (bctx,bt,btcons) = infer(block,fctx)
-      // check the type of the block is not a funtion (must be any interface type)
+      // check the type of the block is not a function (must be any interface type)
       val btInterfaceType = Check.isInterfaceType(Simplify(bt))
       // create the function type
       var tfun = TFun(Simplify(insTypes.foldRight[TExp](TUnit)(TTensor)),btInterfaceType)
-//      // create a function entry
-//      val funEntry = FunEntry(tfun,fctx) //todo: update if we eventually have recursion
-//      println(s"Function type defined ${name}: "+ tfun)
-      // create a fresh type for the function where inputs type variables are replace by the specified type, if any
-      // TODO: add this later
-      //val subst = Substitution(insTypes.zip(params).map(i => if (i._2.typ.isDefined) ))
-      //val insTCons = insTypes.zip(params).map(i => if (i._2.typ.isDefined) TCons(i._1,i._2.typ.get)
+      //// create a function entry
+      //val funEntry = FunEntry(tfun,fctx) //todo: update if we eventually have recursion
+      //println(s"Function type defined ${name}: "+ tfun)
       // check the ports context is closed
       Check.isClosed(fd,bctx.ports.filterNot(p=> insNames.contains(p._1)))
       // match input/output context
@@ -168,13 +171,14 @@ object Infer {
 
   private def portsMatch(ports:Map[String,List[PortEntry]]):Set[TCons] =
     ports.flatMap(p=>portMatch(p._2)).toSet
+
   private def portMatch(pEntries:List[PortEntry]):Set[TCons] = pEntries match {
     case Nil => Set()
     case p::Nil => Set()
     case p1::p2::ps => portMatch(p2::ps)+TCons(p1.tExp,p2.tExp)
   }
 
-  private def infer(se:StreamExpr,ctx:TContext):TypeResult = se match {
+  private def infer(se:StreamExpr,ctx:Context):TypeResult = se match {
     case Port(x) =>
       // create a new type variable
       val pt = TVar(freshVar())
@@ -235,7 +239,7 @@ object Infer {
       (nctx,sfType.tOut,apType.flatMap(r=> r._3).toSet++tcons)
   }
 
-  private def infer(sf:StreamFun,ctx:TContext):TypeResult = sf match {
+  private def infer(sf:StreamFun,ctx:Context):TypeResult = sf match {
     case FunName(f) if ctx.functions.contains(f) =>
       // get function entry
       val fEntry = ctx.functions(f)
@@ -251,7 +255,7 @@ object Infer {
       // create dummy function type
       val ftype = TFun(tVar,tVar)
       // add dummy function to the context?
-      val funEntry = FunEntry(ftype,TContext(ctx.adts,ctx.functions,Map()))
+      val funEntry = FunEntry(ftype,Context(ctx.adts,ctx.functions,Map()))
       (ctx.add(f,funEntry),ftype,Set())
       //throw new UndefinedNameException(s"Undefined Function name $f")
     case SeqFun(f1,f2) =>
