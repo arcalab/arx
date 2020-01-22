@@ -20,7 +20,7 @@ object DSL {
     case f:Parser.NoSuccess => throw new ParsingException("Parser failed: "+f)
   }
 
-  def unify(cons:Set[TCons]):Map[TVar,TExp] = Unify(cons)
+  def unify(cons:Set[TCons]):(Map[TVar,TExp],Set[TCons]) = Unify(cons)
 
   def infer(program: Program):(Context,TExp,Set[TCons]) = Infer(program)
 
@@ -28,14 +28,31 @@ object DSL {
     // mk type constraints
     val (ctx,t,cons) = infer(prog)
 //    println("About to typecheck")
-//    println("Type constraints:\n"+cons.map(c=>Show(c)).mkString("\n"))
+    println("Type constraints:\n"+cons.map(c=>Show(c)).mkString("\n"))
     // try to unify them
-    val subst:Map[TVar,TExp] = Substitute(unify(cons))
-    val substitution = Substitution(subst)
+    val (solvedTCons,unsolvedDestr) = unify(cons)
+    println("solved:\n"+solvedTCons.map(c=>c).mkString("\n"))
+    println("unsolved:\n"+unsolvedDestr.map(c=>c).mkString("\n"))
+    var subst:Map[TVar,TExp] = Substitute(solvedTCons)
+    var substitute = Substitution(subst)
+    // try to substitute known variables in unsolved destructor constraints
+    val substDestr:Set[TCons] = unsolvedDestr.map(tc => TCons(substitute(tc.l),substitute(tc.r)))
+    println("substitutedDestr:\n"+substDestr.map(c=>Show(c)).mkString("\n"))
+    // expand destructors
+    val expandDestrCons = substDestr.map(tc=> TCons(Destructor.expand(tc.l,ctx),Destructor.expand(tc.r,ctx)))
+    println("expanded:\n"+expandDestrCons.map(c=>c).mkString("\n"))
+    // try to unify expanded unsolved constraints
+    val unifiedDestr = unify(expandDestrCons)
+    println("unifiedDestr:\n"+unifiedDestr)
+    if (unifiedDestr._2.nonEmpty)
+      throw new TypeException(s"Impossible to unify type constraints:\n ${unifiedDestr._2.map(Show(_)).mkString(",")}")
+    // otherwise add new know variables to the substitution
+    subst= subst ++ Substitute(unifiedDestr._1)
+    substitute = Substitution(subst)
     // for each name in the context that is a fun return its type
     val functions:Map[String, ContextEntry] = ctx.functions
       .filterNot(f=> Set("fifo","dupl","lossy","merger","xor","drain","writer","reader").contains(f._1))
-    val rawFunctionTypes = functions.map(f=>f._1-> Simplify(substitution(f._2.tExp)))
+    val rawFunctionTypes = functions.map(f=>f._1-> Simplify(substitute(f._2.tExp)))
     var functionTypes = Map[String,TExp]()
     Prettify.reset()
     for((id,t) <- rawFunctionTypes) {
@@ -43,7 +60,7 @@ object DSL {
       functionTypes += id -> Prettify(t)
     }
     // ports types
-    val rawPortsTypes:Map[String,TExp] = ctx.ports.map(p=>p._1->p._2.head.tExp).map(p=>p._1->Simplify(substitution(p._2)))
+    val rawPortsTypes:Map[String,TExp] = ctx.ports.map(p=>p._1->p._2.head.tExp).map(p=>p._1->Simplify(substitute(p._2)))
     var portsTypes = Map[String,TExp]()
 //    Prettify.reset()
     for((id,t) <- rawPortsTypes) {
@@ -52,7 +69,7 @@ object DSL {
     }
     // program types
 //    Prettify.reset()
-    val programType = Map("program" -> Prettify(Simplify(substitution(t))))
+    val programType = Map("program" -> Prettify(Simplify(substitute(t))))
 
     programType++functionTypes++portsTypes
     //rawFunctionTypes++rawPortsTypes

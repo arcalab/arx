@@ -1,7 +1,7 @@
 package dsl.analysis.syntax
 
 import dsl.analysis.syntax.Program.{Block, MaybeReactType, MaybeTypeName}
-import dsl.analysis.types.ReactiveType
+import dsl.analysis.types.RExp
 import dsl.backend.Show
 
 case class Program(types: List[TypeDecl], block: Block) {
@@ -10,7 +10,7 @@ case class Program(types: List[TypeDecl], block: Block) {
 object Program {
   type Block = List[Statement]
   type MaybeTypeName = Option[TypeName]
-  type MaybeReactType = Option[ReactiveType]
+  type MaybeReactType = Option[RExp]
 }
 
 sealed abstract class Statement
