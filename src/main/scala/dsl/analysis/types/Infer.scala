@@ -1,6 +1,6 @@
 package dsl.analysis.types
 
-import dsl.analysis.syntax.Program.Block
+import dsl.analysis.syntax.Program.{Block, MaybeTypeName}
 import dsl.analysis.syntax._
 import dsl.common.{TypeException, UndefinedNameException}
 import dsl.analysis.syntax.SymbolType._
@@ -112,7 +112,7 @@ object Infer {
     case se:StreamExpr => infer(se,ctx)
     case a@Assignment(variables, expr) =>
       //check that each variable on the lhs, if it exists, is a variable (VAR) and names don't repeat
-      Check.lhsAssigAreVars(variables,ctx)
+      TypeCheck.lhsAssigAreVars(variables,ctx)
       // new context
       var nctx = ctx
       // creat a fresh variable for each lhs variable
@@ -133,58 +133,47 @@ object Infer {
       //create a new context for the function that knows only function names and type names - no variable names
       var fctx = Context(ctx.adts,ctx.functions,Map())
       // create a type for each input port (specified or new type variable)
-      val insPorts:List[(String,TExp)] = params.map(p=> (p.name,
-        if (p.typ.isDefined){
-          val userType = typeName2TExp(p.typ.get)
-          if (ctx.adts.contains(p.typ.get.name) && Check.wellDefinedType(userType,ctx.adts(p.typ.get.name).tExp,ctx)) {
-            userType
-          } else
-            throw new UndefinedNameException(s"Unknown type ${Show(userType)}")
-          }
-        else TVar(freshVar())))
+      val insPorts:List[(String,TExp)] = params.map(p=> (p.name, getSecifiedType(p.typ,ctx)))
+      // create a type for the function (specified or new type variable)
+      val specifiedFType = getSecifiedType(typ,ctx)
       // create a fresh type variable for each specified ports whose specified type is a type variable
-      val substParams = Substitution((insPorts.flatMap(p=> p._2.vars)).map(v => v->TVar(freshVar())).toMap)
-//        ++(
-//        if (typ.isDefined)
-//          if (ctx.adts.contains(typ.get.name))
-//            Set(ctx.adts(typ.get.name).tExp)
-//          else throw new UndefinedNameException(s"Name ${typ.get.name} doesn't correspond to an existing type")
-//        else Set()
-//      )
+      // plus, if the function has a specified type, use it it as well
+      val substParams = Substitution((insPorts.flatMap(p=> p._2.vars)++specifiedFType.vars)
+        .map(v => v->TVar(freshVar())).toMap)
       val freshInsPorts = insPorts.map(p=>(p._1,substParams(p._2)))
       // add to the context the data params (NOT FOR NOW) and input params
       val insTypes:List[TExp] = freshInsPorts.map(p => {fctx = fctx.add(p._1,PortEntry(p._2,In)); p._2})
       // get the type of the block
       val (bctx,bt,btcons) = infer(block,fctx)
       // check the type of the block is not a function (must be any interface type)
-      val btInterfaceType = Check.isInterfaceType(Simplify(bt))
+      val btInterfaceType = TypeCheck.isInterfaceType(Simplify(bt))
       // create the function type
       var tfun = TFun(Simplify(insTypes.foldRight[TExp](TUnit)(TTensor)),btInterfaceType)
       //// create a function entry
       //val funEntry = FunEntry(tfun,fctx) //todo: update if we eventually have recursion
-      //println(s"Function type defined ${name}: "+ tfun)
       // check the ports context is closed
-      Check.isClosed(fd,bctx.ports.filterNot(p=> insNames.contains(p._1)))
+      TypeCheck.isClosed(fd,bctx.ports.filterNot(p=> insNames.contains(p._1)))
       // match input/output context
       val inOutTCons = portsMatch(bctx.ports)
-      // unify constraints from body
-      val (unified,unsolved) = Unify(btcons++inOutTCons)
-      val subst:Map[TVar,TExp] = Substitute(unified)
-      val substitution = Substitution(subst)
+      // unify constraints from body ++ ports constrains ++ constraint that tfun must match specified fun type
+      val substitution = TypeCheck.solve(btcons++inOutTCons++Set(TCons(tfun.tOut,specifiedFType)),ctx)
       val subsTFun = TFun(Simplify(substitution(tfun.tIn)),Simplify(substitution(tfun.tOut)))
       // create a function entry
       val funEntry = FunEntry(subsTFun,substitution(fctx)) //todo: update if we eventually have recursion
-//      // if user specified type, mk a type constraint
-//      val tcons = if (typ.isDefined) {
-//        val utfun = substParams(ctx.adts(typ.get.name).tExp)
-//        Set(TCons(utfun,funEntry.tExp.tOut))
-//      }
-//      val subsCtx = fctx.map(e=>e._1-> Simplify(substitution(f._2.tExp)))
-      (ctx.add(name,funEntry),TUnit,unsolved)//Set())//btcons++inOutTCons)
+      (ctx.add(name,funEntry),TUnit,Set())//Set())//btcons++inOutTCons)
     case FunDef(name, params, typ, block)  => // already defined
       throw new RuntimeException(s"Name $name already defined in the context")
 //    TODO: case SFunDef(name, typ, sfun) =>
 //      _
+  }
+
+  private def getSecifiedType(tn:MaybeTypeName,ctx:Context):TExp = tn match {
+    case Some(t) if ctx.adts.contains(t.name) =>
+      val specified = typeName2TExp(t)
+      TypeCheck.wellDefinedType(specified,ctx.adts(t.name).tExp,ctx)
+      specified
+    case Some(t) => throw new UndefinedNameException(s"Unknown type ${Show(t)}")
+    case _ => TVar(freshVar())
   }
 
   private def portsMatch(ports:Map[String,List[PortEntry]]):Set[TCons] =
@@ -206,7 +195,7 @@ object Infer {
       // get constructor entry
       val qentry:ConstEntry = ctx.constructors(q)
       //check the number of expected parameters match
-      Check.numParams(args.size,qentry.params.size)
+      TypeCheck.numParams(args.size,qentry.params.size)
       // create new context from known context
       var nctx = ctx
       // get the type of each actual param
@@ -231,7 +220,7 @@ object Infer {
       // get the type of the stream function
       val sfTypeRes = infer(sfun,ctx)
 //      println("Function type: "+ sfTypeRes._2)
-      val sfType = Check.isFunType(sfTypeRes._2)
+      val sfType = TypeCheck.isFunType(sfTypeRes._2)
       // get the type of each actual param
       var nctx = ctx
       var apType:List[TypeResult] = List()
@@ -267,8 +256,8 @@ object Infer {
     case SeqFun(f1,f2) =>
       val (f1ctx,f1t,f1tcons) = infer(f1,ctx)
       val (f2ctx,f2t,f2tcons) = infer(f2,f1ctx)
-      val tf1:TFun = Check.isFunType(f1t)
-      val tf2:TFun = Check.isFunType(f2t)
+      val tf1:TFun = TypeCheck.isFunType(f1t)
+      val tf2:TFun = TypeCheck.isFunType(f2t)
       // create a type constraint from f1 out to f2 in
       val tcons = Set(TCons(tf1.tOut,tf2.tIn))
       val ft = TFun(tf1.tIn,tf2.tOut)
@@ -276,8 +265,8 @@ object Infer {
     case ParFun(f1,f2) =>
       val (f1ctx,f1t,f1tcons) = infer(f1,ctx)
       val (f2ctx,f2t,f2tcons) = infer(f2,f1ctx)
-      val tf1 = Check.isFunType(f1t)
-      val tf2 = Check.isFunType(f2t)
+      val tf1 = TypeCheck.isFunType(f1t)
+      val tf2 = TypeCheck.isFunType(f2t)
       val nInType = TTensor(tf1.tIn,tf2.tIn)
       val nOutType = TTensor(tf1.tOut,tf2.tOut)
       val ft = Simplify(TFun(nInType,nOutType))

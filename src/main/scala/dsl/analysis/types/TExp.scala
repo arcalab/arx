@@ -51,6 +51,8 @@ case class TVar(name:String) extends TExp {
     case t@TVar(_) => this == t
     case TFun(ins,outs) => this.occurs(ins) || this.occurs(outs)
     case TBase(_, param) => param.exists(t=> this.occurs(t))
+    case TTensor(t1,t2) => this.occurs(t1) || this.occurs(t2)
+    case TDestr(t) => this.occurs(t)
   }
 }
 

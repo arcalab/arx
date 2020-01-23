@@ -9,7 +9,26 @@ import dsl.common.{TypeException, UndefinedNameException}
   */
 
 
-object Check {
+object TypeCheck {
+
+  def solve(cons:Set[TCons],ctx:Context):Substitution = {
+    // try to unify constraints (unsolvedCons have destructors that need another round)
+    val (solvedCons,unsolvedCons) = Unify(cons)
+    var subst:Map[TVar,TExp] = Substitute(solvedCons)
+    var substitute = Substitution(subst)
+    // try to substitute known variables in unsolved destructor constraints
+    val substDestr:Set[TCons] = unsolvedCons.map(tc => TCons(substitute(tc.l),substitute(tc.r)))
+    // expand destructors in unsolved constraints
+    val expandDestrCons:Set[TCons]= substDestr.map(tc=> TCons(Destructor.expand(tc.l,ctx),Destructor.expand(tc.r,ctx)))
+    // try to unify expanded unsolved constraints
+    val (solved,unsolved) = Unify(expandDestrCons)
+    if (unsolved.nonEmpty)
+      throw new TypeException(s"Impossible to unify type constraints:\n ${unsolved.map(Show(_)).mkString(",")}")
+    // otherwise add new know variables to the substitution
+    subst=  Substitute(solved++subst)
+    // return substitution
+    Substitution(subst)
+  }
 
   def numParams(actual:Int,formal:Int):Unit =
     if (actual!=formal) throw new TypeException(s"Expected ${formal} inputs, but ${actual} found")
@@ -43,11 +62,11 @@ object Check {
     existsType(te,ctx) && matchType(te,tDef)
 
   private def existsType(te:TExp,ctx:Context):Boolean = te match {
-    case TBase(name,ps) => (ctx.adts.contains(name) && ps.forall(p=>existsType(p,ctx)))
+    case TBase(name,ps) if ctx.adts.contains(name) && ps.forall(p=>existsType(p,ctx)) => true
+    case TBase(name,ps) => throw new UndefinedNameException(s"Unknown type name ${name}")
     case TTensor(t1,t2) => existsType(t1,ctx) && existsType(t2,ctx)
     case TFun(ins,outs) => existsType(ins,ctx) && existsType(outs,ctx)
-    case TVar(n) => true
-    case TUnit => true
+    case _ => true
   }
   private def matchType(te:TExp,tdef:TExp):Boolean = try {
     Unify(Set(TCons(te,tdef)))

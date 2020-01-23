@@ -32,6 +32,14 @@ object Show {
   def apply(tcons:TCons):String =
     Show(tcons.l) + " = " + Show(tcons.r)
 
+//
+//  def apply(ctx:Context):String = {
+//    apply(ctx.adts) ++ "\n" ++ apply(ctx.functions) ++ apply(ctx.ports)
+//  }
+//
+//  def apply(typeEntry: TypeEntry):String =
+//    typeEntry
+
   //////////////////
   def apply(p:Program): String =
     p.types.map(apply).mkString("\n") +

@@ -3,6 +3,7 @@ package dsl
 //import dsl.analysis.semantics.{Context, _}
 import dsl.analysis.types._
 import dsl.analysis.syntax.{Parser, Program}
+import dsl.analysis.types.Infer.TypeResult
 import dsl.backend.{Prettify, Show, Simplify}
 import dsl.common.{ParsingException, TypeException}
 //import preo.ast.{Connector, CoreConnector}
@@ -27,25 +28,14 @@ object DSL {
   def typeCheck(prog:Program):Map[String,TExp] = {
     // mk type constraints
     val (ctx,t,cons) = infer(prog)
-    // try to unify them
-    val (solvedTCons,unsolvedDestr) = unify(cons)
-    var subst:Map[TVar,TExp] = Substitute(solvedTCons)
-    var substitute = Substitution(subst)
-    // try to substitute known variables in unsolved destructor constraints
-    val substDestr:Set[TCons] = unsolvedDestr.map(tc => TCons(substitute(tc.l),substitute(tc.r)))
-    // expand destructors
-    val expandDestrCons = substDestr.map(tc=> TCons(Destructor.expand(tc.l,ctx),Destructor.expand(tc.r,ctx)))
-    // try to unify expanded unsolved constraints
-    val unifiedDestr = unify(expandDestrCons)
-    if (unifiedDestr._2.nonEmpty)
-      throw new TypeException(s"Impossible to unify type constraints:\n ${unifiedDestr._2.map(Show(_)).mkString(",")}")
-    // otherwise add new know variables to the substitution
-    subst=  Substitute(unifiedDestr._1++subst)
-    substitute = Substitution(subst)
+    // solve type constraints base on context
+    val substitution = TypeCheck.solve(cons,ctx)
+    // apply substitution to context
+    val substCtx:Context = substitution(ctx)
     // for each name in the context that is a fun return its type
-    val functions:Map[String, ContextEntry] = ctx.functions
+    val functions:Map[String, ContextEntry] = substCtx.functions
       .filterNot(f=> Set("fifo","dupl","lossy","merger","xor","drain","writer","reader").contains(f._1))
-    val rawFunctionTypes = functions.map(f=>f._1-> Simplify(substitute(f._2.tExp)))
+    val rawFunctionTypes = functions.map(f=>f._1-> f._2.tExp)//Simplify(substitution(f._2.tExp)))
     var functionTypes = Map[String,TExp]()
     Prettify.reset()
     for((id,t) <- rawFunctionTypes) {
@@ -53,7 +43,7 @@ object DSL {
       functionTypes += id -> Prettify(t)
     }
     // ports types
-    val rawPortsTypes:Map[String,TExp] = ctx.ports.map(p=>p._1->p._2.head.tExp).map(p=>p._1->Simplify(substitute(p._2)))
+    val rawPortsTypes:Map[String,TExp] = ctx.ports.map(p=>p._1->p._2.head.tExp)//.map(p=>p._1->Simplify(substitution(p._2)))
     var portsTypes = Map[String,TExp]()
 //    Prettify.reset()
     for((id,t) <- rawPortsTypes) {
@@ -61,7 +51,7 @@ object DSL {
     }
     // program types
 //    Prettify.reset()
-    val programType = Map("program" -> Prettify(Simplify(substitute(t))))
+    val programType = Map("program" -> Prettify(Simplify(substitution(t))))
 
     programType++functionTypes++portsTypes
     //rawFunctionTypes++rawPortsTypes
