@@ -134,9 +134,13 @@ object Infer {
       var fctx = Context(ctx.adts,ctx.functions,Map())
       // create a type for each input port (specified or new type variable)
       val insPorts:List[(String,TExp)] = params.map(p=> (p.name,
-        if (p.typ.isDefined)
-          if (ctx.adts.contains(p.typ.get.name)) ctx.adts(p.typ.get.name).tExp
-          else throw new UndefinedNameException(s"Name ${p.typ.get.name} doesn't correspond to an existing type")
+        if (p.typ.isDefined){
+          val userType = typeName2TExp(p.typ.get)
+          if (ctx.adts.contains(p.typ.get.name) && Check.wellDefinedType(userType,ctx.adts(p.typ.get.name).tExp,ctx)) {
+            userType
+          } else
+            throw new UndefinedNameException(s"Unknown type ${Show(userType)}")
+          }
         else TVar(freshVar())))
       // create a fresh type variable for each specified ports whose specified type is a type variable
       val substParams = Substitution((insPorts.flatMap(p=> p._2.vars)).map(v => v->TVar(freshVar())).toMap)

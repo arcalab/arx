@@ -2,7 +2,7 @@ package dsl.analysis.types
 
 import dsl.analysis.syntax.Statement
 import dsl.backend.{In, Out, Show}
-import dsl.common.TypeException
+import dsl.common.{TypeException, UndefinedNameException}
 
 /**
   * Created by guillecledou on 2020-01-07
@@ -39,6 +39,23 @@ object Check {
     case _ => false
   }
 
+  def wellDefinedType(te:TExp,tDef: TExp,ctx:Context):Boolean =
+    existsType(te,ctx) && matchType(te,tDef)
+
+  private def existsType(te:TExp,ctx:Context):Boolean = te match {
+    case TBase(name,ps) => (ctx.adts.contains(name) && ps.forall(p=>existsType(p,ctx)))
+    case TTensor(t1,t2) => existsType(t1,ctx) && existsType(t2,ctx)
+    case TFun(ins,outs) => existsType(ins,ctx) && existsType(outs,ctx)
+    case TVar(n) => true
+    case TUnit => true
+  }
+  private def matchType(te:TExp,tdef:TExp):Boolean = try {
+    Unify(Set(TCons(te,tdef)))
+    true //horrible
+  } catch {
+    case e:TypeException => throw new TypeException(s"Not well defined type ${Show(te)}")
+  }
+
   def isClosed(s:Statement,ports:Map[String,List[PortEntry]]):Unit = {
     //ports.forall(p=> isClosedPort(p._2))
     var err: Option[String] = None
@@ -51,6 +68,7 @@ object Check {
     val out = occurrences.find(p=> p.pType == Out)
     in.isDefined && out.isDefined
   }
+
 
 
 

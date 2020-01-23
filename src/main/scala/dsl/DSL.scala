@@ -27,27 +27,20 @@ object DSL {
   def typeCheck(prog:Program):Map[String,TExp] = {
     // mk type constraints
     val (ctx,t,cons) = infer(prog)
-//    println("About to typecheck")
-    println("Type constraints:\n"+cons.map(c=>Show(c)).mkString("\n"))
     // try to unify them
     val (solvedTCons,unsolvedDestr) = unify(cons)
-    println("solved:\n"+solvedTCons.map(c=>c).mkString("\n"))
-    println("unsolved:\n"+unsolvedDestr.map(c=>c).mkString("\n"))
     var subst:Map[TVar,TExp] = Substitute(solvedTCons)
     var substitute = Substitution(subst)
     // try to substitute known variables in unsolved destructor constraints
     val substDestr:Set[TCons] = unsolvedDestr.map(tc => TCons(substitute(tc.l),substitute(tc.r)))
-    println("substitutedDestr:\n"+substDestr.map(c=>Show(c)).mkString("\n"))
     // expand destructors
     val expandDestrCons = substDestr.map(tc=> TCons(Destructor.expand(tc.l,ctx),Destructor.expand(tc.r,ctx)))
-    println("expanded:\n"+expandDestrCons.map(c=>c).mkString("\n"))
     // try to unify expanded unsolved constraints
     val unifiedDestr = unify(expandDestrCons)
-    println("unifiedDestr:\n"+unifiedDestr)
     if (unifiedDestr._2.nonEmpty)
       throw new TypeException(s"Impossible to unify type constraints:\n ${unifiedDestr._2.map(Show(_)).mkString(",")}")
     // otherwise add new know variables to the substitution
-    subst= subst ++ Substitute(unifiedDestr._1)
+    subst=  Substitute(unifiedDestr._1++subst)
     substitute = Substitution(subst)
     // for each name in the context that is a fun return its type
     val functions:Map[String, ContextEntry] = ctx.functions
@@ -64,7 +57,6 @@ object DSL {
     var portsTypes = Map[String,TExp]()
 //    Prettify.reset()
     for((id,t) <- rawPortsTypes) {
-
       portsTypes += id -> Prettify(t)
     }
     // program types

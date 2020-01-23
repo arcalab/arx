@@ -13,10 +13,10 @@ import dsl.common.TypeException
 sealed trait TExp {
   def substitute(tVar:TVar,tExp:TExp):TExp
 
-  def vars:Set[TVar] = this match {
-    case TUnit => Set()
-    case t@TVar(n) => Set(t)
-    case TBase(n,ps) => ps.flatMap(_.vars).toSet
+  def vars:List[TVar] = this match {
+    case TUnit => List()
+    case t@TVar(n) => List(t)
+    case TBase(n,ps) => ps.flatMap(_.vars)
     case TFun(ins,outs) => ins.vars ++ outs.vars
     case TTensor(t1,t2) => t1.vars ++ t2.vars
   }
