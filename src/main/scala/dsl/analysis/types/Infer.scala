@@ -1,10 +1,11 @@
 package dsl.analysis.types
 
+import dsl.DSL
 import dsl.analysis.syntax.Program.{Block, MaybeTypeName}
 import dsl.analysis.syntax._
 import dsl.common.{TypeException, UndefinedNameException}
 import dsl.analysis.syntax.SymbolType._
-import dsl.backend.{In, Out, Show, Simplify}
+import dsl.backend._
 
 /**
   * Created by guillecledou on 2019-08-01
@@ -31,7 +32,7 @@ object Infer {
     var ctx = Context()
     // initialize it with the predefine types and functions (perhaps this is done before? and the context is received?
     // add primitive functions
-    ctx = Context(ctx.adts,mkPrimFunctions(),ctx.ports)
+    ctx = Context(ctx.adts,importPrimFuns(),ctx.ports)
     // add the user defined types
     prog.types.foreach(t => ctx = addUserTypes(t,ctx))
     // infer the type of the program block
@@ -45,24 +46,15 @@ object Infer {
   }
 
 
-  private def mkPrimFunctions():Map[String,FunEntry] = {
-    Map(mkPrimFunction("fifo",1,1),
-      mkPrimFunction("lossy",1,1)
-      ,mkPrimFunction("drain",2,0)
-      ,mkPrimFunction("dupl",1,2)
-      ,mkPrimFunction("merger",2,1)
-      ,mkPrimFunction("xor",1,2)
-      ,mkPrimFunction("writer",0,1)
-      ,mkPrimFunction("reader",1,0))
-
-  }
-
-  private def mkPrimFunction(name:String,ins:Int,outs:Int):(String,FunEntry) = {
+  private def importPrimFuns():Map[String,FunEntry] =
+    DSL.prelude.importFunctions().map(mkPrimFunEntry).toMap
+  
+  private def mkPrimFunEntry(fun:PrimFun):(String,FunEntry) = {
     val tVar = TVar(freshVar())
-    val insT = (1 to ins).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
-    val outsT =(1 to outs).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
+    val insT = (1 to fun.ins).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
+    val outsT =(1 to fun.outs).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
     val funT = TFun(Simplify(insT),Simplify(outsT))
-    (name,FunEntry(funT,Context()))
+    (fun.name,FunEntry(funT,Context()))
   }
 
 

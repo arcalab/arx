@@ -1,6 +1,7 @@
 package dsl.backend
 
 //import dsl.analysis.semantics._
+import dsl.analysis.syntax.Program.Block
 import dsl.analysis.syntax._
 import dsl.analysis.types._
 
@@ -32,19 +33,19 @@ object Show {
   def apply(tcons:TCons):String =
     Show(tcons.l) + " = " + Show(tcons.r)
 
-//
-//  def apply(ctx:Context):String = {
-//    apply(ctx.adts) ++ "\n" ++ apply(ctx.functions) ++ apply(ctx.ports)
-//  }
-//
-//  def apply(typeEntry: TypeEntry):String =
-//    typeEntry
-
   //////////////////
   def apply(p:Program): String =
+    p.imports.map(apply).mkString("\n")+
+      (if (p.imports.nonEmpty) "\n\n" else "") +
     p.types.map(apply).mkString("\n") +
       (if (p.types.nonEmpty) "\n\n" else "") +
       p.block.map(apply).mkString("\n")
+
+  def apply(im:Import):String = im match {
+    case Import(mod,Nil) => s"import ${im.module}"
+    case Import(mod,m::Nil) => s"import ${im.module}.${m}"
+    case _ => s"import ${im.module}.{${im.members.mkString(",")}}"
+  }
 
   def apply(td: TypeDecl): String =
     "data " + apply(td.name) + " = " + td.constructors.map(apply).mkString(" | ")

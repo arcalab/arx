@@ -2,9 +2,9 @@ package dsl.analysis.syntax
 
 import dsl.analysis.syntax.Program.{Block, MaybeReactType, MaybeTypeName}
 import dsl.analysis.types.RExp
-import dsl.backend.Show
+import dsl.backend.{Import, Show}
 
-case class Program(types: List[TypeDecl], block: Block) {
+case class Program(imports:List[Import],types: List[TypeDecl], block: Block) {
   override def toString: String = Show(this)
 }
 object Program {

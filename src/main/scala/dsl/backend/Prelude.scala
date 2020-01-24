@@ -23,7 +23,7 @@ object Prelude {
   private def either = "data Either<a,b> = Left(a) | Right(b)"
 
   // all primitive types indexed by name
-  private val types:Map[String,TypeDecl] = mkTypes(List(unit,nat,list,bool,pair,either).mkString("\n"))
+  private lazy val types:Map[String,TypeDecl] = mkTypes(List(unit,nat,list,bool,pair,either).mkString("\n"))
 
   // return a list of type declarations for all primitive types
   def importTypes():List[TypeDecl] = types.map(t=>t._2).toList
@@ -47,10 +47,13 @@ object Prelude {
   private def sync = PrimFun("sync",1,1)
   private def id = PrimFun("id",1,1)
   private def dupl = PrimFun("dupl",1,2)
+  private def xor = PrimFun("xor",1,2)
   private def merger = PrimFun("merger",2,1)
   private def drain = PrimFun("drain",2,0)
+  private def writer = PrimFun("writer",0,1)
+  private def reader = PrimFun("reader",1,0)
 
-  private val functions :Map[String,PrimFun] = List(fifo,fifofull,lossy,sync,id,dupl,merger,drain)
+  private val functions :Map[String,PrimFun] = List(fifo,fifofull,lossy,sync,id,dupl,xor,merger,drain,writer,reader)
     .map(f=> f.name -> f).toMap
 
   // return the function type for function @name if known
@@ -61,6 +64,10 @@ object Prelude {
   // returns a list of function types for all primitive functions
   def importFunctions():List[PrimFun] = functions.map(f=>f._2).toList
 
+  // MODULES
+
+//  private val typesMod = Module("types")
+
 }
 
-case class PrimFun(name:String,ins:Int,outs:Int)
+

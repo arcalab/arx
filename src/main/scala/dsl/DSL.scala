@@ -4,7 +4,7 @@ package dsl
 import dsl.analysis.types._
 import dsl.analysis.syntax.{Parser, Program}
 import dsl.analysis.types.Infer.TypeResult
-import dsl.backend.{Prettify, Show, Simplify}
+import dsl.backend.{Prelude, Prettify, Show, Simplify}
 import dsl.common.{ParsingException, TypeException}
 //import preo.ast.{Connector, CoreConnector}
 //import preo.frontend.{Eval, Show, Simplify}
@@ -20,6 +20,8 @@ object DSL {
     case Parser.Success(result, next) => result
     case f:Parser.NoSuccess => throw new ParsingException("Parser failed: "+f)
   }
+
+  val prelude = Prelude
 
   def unify(cons:Set[TCons]):(Map[TVar,TExp],Set[TCons]) = Unify(cons)
 
@@ -43,7 +45,8 @@ object DSL {
       functionTypes += id -> Prettify(t)
     }
     // ports types
-    val rawPortsTypes:Map[String,TExp] = ctx.ports.map(p=>p._1->p._2.head.tExp)//.map(p=>p._1->Simplify(substitution(p._2)))
+    val rawPortsTypes:Map[String,TExp] = ctx.ports.map(p=>p._1->p._2.head.tExp)
+    //.map(p=>p._1->Simplify(substitution(p._2)))
     var portsTypes = Map[String,TExp]()
 //    Prettify.reset()
     for((id,t) <- rawPortsTypes) {
@@ -56,5 +59,7 @@ object DSL {
     programType++functionTypes++portsTypes
     //rawFunctionTypes++rawPortsTypes
   }
+
+
 
 }

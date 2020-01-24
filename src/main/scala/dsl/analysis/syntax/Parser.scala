@@ -3,6 +3,7 @@ package dsl.analysis.syntax
 import dsl.analysis.syntax.Program.Block
 import dsl.analysis.syntax.SymbolType._
 import dsl.analysis.types.{Pull, Push}
+import dsl.backend.Import
 import dsl.common.ParsingException
 
 import scala.util.matching.Regex
@@ -40,9 +41,20 @@ object Parser extends RegexParsers {
   /* Program */
 
   def program:Parser[Program] =
+    rep(imports) ~
     rep(dt) ~ block ^^ {
-      case typs~bl => Program(typs,bl)
+      case imp~typs~bl => Program(imp,typs,bl)
     }
+
+  def imports:Parser[Import] =
+    "import"~lowerCaseId~rep("."~>lowerCaseId)~opt(members) ^^ {
+      case _~mod~mem => Import(mod.mkString("."),mem.getOrElse(List()))
+    }
+
+  def members:Parser[List[String]] =
+    ".{"~>repsep(id,",")<~"}" |
+    "."~>id ^^ {List(_)}
+
 
   def block: Parser[Block] =
     rep(statement)

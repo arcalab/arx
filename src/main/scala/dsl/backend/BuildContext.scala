@@ -1,5 +1,6 @@
 package dsl.backend
 
+import dsl.DSL
 import dsl.analysis.syntax.{Const, GroundTerm, Port}
 import dsl.analysis.syntax.Program.Block
 import dsl.backend.BuildContext.NetBuilder
@@ -13,18 +14,10 @@ object BuildContext {
   type NetBuilder = IO => Net
 
 
-  def mkPrim(name:String,i:Int,o:Int): (String, (NetBuilder, Int, Int)) =
-    name -> ((io:IO) => Net.mkNet(name,io._1,io._2) , i, o)
-  def reoPrims: mutable.Map[String, (NetBuilder, IPort, IPort)] = mutable.Map(
-    mkPrim("drain",2,0),
-    mkPrim("lossy",1,1),
-    mkPrim("fifo",1,1),
-    mkPrim("dupl",1,2),
-    mkPrim("xor",1,2),
-    mkPrim("merger",2,1),
-    mkPrim("writer",0,1),
-    mkPrim("reader",1,0)
-  )
+  def mkPrim(prim:PrimFun): (String, (NetBuilder, Int, Int)) =
+    prim.name -> ((io:IO) => Net.mkNet(prim.name,io._1,io._2) , prim.ins, prim.outs)
+  def reoPrims: mutable.Map[String, (NetBuilder, IPort, IPort)] =
+    mutable.Map(DSL.prelude.importFunctions().map(mkPrim):_*)
 }
 
 class BuildContext {
