@@ -57,9 +57,8 @@ object Parser extends RegexParsers {
     }
 
   def members:Parser[List[String]] =
-    ".{"~>repsep(id,",")<~"}" //|
-//    "."~>id ^^ {List(_)}
-
+    ".{"~>repsep(id,",")<~"}" |
+    "."~>id ^^ {List(_)}
 
   def block: Parser[Block] =
     rep(statement)

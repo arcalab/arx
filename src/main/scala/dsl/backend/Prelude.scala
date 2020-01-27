@@ -78,10 +78,7 @@ object Prelude {
   // Complex functions
 
   private lazy val counter =
-    """data Nat = Zero | Succ(Nat)
-      |data Unit = U
-      |
-      |def counter(tick): Nat = {
+    """def counter(tick): Nat = {
       |    drain(tick,n)
       |    succ:=build(U,n) // build<Nat>
       |    next:=fifo(succ)
@@ -203,7 +200,10 @@ object Prelude {
       case Some(module) =>
         if (i.members.isEmpty) getAllContent(module)
         else getMembers(module,i.members)
-      case None => throw new UndefinedNameException(s"Unknown module name ${i.module}")
+      case None =>
+        if (i.members.isEmpty) findModule(i.module.split("\\.").toList.init,modules) match {
+          case Some(module) => getMembers(module,List(i.module.split("\\.").last))
+        } else throw new UndefinedNameException(s"Unknown module name ${i.module}")
     }
 
   private def findModule(names:List[String],namespace:Map[String,Module]):Option[Module] = {
