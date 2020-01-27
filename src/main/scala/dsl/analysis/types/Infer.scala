@@ -29,10 +29,11 @@ object Infer {
     */
   def apply(prog:Program):TypeResult = {
     // create a new context
-    var ctx = loadImports(prog.imports)//Context()
-    // initialize it with the predefine types and functions (perhaps this is done before? and the context is received?
+    var ctx = Context()
     // add primitive functions
-//    ctx = Context(ctx.adts,importPrimFuns(),ctx.ports)
+    ctx = Context(ctx.adts,importPrimFuns(),ctx.ports)
+    // load imports
+    ctx = loadImports(prog.imports,ctx)//Context()
     // add the user defined types
     prog.types.foreach(t => ctx = addUserTypes(t,ctx))
     // infer the type of the program block
@@ -45,9 +46,9 @@ object Infer {
     (pctx,Simplify(pt),ptcons++inOutTCons)
   }
 
-  private def loadImports(imp:List[Import]):Context = {
+  private def loadImports(imp:List[Import],ctx:Context):Context = {
     val content:List[ModuleContent] = imp.flatMap(i=>Prelude.getImport(i))
-    loadContent(content,Context())
+    loadContent(content,ctx)
   }
 
   private def loadContent(mc:List[ModuleContent],ctx:Context):Context = mc match {

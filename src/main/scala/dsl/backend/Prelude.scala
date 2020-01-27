@@ -23,6 +23,14 @@ object Prelude {
   private lazy val pair = "data Pair<a,b> = P(a,b)"
   private lazy val either = "data Either<a,b> = Left(a) | Right(b)"
 
+  private lazy val alltypes =
+    """data List<a> = Nil | Cons(a,List<a>)
+      |data Bool = True | False
+      |data Nat = Zero | Succ(Nat)
+      |data Pair<a,b> = P(a,b)
+      |data Either<a,b> = Left(a) | Right(b)
+      |data Unit = U"""
+
   // all primitive types indexed by name
   private lazy val types:Map[String,PrimType] = mkTypes(List(unit,nat,list,bool,pair,either).mkString("\n"))
 
@@ -70,7 +78,10 @@ object Prelude {
   // Complex functions
 
   private lazy val counter =
-    """def counter(tick): Nat = {
+    """data Nat = Zero | Succ(Nat)
+      |data Unit = U
+      |
+      |def counter(tick): Nat = {
       |    drain(tick,n)
       |    succ:=build(U,n) // build<Nat>
       |    next:=fifo(succ)
@@ -82,6 +93,105 @@ object Prelude {
       |    res
       |  }
     """.stripMargin
+
+  private lazy val alt =
+    """def alt(i1,i2) = {
+       |  a:=in1(i1) b:=in2(i2)
+       |  drain(a, b)
+       |  x:=a x:=fifo(b)
+       |  out(x)
+       |}
+       |alt(x,y)"""
+
+  private lazy val lossyfifo =
+    """y:=lossy(x)
+      |fifo(y)"""
+
+  private lazy val miscdata =
+    """data List<a> = Nil | Cons(a,List<a>)
+      |data Bool = True | False
+      |data Nat = Zero | Succ(Nat)
+      |data Pair<a,b> = P(a,b)
+      |data Either<a,b> = Left(a) | Right(b)
+      |data Unit = U
+      |
+      |x := Cons(Zero,Nil)
+      |y := Cons(Zero,x)
+      |z := Cons(Succ(Succ(Zero)),y)
+      |w := True
+      |a,b,c := dupl3(x)
+      |
+      |def alt(i1,i2) = {
+      |  a:=in1(i1) b:=in2(i2)
+      |  drain(a, b)
+      |  o:=a o:=fifo(b)
+      |  o
+      |}
+      |// If Then Else
+      |def ite(b:Bool,then:A,else:A): A = {
+      |    t,f := match(b)
+      |    drain(t,ok)
+      |    drain(f,ko)
+      |    ok
+      |    ko
+      |}
+      |
+      |// fibbonaci
+      |def fib(): Nat = {
+      |  b:=fifoFull_Succ_Zero(a)
+      |  c:=fifo(b)
+      |  a := add(b,c)
+      |  a
+      |}
+      |
+      |// counts ticks (to check)
+      |def counter(tick): Nat = {
+      |  drain(tick,n)
+      |  succ:=build(nil,n)
+      |  next:=fifo(succ)
+      |  iter:=fifoFull_Zero(next)
+      |  n,res:=xor(iter)
+      |  zero:=Zero
+      |  drain(res,zero)
+      |  succ:=zero
+      |  res
+      |}
+      |
+      |// Addition of naturals (to check)
+      |def add(a, b): Nat = {
+      |  drain(a,b)
+      |  lockAll:=fifo(a)
+      |  lockA:=fifo(a)
+      |  waitB:=fifo(b)
+      |  next:=a
+      |  toMatch:=fifo(next)
+      |  zero,succ:=match(toMatch)
+      |  next:=fifo(succ)
+      |  res:=counter(succ)
+      |  aDone,bDone:=xor(zero)
+      |  drain(aDone,lockA)
+      |  drain(aDone,waitB)
+      |  next:=waitB
+      |  lockB:=fito(waitB)
+      |  drain(bDone,lockB)
+      |  drain(bDone,lockAll)
+      |  drain(bDone,res)
+      |  res
+      |}"""
+
+  private lazy val sequencer3 =
+    """x1:=fifofull(x3) drain(o1,x1) out1(o1)
+      |x2:=    fifo(x1) drain(o2,x2) out2(o2)
+      |x3:=    fifo(x2) drain(o3,x3) out3(o3)
+      |"""
+
+
+  private lazy val programs =
+    Map("counter"->counter,
+      "alt"->alt,
+      "lossyfifo"->lossyfifo,
+      "miscdata"->miscdata,
+      "sequencer3"->sequencer3)
 
   private lazy val mathFunctions = Map("counter"->counter)
 
@@ -97,7 +207,7 @@ object Prelude {
     }
 
   private def findModule(names:List[String],namespace:Map[String,Module]):Option[Module] = {
-//    println(s"names: ${names}")
+    println(s"names: ${names}")
     names match {
       case Nil => None
       case n :: Nil if namespace.contains(n) => Some(namespace(n))
@@ -121,10 +231,10 @@ object Prelude {
 
   // MODULES
 
-  private lazy val typesMod = Module("types",List(),importTypes())
-  private lazy val connsMod = Module("conn",List(primitiveMod),List())
-  private lazy val primitiveMod = Module("prim",List(),importPrimFunctions())
-  private lazy val mathMod = Module("math",List(),loadComplexFunctions())
+  private lazy val typesMod = Module("Types",List(),importTypes())
+  private lazy val connsMod = Module("Conn",List(primitiveMod,mathMod),List())
+  private lazy val primitiveMod = Module("Prim",List(),importPrimFunctions())
+  private lazy val mathMod = Module("Math",List(),loadComplexFunctions())
 //
   private lazy val modules:Map[String,Module] = List(typesMod,connsMod).map(m=>m.name->m).toMap
 

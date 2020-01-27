@@ -52,13 +52,13 @@ object Parser extends RegexParsers {
     }
 
   def imports:Parser[Import] =
-    "import"~lowerCaseId~rep("."~>lowerCaseId)~opt(members) ^^ {
+    "import"~capitalId~rep("."~>capitalId)~opt(members) ^^ {
       case _~m~ms~mem => Import((m::ms).mkString("."),mem.getOrElse(List()))
     }
 
   def members:Parser[List[String]] =
-    ".{"~>repsep(id,",")<~"}" |
-    "."~>id ^^ {List(_)}
+    ".{"~>repsep(id,",")<~"}" //|
+//    "."~>id ^^ {List(_)}
 
 
   def block: Parser[Block] =
