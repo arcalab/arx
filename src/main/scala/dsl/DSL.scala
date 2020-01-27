@@ -2,7 +2,7 @@ package dsl
 
 //import dsl.analysis.semantics.{Context, _}
 import dsl.analysis.types._
-import dsl.analysis.syntax.{Parser, Program}
+import dsl.analysis.syntax.{FunDef, Parser, Program}
 import dsl.analysis.types.Infer.TypeResult
 import dsl.backend.{Prelude, Prettify, Show, Simplify}
 import dsl.common.{ParsingException, TypeException}
@@ -18,6 +18,14 @@ object DSL {
 
   def parse(code:String):Program = Parser.parseProgram(code) match {
     case Parser.Success(result, next) => result
+    case f:Parser.NoSuccess => throw new ParsingException("Parser failed: "+f)
+  }
+
+  def parseFunction(code:String):FunDef = Parser.parseFunction(code) match {
+    case Parser.Success(result,next) => result match {
+      case f@FunDef(n, ps, t, b) => f
+      case _ => throw new RuntimeException("Only function defitions supported for now")
+    }
     case f:Parser.NoSuccess => throw new ParsingException("Parser failed: "+f)
   }
 

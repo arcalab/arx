@@ -29,10 +29,10 @@ object Infer {
     */
   def apply(prog:Program):TypeResult = {
     // create a new context
-    var ctx = Context()
+    var ctx = loadImports(prog.imports)//Context()
     // initialize it with the predefine types and functions (perhaps this is done before? and the context is received?
     // add primitive functions
-    ctx = Context(ctx.adts,importPrimFuns(),ctx.ports)
+//    ctx = Context(ctx.adts,importPrimFuns(),ctx.ports)
     // add the user defined types
     prog.types.foreach(t => ctx = addUserTypes(t,ctx))
     // infer the type of the program block
@@ -45,10 +45,28 @@ object Infer {
     (pctx,Simplify(pt),ptcons++inOutTCons)
   }
 
+  private def loadImports(imp:List[Import]):Context = {
+    val content:List[ModuleContent] = imp.flatMap(i=>Prelude.getImport(i))
+    loadContent(content,Context())
+  }
+
+  private def loadContent(mc:List[ModuleContent],ctx:Context):Context = mc match {
+    case Nil => ctx
+    case PrimType(n,td)::ls =>
+      val nctx = loadContent(ls,ctx)
+      addUserTypes(td,nctx)
+    case PrimFun(n,ins,out)::ls =>
+      val nctx = loadContent(ls,ctx)
+      nctx.add(n,mkPrimFunEntry(PrimFun(n,ins,out))._2)
+    case ComplFun(n,fd)::ls =>
+      val nctx = loadContent(ls,ctx)
+      val (nfctx,ft,cons) = infer(fd,nctx)
+      nfctx
+  }
 
   private def importPrimFuns():Map[String,FunEntry] =
-    DSL.prelude.importFunctions().map(mkPrimFunEntry).toMap
-  
+    DSL.prelude.importPrimFunctions().map(mkPrimFunEntry).toMap
+
   private def mkPrimFunEntry(fun:PrimFun):(String,FunEntry) = {
     val tVar = TVar(freshVar())
     val insT = (1 to fun.ins).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
@@ -56,7 +74,6 @@ object Infer {
     val funT = TFun(Simplify(insT),Simplify(outsT))
     (fun.name,FunEntry(funT,Context()))
   }
-
 
   /**
     * Add user defines to the context

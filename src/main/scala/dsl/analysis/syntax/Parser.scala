@@ -27,6 +27,11 @@ object Parser extends RegexParsers {
     parseAll(program,code)
   }
 
+  def parseFunction(code:String):ParseResult[Statement] = {
+    sym = new SymbolsTable
+    parseAll(funDef,code)
+  }
+
   override def skipWhitespace = true
   override val whiteSpace: Regex = "( |\t|\r|\f|\n|//.*)+".r
 
@@ -48,7 +53,7 @@ object Parser extends RegexParsers {
 
   def imports:Parser[Import] =
     "import"~lowerCaseId~rep("."~>lowerCaseId)~opt(members) ^^ {
-      case _~mod~mem => Import(mod.mkString("."),mem.getOrElse(List()))
+      case _~m~ms~mem => Import((m::ms).mkString("."),mem.getOrElse(List()))
     }
 
   def members:Parser[List[String]] =
