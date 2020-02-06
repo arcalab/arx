@@ -15,7 +15,7 @@ object BuildContext {
 
 
   def mkPrim(prim:PrimFun): (String, (NetBuilder, Int, Int)) =
-    prim.name -> ((io:IO) => Net.mkNet(prim.name,io._1,io._2) , prim.ins, prim.outs)
+    prim.name -> ((io:IO) => Net.mkNet(prim.name,io._1,io._2) , prim.sb._1.inputs.size, prim.sb._1.outputs.size)
   def reoPrims: mutable.Map[String, (NetBuilder, IPort, IPort)] =
     mutable.Map(DSL.prelude.importPrimFunctions().map(mkPrim):_*)
 }

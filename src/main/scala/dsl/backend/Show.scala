@@ -1,9 +1,9 @@
 package dsl.backend
 
-//import dsl.analysis.semantics._
-import dsl.analysis.syntax.Program.Block
+import dsl.analysis.semantics._
 import dsl.analysis.syntax._
 import dsl.analysis.types._
+
 
 
 /**
@@ -33,6 +33,33 @@ object Show {
   def apply(tcons:TCons):String =
     Show(tcons.l) + " = " + Show(tcons.r)
 
+  /* Stream Builders */
+
+  def apply(sb:StreamBuilder):String = {
+    s"""sb<${sb.memory.mkString(",")}> =
+       |  init:
+       |    ${sb.init.map(apply).mkString(",")}
+       |  guarded commands:
+       |    ${sb.gcs.map(apply).mkString("\n")}
+     """.stripMargin
+  }
+
+  def apply(gc:GuardedCommand):String = {
+    s"""${apply(gc.guard)} → [
+        | ${gc.cmd.map(apply).mkString("\n")}
+        |]
+     """.stripMargin
+  }
+
+  def apply(cmd:Command):String =
+    cmd.variable + ":=" + apply(cmd.term)
+
+  def apply(gc:Guard):String = gc match {
+    case And(g1,g2) => apply(g1) + ", " + apply(g2)
+    case Get(v) => s"get($v)"
+    case Ask(v) => s"ask($v)"
+    case Und(v) => s"und($v)"
+  }
   //////////////////
   def apply(p:Program): String =
     p.imports.map(apply).mkString("\n")+

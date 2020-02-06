@@ -1,7 +1,9 @@
 package dsl.backend
 
 import dsl.DSL
-import dsl.analysis.syntax.{FunDef, TypeDecl}
+import dsl.DSL._
+import dsl.analysis.semantics.{Get, StreamBuilder, True, Und}
+import dsl.analysis.syntax.{FunDef, GroundTerm, Port, TypeDecl}
 import dsl.common.UndefinedNameException
 import spire.syntax.module
 
@@ -48,23 +50,82 @@ object Prelude {
     program.types.map(t=> t.name.name->PrimType(t.name.name,t)).toMap
   }
 
-  // FUNCTIONS
+   /* FUNCTIONS */
 
-  //primitives
+  /* Stream builders for primitive function  */
 
-  private lazy val fifo = PrimFun("fifo",1,1)
-  private lazy val fifofull = PrimFun("fifofull",1,1)
-  private lazy val lossy = PrimFun("lossy",1,1)
-  private lazy val sync = PrimFun("sync",1,1)
-  private lazy val id = PrimFun("id",1,1)
-  private lazy val dupl = PrimFun("dupl",1,2)
-  private lazy val xor = PrimFun("xor",1,2)
-  private lazy val merger = PrimFun("merger",2,1)
-  private lazy val drain = PrimFun("drain",2,0)
-  private lazy val writer = PrimFun("writer",0,1)
-  private lazy val reader = PrimFun("reader",1,0)
+  private lazy val fifosb = (sb withCommands (
+    (get("in") & und("m"))->("m":= Port("in")),
+    get("m") -> ("out":= Port("m"))
+  ) ins "in" outs "out" mems "m", List("in"),List("out"))
 
-  private lazy val functions :Map[String,PrimFun] = List(fifo,fifofull,lossy,sync,id,dupl,xor,merger,drain,writer,reader)
+  private lazy val fifoFullsb = (fifosb._1 initially ("m" := Port("_p1")),fifosb._2,fifosb._3)
+
+  private lazy val idsb = (sb withCommands (
+    get("in")->("out":=Port("in"))
+  ) ins "in" outs "out",List("in"),List("out"))
+
+  private lazy val syncsb = idsb
+
+  private lazy val lossysb = (sb withCommands (
+    get("in")->("out":=Port("in")),
+    get("in")->()
+  ) ins "in" outs "out",List("in"),List("out"))
+
+  private lazy val duplsb = (sb withCommands (
+    get("in") -> ("out1":=Port("in"),"out2":= Port("in"))
+  ) ins "in" outs("out1","out2"),List("in"),List("out1","out2"))
+
+  private lazy val mergersb = (sb withCommands (
+    get("in1") -> ("out":= Port("in1")),
+    get("in2") -> ("out":= Port("in2"))
+  ) ins ("in1","in2") outs "out", List("in1","in2"),List("out"))
+
+  private lazy val xorsb = (sb withCommands (
+    get("in") -> ("out1":=Port("in")),
+    get("in") -> ("out2":= Port("in"))
+  ) ins "in" outs("out1","out2"),List("in"),List("out1","out2"))
+
+  private lazy val drainsb = (sb withCommands (
+    (get("in1") & get("in2")) -> ()
+  ) ins ("in1","in2"),List("in1","in2"),List())
+
+  private lazy val writersb = (sb initially ("m" := Port("_p1")) withCommands (
+      get("m") -> ("out":= Port("m"))
+  ) outs "out" mems "m", List(),List("out"))
+
+  private lazy val readersb = (sb withCommands (
+      get("in") -> ("m":= Port("in"))
+    ) ins "in" mems "m",List("in"),List())
+
+  /* Signature for primitive functions */
+
+//  private lazy val fifo = PrimFun("fifo",1,1)
+//  private lazy val fifofull = PrimFun("fifofull",1,1)
+//  private lazy val lossy = PrimFun("lossy",1,1)
+//  private lazy val sync = PrimFun("sync",1,1)
+//  private lazy val id = PrimFun("id",1,1)
+//  private lazy val dupl = PrimFun("dupl",1,2)
+//  private lazy val xor = PrimFun("xor",1,2)
+//  private lazy val merger = PrimFun("merger",2,1)
+//  private lazy val drain = PrimFun("drain",2,0)
+//  private lazy val writer = PrimFun("writer",0,1)
+//  private lazy val reader = PrimFun("reader",1,0)
+
+  private lazy val fifo = PrimFun("fifo",fifosb)
+  private lazy val fifofull = PrimFun("fifofull",fifoFullsb)
+  private lazy val lossy = PrimFun("lossy",lossysb)
+  private lazy val sync = PrimFun("sync",syncsb)
+  private lazy val id = PrimFun("id",idsb)
+  private lazy val dupl = PrimFun("dupl",duplsb)
+  private lazy val xor = PrimFun("xor",xorsb)
+  private lazy val merger = PrimFun("merger",mergersb)
+  private lazy val drain = PrimFun("drain",drainsb)
+  private lazy val writer = PrimFun("writer",writersb)
+  private lazy val reader = PrimFun("reader",readersb)
+
+  private lazy val functions :Map[String,PrimFun] =
+    List(fifo,fifofull,lossy,sync,id,dupl,xor,merger,drain,writer,reader)
     .map(f=> f.name -> f).toMap
 
   // return the function type for function @name if known
@@ -239,5 +300,4 @@ object Prelude {
   private lazy val modules:Map[String,Module] = List(typesMod,connsMod).map(m=>m.name->m).toMap
 
 }
-
 

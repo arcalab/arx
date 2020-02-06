@@ -1,9 +1,11 @@
 package dsl
 
 //import dsl.analysis.semantics.{Context, _}
+import dsl.analysis.semantics._
 import dsl.analysis.types._
-import dsl.analysis.syntax.{FunDef, Parser, Program}
+import dsl.analysis.syntax.{FunDef, GroundTerm, Parser, Program}
 import dsl.analysis.types.Infer.TypeResult
+import dsl.analysis.semantics.{Command, GuardedCommand}
 import dsl.backend.{Prelude, Prettify, Show, Simplify}
 import dsl.common.{ParsingException, TypeException}
 //import preo.ast.{Connector, CoreConnector}
@@ -68,6 +70,19 @@ object DSL {
     //rawFunctionTypes++rawPortsTypes
   }
 
+  /* DSL for Stream builders */
+
+  class Var(name:String) {
+    def :=(term:GroundTerm):Command = Command(name,term)
+  }
+
+  implicit def toVar(s:String):Var = new Var(s)
+
+  def sb:StreamBuilder = StreamBuilder.empty
+
+  def get(v:String):Guard = Get(v)
+  def und(v:String):Guard = Und(v)
+  def ask(v:String):Guard = Ask(v)
 
 
 }

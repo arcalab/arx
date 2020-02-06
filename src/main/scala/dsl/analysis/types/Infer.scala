@@ -56,9 +56,9 @@ object Infer {
     case PrimType(n,td)::ls =>
       val nctx = loadContent(ls,ctx)
       addUserTypes(td,nctx)
-    case PrimFun(n,ins,out)::ls =>
+    case PrimFun(n,sb)::ls =>
       val nctx = loadContent(ls,ctx)
-      nctx.add(n,mkPrimFunEntry(PrimFun(n,ins,out))._2)
+      nctx.add(n,mkPrimFunEntry(PrimFun(n,sb))._2)
     case ComplFun(n,fd)::ls =>
       val nctx = loadContent(ls,ctx)
       val (nfctx,ft,cons) = infer(fd,nctx)
@@ -70,8 +70,8 @@ object Infer {
 
   private def mkPrimFunEntry(fun:PrimFun):(String,FunEntry) = {
     val tVar = TVar(freshVar())
-    val insT = (1 to fun.ins).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
-    val outsT =(1 to fun.outs).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
+    val insT = (1 to fun.sb._1.inputs.size).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
+    val outsT =(1 to fun.sb._1.outputs.size).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
     val funT = TFun(Simplify(insT),Simplify(outsT))
     (fun.name,FunEntry(funT,Context()))
   }
