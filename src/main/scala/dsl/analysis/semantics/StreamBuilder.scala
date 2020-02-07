@@ -1,5 +1,7 @@
 package dsl.analysis.semantics
 
+import dsl.backend.Simplify
+
 /**
   * A stream builder consists of an initial configuration (of commands),
   * and a list of guarded commands
@@ -33,7 +35,7 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
     // composes two guarded commands
     def compose(gc1:GuardedCommand,gc2:GuardedCommand):GuardedCommand = {
       val hide    = gc1.outputs ++ gc2.outputs
-      val nguards = hideMix(gc1.guard & gc2.guard,hide)
+      val nguards = Simplify(hideMix(gc1.guard & gc2.guard,hide))
       val ncmds   = gc1.cmd ++ gc2.cmd
 
       GuardedCommand(nguards,ncmds)
@@ -73,7 +75,6 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
 
   def withCommands(gcs:GuardedCommand*):StreamBuilder =
     StreamBuilder(this.init,this.gcs++gcs.toSet,this.inputs,this.outputs,this.memory)
-
 
 
   /**

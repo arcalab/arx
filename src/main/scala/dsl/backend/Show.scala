@@ -37,8 +37,9 @@ object Show {
 
   def apply(sb:StreamBuilder):String = {
     s"""<${sb.memory.mkString(",")}> =
+       |  interface: [${sb.inputs.mkString(",")}|${sb.outputs.mkString(",")}]
        |  init:${sb.init.map(apply).mkString(",")}
-       |  guarded commands:${sb.gcs.map(apply).mkString(",")}""".stripMargin
+       |  guarded commands:\n    ${sb.gcs.map(apply).mkString(",\n    ")}""".stripMargin
   }
 
   def apply(gc:GuardedCommand):String = {

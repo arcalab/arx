@@ -26,7 +26,6 @@ object Encode{
     val ctx = loadPrimitives()
     // encode program block
     val (sbB,sbBOuts,sbBCtx) = encode(program.block,ctx,typedCtx)
-    println("Encoded Program")
     (sbB,sbBOuts,sbBCtx)
   }
 
@@ -41,12 +40,9 @@ object Encode{
     case Nil => (StreamBuilder.empty,List(),sbCtx)
     case b::bs =>
       // encode b
-      println(s"Encoding a parallel block - ${Show(b)} of type ${b.getClass} ")
       val (sbB,sbBOuts,sbBCtx) = encode(b,sbCtx,typeCtx)
       // encode rest and compose it
-      println(s"Encoding the rest of the parallel blocks ")
       val (sbBs,sbBsOuts,sbBsCtx) = encode(bs,sbBCtx,typeCtx)
-      println("Composing Parallel blocks")
       // compose stream builders and enqueue outputs
       (sbB*sbBs,sbBOuts++sbBsOuts,sbBsCtx)
   }
@@ -59,7 +55,6 @@ object Encode{
   private def encode(st:Statement, sbCtx:SBContext, typeCtx:Context):SemanticResult = st match {
     case se:StreamExpr => encode(se,sbCtx,typeCtx)
     case Assignment(variables, expr) =>
-      println("Encode Assignment")
       // get the stream builder entry of the expression
       val (sbE,sbEOuts,sbECtx) = encode(expr,sbCtx,typeCtx)
       // create a map from sbEOuts to variables
@@ -105,9 +100,7 @@ object Encode{
       //todo: continue
       (DSL.sb,List(),sbCtx)
     case FunctionApp(FunName(name), args) =>
-      println(s"Discovering Function Application - ${name}")
       // get the stream builder entry associated to name
-      println(s"Encoding function arguments")
       val (sb,sbIns,sbOuts) = if (sbCtx.contains(name)) sbCtx(name) else sbCtx("id") //otherwise, assume 1->1 function
       // get a stream builder for each argument
       val argsSb:List[SemanticResult]  = args.map(a=> encode(a,sbCtx,typeCtx))
@@ -122,7 +115,6 @@ object Encode{
       // compose stream builders from arguments
       val argsComp = argsSb.map(_._1).foldRight[StreamBuilder](DSL.sb)(_*_)
       // return result, and remap outputs of the function to the corresponding fresh names
-      println(s"Leaving Function Application - ${name}")
       (sbFresh * argsComp,sbOuts.map(remap),sbCtx)
     case _ => throw new RuntimeException(s"Stream Expression ${Show(se)} of type ${se.getClass} not supported.")
     // todo: Any kind of StreamFun if we go back to having this option,
@@ -169,21 +161,17 @@ object Encode{
 
   /**
     * Substitutes a stream builder with fresh names based on a given mapping
+    * todo: check if the sets can overlap, then do smart rename to remember new known names
     * @param sbe stream builder entry
     * @param remap mapping from names to new names
     * @return sbe substituted based on remap
     */
   private def fresh(sb:StreamBuilder,remap:Map[String,String]):StreamBuilder = {
-    //val variables = sb.outputs++sb.inputs++sb.outputs
-    //todo check if the sets can overlap, then do smart rename to remember new known names
-    //val remap:Map[String,String] = variables.map(v => v->freshVar()).toMap
-    println("Get fresh stream builder")
     val ins  = sb.inputs.map(v=>remap.getOrElse(v,v))
     val outs = sb.outputs.map(v=>remap.getOrElse(v,v))
     val mems = sb.memory.map(v=>remap.getOrElse(v,v))
     val gcs  = sb.gcs.map(gc=>rename(gc,remap))
     val init = sb.init.map(c=>rename(c,remap))
-    println("Got fresh stream builder")
     StreamBuilder(init,gcs,ins,outs,mems)
   }
 

@@ -22,7 +22,7 @@ import dsl.common.{ParsingException, TypeException}
 object DSL {
 
   def parse(code:String):Program = Parser.parseProgram(code) match {
-    case Parser.Success(result, next) => result
+    case Parser.Success(result, _) => result
     case f:Parser.NoSuccess => throw new ParsingException("Parser failed: "+f)
   }
 
@@ -34,7 +34,7 @@ object DSL {
     case f:Parser.NoSuccess => throw new ParsingException("Parser failed: "+f)
   }
 
-  val prelude = Prelude
+  val prelude: Prelude.type = Prelude
 
   def unify(cons:Set[TCons]):(Map[TVar,TExp],Set[TCons]) = Unify(cons)
 
@@ -47,39 +47,14 @@ object DSL {
     val substitution = TypeCheck.solve(cons,ctx)
     // apply substitution to context
     val substCtx:Context = substitution(ctx)
-//    // for each name in the context that is a fun return its type
-//    val functions:Map[String, ContextEntry] = substCtx.functions
-//      .filterNot(f=> Set("fifo","dupl","lossy","merger","xor","drain","writer","reader").contains(f._1))
-//    val rawFunctionTypes = functions.map(f=>f._1-> f._2.tExp)//Simplify(substitution(f._2.tExp)))
-//    var functionTypes = Map[String,TExp]()
-//    Prettify.reset()
-//    for((id,t) <- rawFunctionTypes) {
-////      Prettify.reset()
-//      functionTypes += id -> Prettify(t)
-//    }
-//    // ports types
-//    val rawPortsTypes:Map[String,TExp] = ctx.ports.map(p=>p._1->p._2.head.tExp)
-//    //.map(p=>p._1->Simplify(substitution(p._2)))
-//    var portsTypes = Map[String,TExp]()
-////    Prettify.reset()
-//    for((id,t) <- rawPortsTypes) {
-//      portsTypes += id -> Prettify(t)
-//    }
     //add program type to context
     // todo: get type of the inputs
     val (program,programType) = ("program",FunEntry(TFun(TUnit,Simplify(substitution(t))),Context()))
     // prettify context
     Prettify.reset()
     val prettyCtx = Prettify(substCtx.add(program,programType))
-    // program type
-//    val programType = Map("program" -> Prettify(Simplify(substitution(t))))
-
-//    programType++functionTypes++portsTypes
-    //rawFunctionTypes++rawPortsTypes
     prettyCtx
   }
-
-//  def typeCheck(prog:Program)
 
   /* DSL for Stream builders */
 
