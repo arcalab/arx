@@ -36,19 +36,13 @@ object Show {
   /* Stream Builders */
 
   def apply(sb:StreamBuilder):String = {
-    s"""sb<${sb.memory.mkString(",")}> =
-       |  init:
-       |    ${sb.init.map(apply).mkString(",")}
-       |  guarded commands:
-       |    ${sb.gcs.map(apply).mkString("\n")}
-     """.stripMargin
+    s"""<${sb.memory.mkString(",")}> =
+       |  init:${sb.init.map(apply).mkString(",")}
+       |  guarded commands:${sb.gcs.map(apply).mkString(",")}""".stripMargin
   }
 
   def apply(gc:GuardedCommand):String = {
-    s"""${apply(gc.guard)} → [
-        | ${gc.cmd.map(apply).mkString("\n")}
-        |]
-     """.stripMargin
+    s"""${apply(gc.guard)} → [${gc.cmd.map(apply).mkString(",")}]""".stripMargin
   }
 
   def apply(cmd:Command):String =
@@ -59,6 +53,7 @@ object Show {
     case Get(v) => s"get($v)"
     case Ask(v) => s"ask($v)"
     case Und(v) => s"und($v)"
+    case True => s"true"
   }
   //////////////////
   def apply(p:Program): String =

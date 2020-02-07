@@ -3,7 +3,7 @@ package dsl.backend
 import dsl.analysis.syntax.Program.Block
 import dsl.analysis.syntax._
 import dsl.backend.Net.{Connector, Interface}
-import dsl.backend.PType
+import dsl.backend.PortType
 
 
 /**
@@ -156,7 +156,7 @@ object Net {
     *  - Net([id1: []->True_p] , Nil, Nil ) - for the generated port True_p for "True" (and other constructors if they exist)
     *  - [x_p, True_p] - the port numbers of each actual argument.
     */
-  private def processArgs(args: List[GroundTerm])(implicit gm:BuildContext): (Net,List[(IPort,PType)]) = {
+  private def processArgs(args: List[GroundTerm])(implicit gm:BuildContext): (Net,List[(IPort,PortType)]) = {
     val (newPorts,nets) = args.map(mkPort).unzip
     ( nets.fold(Net(Nil,Set(),Set()))(_++_) ,
       newPorts)
@@ -192,7 +192,7 @@ object Net {
     Net(Nil,Set(),Set(x))
   }
 
-  def mkPort(gt:GroundTerm)(implicit gm:BuildContext): ((IPort,PType),Net) = gt match {
+  def mkPort(gt:GroundTerm)(implicit gm:BuildContext): ((IPort,PortType),Net) = gt match {
     case Port(x) =>
       gm.getPort(x,In)
       (gm.ports(x),Net(Nil,Set(),Set()))

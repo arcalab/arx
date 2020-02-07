@@ -1,7 +1,7 @@
 package dsl.analysis.types
 
 import dsl.analysis.syntax.SymbolType._
-import dsl.backend.PType
+import dsl.backend.{In, PortType}
 
 
 /**
@@ -32,6 +32,14 @@ case class Context(adts : Map[String,TypeEntry],
         checkNotIn(name,context)
         new Context(adts+(name->t),functions,ports)
     case _ => throw new RuntimeException("Constructors are added automatically when discovering ADT declarations")
+  }
+
+  def inputs():Map[String,List[PortEntry]] =
+    this.ports.filterNot(p=> p._2.forall(p=>(!isIn(p.pType))))
+
+  private def isIn(pt:PortType):Boolean = pt match {
+    case In => true
+    case _ => false
   }
 
   private def checkNotIn(name:String,ctx:Map[String,ContextEntry]):Unit =

@@ -2,11 +2,8 @@ package dsl.backend
 
 import dsl.DSL
 import dsl.DSL._
-import dsl.analysis.semantics.{Get, StreamBuilder, True, Und}
-import dsl.analysis.syntax.{FunDef, GroundTerm, Port, TypeDecl}
+import dsl.analysis.syntax.{Port}
 import dsl.common.UndefinedNameException
-import spire.syntax.module
-
 
 
 /**
@@ -136,6 +133,7 @@ object Prelude {
   // returns a list of function types for all primitive functions
   def importPrimFunctions():List[PrimFun] = functions.map(f=>f._2).toList
 
+  def primitiveFunctionNames():Set[String] = functions.map(f=>f._1).toSet
   // Complex functions
 
   private lazy val counter =

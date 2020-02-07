@@ -1,6 +1,6 @@
 package dsl.analysis.types
 
-import dsl.backend.PType
+import dsl.backend.PortType
 
 /**
   * Created by guillecledou on 2019-08-01
@@ -14,4 +14,4 @@ sealed trait ContextEntry {
 case class FunEntry(/*tParams:List[TExp] , dps:List[TExp],*/ tExp:TFun, funCtx:Context) extends ContextEntry
 case class TypeEntry(tExp:TBase, constructors:List[ConstEntry])                         extends ContextEntry
 case class ConstEntry(name:String, params:List[TExp], tExp:TExp)                        extends ContextEntry
-case class PortEntry(tExp:TExp, pType:PType)                                            extends ContextEntry
+case class PortEntry(tExp:TExp, pType:PortType)                                            extends ContextEntry

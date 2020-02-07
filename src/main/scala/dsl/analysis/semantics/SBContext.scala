@@ -41,6 +41,11 @@ class SBContext {
     */
   def contains(name:String):Boolean = functions.contains(name)
 
+  /**
+    * Returns the entire context
+    * @return context of stream builder
+    */
+  def get():Map[String,StreamBuilderEntry] = functions
 }
 
 object SBContext {

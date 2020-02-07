@@ -5,7 +5,7 @@ import dsl.analysis.syntax.{Const, GroundTerm, Port}
 import dsl.analysis.syntax.Program.Block
 import dsl.backend.BuildContext.NetBuilder
 import dsl.backend.Net.{FunBlock, IPort, Interface}
-import dsl.backend.PType
+import dsl.backend.PortType
 
 import scala.collection.mutable
 
@@ -23,7 +23,7 @@ object BuildContext {
 class BuildContext {
 
 
-  val ports: mutable.Map[String, (IPort,PType)]        = mutable.Map()
+  val ports: mutable.Map[String, (IPort,PortType)]        = mutable.Map()
   val fun:   mutable.Map[String, FunBlock]             = mutable.Map()
   val prims: mutable.Map[String, (NetBuilder,Int,Int)] = BuildContext.reoPrims
   protected var seed:IPort = 0
@@ -31,13 +31,13 @@ class BuildContext {
     seed += 1
     seed
   }
-  def freshPort(t:PType): Port = {
+  def freshPort(t:PortType): Port = {
     seed += 1
     val pn = "x$"+seed
     ports += pn -> (seed,t)
     Port(pn)
   }
-  def getPort(n:String,t:PType): IPort = ports.get(n) match {
+  def getPort(n:String,t:PortType): IPort = ports.get(n) match {
     case Some((x,In)) =>
       if(t==Out) ports += n -> (x,Mix)
       x
@@ -49,7 +49,7 @@ class BuildContext {
       ports += n -> (fresh,t)
       seed
   }
-  def getPorts(gt:GroundTerm,t:PType): List[IPort] = gt match {
+  def getPorts(gt:GroundTerm,t:PortType): List[IPort] = gt match {
     case Port(x) => List(getPort(x,t))
     case Const(_, args) => args.flatMap(getPorts(_,t))
   }

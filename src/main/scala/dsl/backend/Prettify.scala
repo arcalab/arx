@@ -14,6 +14,21 @@ object Prettify {
   /* Variable free name -> pretty name */
   private var prettyVars:Map[String,String] = Map()
 
+
+  /**
+    * Prettifies a context by replacing type variables with alphabet letters, accordingly
+    * @param ctx a type context
+    * @return prettified context
+    */
+  def apply(ctx:Context):Context = {
+    val nFuns = ctx.functions.map(f=> f._1 ->
+      FunEntry(TFun(apply(f._2.tExp.tIn),apply(f._2.tExp.tOut)),apply(f._2.funCtx)))
+    val nPorts =
+      ctx.ports.map(p => p._1 -> p._2.map(apply))
+    Context(ctx.adts,nFuns,nPorts)
+  }
+
+
   /**
     * Given a type expression with free variables, rename all free variables to alphabet letters, accordingly.
     * @param te type expression
@@ -63,4 +78,11 @@ object Prettify {
       res.toString
     else intToAlpha(quotient-1)+res
   }
+
+  /**
+    * Prettifies a port entry by replacing type variables with alphabet letters, accordingly
+    * @param pe port entry
+    * @return prettified port entry
+    */
+  private def apply(pe:PortEntry):PortEntry = PortEntry(apply(pe.tExp),pe.pType)
 }
