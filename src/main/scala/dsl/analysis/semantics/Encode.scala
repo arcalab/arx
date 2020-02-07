@@ -19,7 +19,7 @@ object Encode{
   type SemanticResult = (StreamBuilder,List[String],SBContext)
 
   private var vars:Int = 0
-  private def freshVar():String = {vars+=1; (vars-1).toString}
+  private def freshVar():String = {vars+=1; s"v${vars-1}"}
 
   def apply(program:Program,typedCtx:Context):SemanticResult = {
     // create context with primitive functions
@@ -61,8 +61,8 @@ object Encode{
       val remap = sbEOuts.zip(variables).toMap
       // remap outputs in the sbE to variables
       val sbFresh = fresh(sbE,remap)
-      // return fresh stream builder and renamed outputs based on map
-      (sbFresh,sbEOuts.map(remap),sbECtx)
+      // return fresh stream builder 
+      (sbFresh,List(),sbECtx)
     case FunDef(name, params, typ, block) =>
       // get the stream builder of the block
       val (sbB,sbBOuts,sbBCtx) = encode(block,sbCtx,typeCtx)

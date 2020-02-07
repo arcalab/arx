@@ -1,5 +1,7 @@
 package dsl.backend
 
+import dsl.analysis.semantics.{SBContext, StreamBuilder}
+import dsl.analysis.semantics.StreamBuilder.StreamBuilderEntry
 import dsl.analysis.types._
 
 /**
@@ -28,26 +30,29 @@ object Prettify {
     Context(ctx.adts,nFuns,nPorts)
   }
 
-
   /**
     * Given a type expression with free variables, rename all free variables to alphabet letters, accordingly.
     * @param te type expression
     * @return prettified type expression
     */
   def apply(te: TExp):TExp = te match {
-    case TVar(n) if n.matches("[0-9]*") =>
-      if (prettyVars.contains(n)) TVar(prettyVars(n))
-      else {
-        var s = intToAlpha(prettifySeed())
-        prettyVars+= (n->s)
-        TVar(s)
-      }
+    case TVar(n) if n.matches("[0-9]*") => TVar(prettify(n))
     case t@TVar(_) => t
     case TTensor(t1,t2) => TTensor(apply(t1),apply(t2))
     case TFun(i,o) => TFun(apply(i)/*.asInstanceOf[TInterface]*/,apply(o)/*.asInstanceOf[TInterface]*/)
     case TBase(n,ps) => TBase(n,ps.map(apply))
     case t => t
   }
+
+  def prettify(str:String) =
+    if (prettyVars.contains(str))
+      prettyVars(str)
+    else {
+      val s = intToAlpha(prettifySeed())
+      prettyVars+= (str->s)
+      s
+    }
+
 
   /**
     * Return current seed and increased seeds by one

@@ -55,4 +55,16 @@ object SBContext {
     * @return
     */
   def apply():SBContext = new SBContext
+
+  /**
+    * Creates a context based on a given map of names to stream builder entries
+    * @param ctx
+    * @return
+    */
+  def apply(map:Map[String,StreamBuilderEntry]):SBContext = {
+    val ctx = new SBContext {
+      override val functions: Map[String, StreamBuilderEntry] = map
+    }
+    ctx
+  }
 }
