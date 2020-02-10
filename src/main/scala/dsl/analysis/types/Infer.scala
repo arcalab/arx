@@ -173,7 +173,6 @@ object Infer {
       val substitution = TypeCheck.solve(btcons++inOutTCons++Set(TCons(tfun.tOut,specifiedFType)),ctx)
       val subsTFun = TFun(Simplify(substitution(tfun.tIn)),Simplify(substitution(tfun.tOut)))
       // create a function entry
-      println(s"Fun definition -end")
       val funEntry = FunEntry(subsTFun,substitution(fctx)) //todo: update if we eventually have recursion
       (ctx.add(name,funEntry),TUnit,Set(),TypedFunDef(fd,funEntry.tExp,substitution(btb,bctx)))//Set())//btcons++inOutTCons)
     case FunDef(name, params, typ, block)  => // already defined
@@ -252,7 +251,6 @@ object Infer {
       val actualPsType = Simplify(apType.map(r => r._2).foldRight[TExp](TUnit)(TTensor))
       // get type constraints from actual to formal params
       val tcons  = Set(TCons(actualPsType,sfType.tIn))
-      println(s"Fun application ${Show(se)}")
       // return the result
       (nctx,sfType.tOut,apType.flatMap(r=> r._3).toSet++tcons,TypedFunApp(sfTypeRes._4,sfType.tOut,apType.map(_._4)))
   }
@@ -294,7 +292,7 @@ object Infer {
     case Match =>
       val tVar = TVar(freshVar())
       val mtype = TFun(tVar,TDestr(tVar))
-      (ctx,mtype,Set(),TypedMatch(TDestr(tVar),tVar))
+      (ctx,mtype,Set(),TypedMatch(tVar,TDestr(tVar)))
     case Build =>
       val tVar = TVar(freshVar())
       val btype = TFun(TDestr(tVar),tVar)

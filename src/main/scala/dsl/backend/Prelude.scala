@@ -265,17 +265,15 @@ object Prelude {
         } else throw new UndefinedNameException(s"Unknown module name ${i.module}")
     }
 
-  private def findModule(names:List[String],namespace:Map[String,Module]):Option[Module] = {
-    println(s"names: ${names}")
-    names match {
-      case Nil => None
-      case n :: Nil if namespace.contains(n) => Some(namespace(n))
-      case n :: ns if namespace.contains(n) =>
-        val nNameSpace = namespace(n).childs.map(m => m.name -> m).toMap
-        findModule(ns, nNameSpace)
-      case _ => None
-    }
+  private def findModule(names:List[String],namespace:Map[String,Module]):Option[Module] = names match {
+    case Nil => None
+    case n :: Nil if namespace.contains(n) => Some(namespace(n))
+    case n :: ns if namespace.contains(n) =>
+      val nNameSpace = namespace(n).childs.map(m => m.name -> m).toMap
+      findModule(ns, nNameSpace)
+    case _ => None
   }
+
 
   private def getMembers(module:Module,members:List[String]): List[ModuleContent] = members match {
     case Nil => List()

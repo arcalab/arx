@@ -33,6 +33,7 @@ sealed trait Guard {
     case Ask(v)     => Set(v)
     case Get(v)     => Set(v)
     case Und(v)     => Set(v)
+    case IsQ(q,v)   => Set(v)
     case True       => Set()
   }
 

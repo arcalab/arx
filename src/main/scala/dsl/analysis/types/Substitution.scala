@@ -30,42 +30,34 @@ case class Substitution(sub:Map[TVar,TExp]) {
 
   def apply(tp:TypedProgram,ctx:Context):(TypedProgram,Context) = {
     val nctx = apply(ctx)
-    println("Substitution program ")
     (TypedProgram(tp.imports,tp.types,apply(tp.typedBlock,nctx)),nctx)
   }
 
   def apply(tb:TypedBlock,ctx:Context):TypedBlock = tb.map(b=>apply(b,ctx))
 
-  def apply(ts:TypedStatement,ctx:Context):TypedStatement = {
-    println("Substitution ts ");ts match {
+  def apply(ts:TypedStatement,ctx:Context):TypedStatement = ts match {
     case TypedFunDef(f,t,tb) => TypedFunDef(f,apply(t),apply(tb,ctx))
     case TypedSFunDef(f,t,tb) => TypedSFunDef(f,apply(t),apply(tb,ctx))
     case TypedAssignment(a,tlhs,trhs) => TypedAssignment(a,tlhs.map(apply),apply(trhs,ctx))
     case se:TypedStreamExpr => apply(se,ctx)
-  }}
+  }
 
-  def apply(tsf:TypedStreamFun,ctx:Context):TypedStreamFun = {
-    println("Substitution tsf ")
-    tsf match {
+  def apply(tsf:TypedStreamFun,ctx:Context):TypedStreamFun = tsf match {
     case TypedFunName(f,t)  => TypedFunName(f,apply(t))
     case TypedBuild(t,ta)   => TypedBuild(Destructor.expand(apply(t),ctx),Destructor.expand(apply(ta),ctx))
     case TypedMatch(t,ta)   => TypedMatch(apply(t),apply(ta))
     case TypedSeqFun(t1,t2) => TypedSeqFun(apply(t1,ctx),apply(t2,ctx))
     case TypedParFun(t1,t2) => TypedParFun(apply(t1,ctx),apply(t2,ctx))
-  }}
+  }
 
-  def apply(tse:TypedStreamExpr,ctx:Context):TypedStreamExpr = {
-    println("Substitution tse ")
-    tse match {
+  def apply(tse:TypedStreamExpr,ctx:Context):TypedStreamExpr = tse match {
     case TypedFunApp(sf,t,ta) => TypedFunApp(apply(sf,ctx),apply(t),ta.map(apply))
     case tgt:TypedGroundTerm => apply(tgt)
-  }}
+  }
 
-  def apply(tgt:TypedGroundTerm):TypedGroundTerm = {
-    println("Substitution tgt ")
-    tgt match {
+  def apply(tgt:TypedGroundTerm):TypedGroundTerm = tgt match {
     case TypedConst(q, t, tArgs) => TypedConst(q, apply(t), tArgs.map(apply))
     case TypedPort(p, t) => TypedPort(p,apply(t))
-  }}
+  }
 
 }

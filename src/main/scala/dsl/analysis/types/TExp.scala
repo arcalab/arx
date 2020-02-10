@@ -19,6 +19,7 @@ sealed trait TExp {
     case TBase(n,ps) => ps.flatMap(_.vars)
     case TFun(ins,outs) => ins.vars ++ outs.vars
     case TTensor(t1,t2) => t1.vars ++ t2.vars
+    case TDestr(t) => t.vars
   }
 }
 

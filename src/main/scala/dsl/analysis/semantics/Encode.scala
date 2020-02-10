@@ -78,12 +78,7 @@ object Encode{
 
   }
 
-  /**
-    * Generates the stream builder of a stream expression
-    * @param se
-    * @return stream builder for se
-    */
-  private def encode(se:TypedStreamExpr, sbCtx:SBContext,typeCtx:Context):SemanticResult = se match {
+  private def encode(gt:TypedGroundTerm,sbCtx: SBContext):SemanticResult = gt match {
     case TypedPort(x,_) =>
       var out = freshVar()
       var gc  = Get(x) -> (out := Port(x))
@@ -94,19 +89,21 @@ object Encode{
       var out = freshVar()
       var gc = gets -> (out := const)
       (StreamBuilder(Set(),Set(gc),fvq,Set(out)),List(out),sbCtx)
-    case TypedFunApp(TypedMatch(tm,tmargs),_, targs) =>
-      //todo: continue
-      println(s"Match: ${Show(tmargs)} -> ${Show(tm)} ")
-      (DSL.sb,List(),sbCtx)
-    case TypedFunApp(TypedBuild(tb@TBase(name,_),tbargs), _, targs) =>
-      // for each fv in the arguments get a stream builder
-      val fvb:List[String] = targs.flatMap(fv)
-      val gets = fvb.map(Get).foldRight[Guard](True)(_&_)
+  }
+
+  /**
+    * Generates the stream builder of a stream expression
+    * @param se
+    * @return stream builder for se
+    */
+  private def encode(se:TypedStreamExpr, sbCtx:SBContext,typeCtx:Context):SemanticResult = se match {
+    case gt:TypedGroundTerm => encode(gt,sbCtx)
+    case TypedFunApp(TypedMatch(tb@TBase(name, _), tmargs),_,targs) =>
       val constructors:List[ConstEntry] = typeCtx.adts(name).constructors
-      val (gcs,sbs,out) = mkGCQs(constructors,targs,sbCtx,typeCtx)
-      val buildSb = sb withCommands (gcs:_*) outs out ins (gcs.flatMap(gc=>gc.inputs):_*)
-      println(s"Build: ${Show(tbargs)} -> ${Show(tb)} ")
-      (buildSb*sbs,List(out),sbCtx)
+      mkMatch(constructors,targs.head,sbCtx)
+    case TypedFunApp(TypedBuild(tb@TBase(name,_),tbargs), _, targs) =>
+      val constructors:List[ConstEntry] = typeCtx.adts(name).constructors
+      mkBuild(constructors,targs,sbCtx)
     case TypedFunApp(TypedFunName(name,_),_, args) =>
       // get the stream builder entry associated to name
       val (sb,sbIns,sbOuts) = if (sbCtx.contains(name)) sbCtx(name) else sbCtx("id") //otherwise, assume 1->1 function
@@ -129,30 +126,70 @@ object Encode{
     //  but if will required sequence of inputs as well.
   }
 
-  private def mkGCQs(qs:List[ConstEntry]
+  private def mkBuild(qs:List[ConstEntry]
+                      , args:List[TypedGroundTerm]
+                      , sbCtx:SBContext): SemanticResult = {
+    val out = freshVar()
+    val (gcs,sbs) = mkGCBuild(qs,args,sbCtx,out)
+    val buildSb = sb withCommands (gcs:_*) outs out ins (gcs.flatMap(gc=>gc.inputs):_*)
+    (buildSb*sbs,List(out),sbCtx)
+  }
+
+  private def mkGCBuild(qs:List[ConstEntry]
                      , args:List[TypedGroundTerm]
-                     , sbCtx:SBContext
-                     , typeCtx:Context): (List[GuardedCommand],StreamBuilder,String) = qs match {
-    case Nil => (List(),DSL.sb,"")
+                     , sbCtx:SBContext,out:String): (List[GuardedCommand],StreamBuilder) = qs match {
+    case Nil => (List(),DSL.sb)
     case q::more =>
       // get the arguments that correspond to the first constructor q
-      val qArgs = args.take(q.params.size)
+      val numArgs = q.params.size
+      val qArgs = args.take(if (numArgs==0) 1 else numArgs)
       // make a stream builder for each argument
-      val sbArgs:List[SemanticResult] = qArgs.map(a=> encode(a,sbCtx,typeCtx))
+      val sbArgs:List[SemanticResult] = qArgs.map(a=> encode(a,sbCtx))
       // make gets for the output variable of each sb in the previous step
       val getArgs = sbArgs.map(_._2.head).map(p => Get(p)).foldRight[Guard](True)(_&_)
-      // remove this arguments from the list
-      val restArgs = args.drop(q.params.size)
+      // remove these arguments from the list
+      val restArgs = args.drop(if (numArgs==0) 1 else numArgs)
       // build the constructor
-      val constructor = Const(q.name,sbArgs.map(p=> Port(p._2.head)))
+      val constructor = Const(q.name,if (numArgs==0) List() else sbArgs.map(p=> Port(p._2.head)))
       // composed arguments stream builders into a single stream builder
       val compArgs = sbArgs.map(_._1).foldRight[StreamBuilder](DSL.sb)(_*_)
       // get the rest of the guarded commands
-      val gcMore = mkGCQs(more,restArgs,sbCtx,typeCtx)
+      val gcMore = mkGCBuild(more,restArgs,sbCtx,out)
       // make the actual guarded command for this constructor
-      val out = freshVar()
       val gcq = getArgs -> (out := constructor)
-      (gcq::gcMore._1,compArgs*gcMore._2,out)
+      (gcq::gcMore._1,compArgs*gcMore._2)
+  }
+
+  private def mkMatch(qs:List[ConstEntry]
+                    , arg:TypedGroundTerm
+                    , sbCtx:SBContext): SemanticResult = {
+    val (sbIn,in,_) = encode(arg,sbCtx)
+    val (gcs,sbs,outs) = mkGCMatch(qs,sbCtx,in.head)
+    val buildSb = sb withCommands (gcs:_*) outs (outs:_*) ins in.head
+    (buildSb*sbs,outs,sbCtx)
+  }
+
+  private def mkGCMatch(qs:List[ConstEntry]
+                        , sbCtx:SBContext,in:String): (List[GuardedCommand],StreamBuilder,List[String]) = qs match {
+    case Nil => (List(),DSL.sb,List())
+    case q::more =>
+      // get the arguments that correspond to the first constructor q
+      val numArgs = q.params.size
+      // make guard with get for the input variable and guard for isQ
+      val guard = Get(in) & IsQ(q.name,in)
+      // generate the outputs for this constructor
+      var commands:List[Command] = List()
+      var outputs:List[String] = List()
+      for (p<-q.params.zipWithIndex) {
+        val out = freshVar()
+        outputs  :+= out
+        commands :+= (out := Const(s"get${q.name}${if(q.params.isEmpty)""else p._2.toString}",Port(in)::Nil))
+        //todo add custom class
+      }
+      val gcq = guard -> (commands:_*)
+      // get the rest of the guarded commands
+      val (gcMore,sbMore,outsMore) = mkGCMatch(more,sbCtx,in)
+      (gcq::gcMore,sbMore,outputs++outsMore)
   }
 
 //  /**
