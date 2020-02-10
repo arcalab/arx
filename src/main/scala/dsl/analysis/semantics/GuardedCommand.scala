@@ -50,3 +50,4 @@ case class And(g1:Guard,g2:Guard) extends Guard
 case class Ask(variable:String) extends Guard
 case class Get(variable:String) extends Guard
 case class Und(variable:String) extends Guard
+case class IsQ(q:String,variable:String) extends Guard

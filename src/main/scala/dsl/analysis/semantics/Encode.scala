@@ -5,7 +5,8 @@ import dsl.DSL._
 import dsl.analysis.semantics.StreamBuilder.StreamBuilderEntry
 import dsl.analysis.syntax.Program.Block
 import dsl.analysis.syntax._
-import dsl.analysis.types.Context
+import dsl.analysis.types.TypedProgram.TypedBlock
+import dsl.analysis.types._
 import dsl.backend.Show
 
 /**
@@ -21,11 +22,11 @@ object Encode{
   private var vars:Int = 0
   private def freshVar():String = {vars+=1; s"v${vars-1}"}
 
-  def apply(program:Program,typedCtx:Context):SemanticResult = {
+  def apply(program:TypedProgram,typeCtx:Context):SemanticResult = {
     // create context with primitive functions
     val ctx = loadPrimitives()
     // encode program block
-    val (sbB,sbBOuts,sbBCtx) = encode(program.block,ctx,typedCtx)
+    val (sbB,sbBOuts,sbBCtx) = encode(program.typedBlock,ctx,typeCtx)
     (sbB,sbBOuts,sbBCtx)
   }
 
@@ -36,7 +37,7 @@ object Encode{
     * @param typeCtx known context of types for program elements
     * @return a semantic encoding for block
     */
-  private def encode(block:Block,sbCtx:SBContext, typeCtx:Context):SemanticResult = block match {
+  private def encode(block:TypedBlock,sbCtx:SBContext,typeCtx:Context):SemanticResult = block match {
     case Nil => (StreamBuilder.empty,List(),sbCtx)
     case b::bs =>
       // encode b
@@ -52,28 +53,28 @@ object Encode{
     * @param st program statement
     * @return a semantic encoding for a statement
     */
-  private def encode(st:Statement, sbCtx:SBContext, typeCtx:Context):SemanticResult = st match {
-    case se:StreamExpr => encode(se,sbCtx,typeCtx)
-    case Assignment(variables, expr) =>
+  private def encode(st:TypedStatement, sbCtx:SBContext,typeCtx:Context):SemanticResult = st match {
+    case se:TypedStreamExpr => encode(se,sbCtx,typeCtx)
+    case TypedAssignment(asg,lhs, rhs) =>
       // get the stream builder entry of the expression
-      val (sbE,sbEOuts,sbECtx) = encode(expr,sbCtx,typeCtx)
+      val (sbE,sbEOuts,sbECtx) = encode(rhs,sbCtx,typeCtx)
       // create a map from sbEOuts to variables
-      val remap = sbEOuts.zip(variables).toMap
+      val remap = sbEOuts.zip(asg.variables).toMap
       // remap outputs in the sbE to variables
       val sbFresh = fresh(sbE,remap)
-      // return fresh stream builder 
+      // return fresh stream builder
       (sbFresh,List(),sbECtx)
-    case FunDef(name, params, typ, block) =>
+    case TypedFunDef(fd, te, tb) =>
       // get the stream builder of the block
-      val (sbB,sbBOuts,sbBCtx) = encode(block,sbCtx,typeCtx)
+      val (sbB,sbBOuts,sbBCtx) = encode(tb,sbCtx,typeCtx)
       // create an stream builder entry for the function
-      val fEntry = (sbB,params.map(tv=>tv.name),sbBOuts)
+      val fEntry = (sbB,fd.params.map(tv=>tv.name),sbBOuts)
       // add the entry to the context returned by encoding the block
-      val nSbCtx = sbBCtx.add(name,fEntry)
+      val nSbCtx = sbBCtx.add(fd.name,fEntry)
       // return the new context and an empty stream builder and outputs
       (StreamBuilder.empty,List(),nSbCtx)
     //todo: case for SFunDef
-    case _ =>throw new RuntimeException(s"Statement ${Show(st)} of type ${st.getClass} not supported.")
+    case _ =>throw new RuntimeException(s"Statement ${st} of type ${st.getClass} not supported.")
 
   }
 
@@ -82,27 +83,34 @@ object Encode{
     * @param se
     * @return stream builder for se
     */
-  private def encode(se:StreamExpr, sbCtx:SBContext, typeCtx:Context):SemanticResult = se match {
-    case Port(x) =>
+  private def encode(se:TypedStreamExpr, sbCtx:SBContext,typeCtx:Context):SemanticResult = se match {
+    case TypedPort(x,_) =>
       var out = freshVar()
       var gc  = Get(x) -> (out := Port(x))
       (StreamBuilder(Set(),Set(gc),Set(x),Set(out)),List(out),sbCtx)
-    case q@Const(name,args) =>
+    case q@TypedConst(const,_,targs) =>
       var fvq = fv(q)
       var gets = fvq.map(Get).foldRight[Guard](True)(_&_)
       var out = freshVar()
-      var gc = gets -> (out := q)
+      var gc = gets -> (out := const)
       (StreamBuilder(Set(),Set(gc),fvq,Set(out)),List(out),sbCtx)
-    case FunctionApp(Match, args) =>
+    case TypedFunApp(TypedMatch(tm,tmargs),_, targs) =>
       //todo: continue
+      println(s"Match: ${Show(tmargs)} -> ${Show(tm)} ")
       (DSL.sb,List(),sbCtx)
-    case FunctionApp(Build, args) =>
-      //todo: continue
-      (DSL.sb,List(),sbCtx)
-    case FunctionApp(FunName(name), args) =>
+    case TypedFunApp(TypedBuild(tb@TBase(name,_),tbargs), _, targs) =>
+      // for each fv in the arguments get a stream builder
+      val fvb:List[String] = targs.flatMap(fv)
+      val gets = fvb.map(Get).foldRight[Guard](True)(_&_)
+      val constructors:List[ConstEntry] = typeCtx.adts(name).constructors
+      val (gcs,sbs,out) = mkGCQs(constructors,targs,sbCtx,typeCtx)
+      val buildSb = sb withCommands (gcs:_*) outs out ins (gcs.flatMap(gc=>gc.inputs):_*)
+      println(s"Build: ${Show(tbargs)} -> ${Show(tb)} ")
+      (buildSb*sbs,List(out),sbCtx)
+    case TypedFunApp(TypedFunName(name,_),_, args) =>
       // get the stream builder entry associated to name
       val (sb,sbIns,sbOuts) = if (sbCtx.contains(name)) sbCtx(name) else sbCtx("id") //otherwise, assume 1->1 function
-      // get a stream builder for each argument
+      // get a stream builder for each argument todo: probably just for free variables.
       val argsSb:List[SemanticResult]  = args.map(a=> encode(a,sbCtx,typeCtx))
       // zip inputs with the output of the corresponding argument (we know they have only 1 output)
       val remapInputs:List[(String,String)] = sbIns.zip(argsSb.map(_._2.head))
@@ -116,9 +124,35 @@ object Encode{
       val argsComp = argsSb.map(_._1).foldRight[StreamBuilder](DSL.sb)(_*_)
       // return result, and remap outputs of the function to the corresponding fresh names
       (sbFresh * argsComp,sbOuts.map(remap),sbCtx)
-    case _ => throw new RuntimeException(s"Stream Expression ${Show(se)} of type ${se.getClass} not supported.")
+    case _ => throw new RuntimeException(s"Stream Expression ${se} of type ${se.getClass} not supported.")
     // todo: Any kind of StreamFun if we go back to having this option,
     //  but if will required sequence of inputs as well.
+  }
+
+  private def mkGCQs(qs:List[ConstEntry]
+                     , args:List[TypedGroundTerm]
+                     , sbCtx:SBContext
+                     , typeCtx:Context): (List[GuardedCommand],StreamBuilder,String) = qs match {
+    case Nil => (List(),DSL.sb,"")
+    case q::more =>
+      // get the arguments that correspond to the first constructor q
+      val qArgs = args.take(q.params.size)
+      // make a stream builder for each argument
+      val sbArgs:List[SemanticResult] = qArgs.map(a=> encode(a,sbCtx,typeCtx))
+      // make gets for the output variable of each sb in the previous step
+      val getArgs = sbArgs.map(_._2.head).map(p => Get(p)).foldRight[Guard](True)(_&_)
+      // remove this arguments from the list
+      val restArgs = args.drop(q.params.size)
+      // build the constructor
+      val constructor = Const(q.name,sbArgs.map(p=> Port(p._2.head)))
+      // composed arguments stream builders into a single stream builder
+      val compArgs = sbArgs.map(_._1).foldRight[StreamBuilder](DSL.sb)(_*_)
+      // get the rest of the guarded commands
+      val gcMore = mkGCQs(more,restArgs,sbCtx,typeCtx)
+      // make the actual guarded command for this constructor
+      val out = freshVar()
+      val gcq = getArgs -> (out := constructor)
+      (gcq::gcMore._1,compArgs*gcMore._2,out)
   }
 
 //  /**
@@ -154,9 +188,9 @@ object Encode{
     * @param gt ground term
     * @return a set of free variables' names
     */
-  private def fv(gt:GroundTerm):Set[String] = gt match {
-    case Port(x) => Set(x)
-    case Const(q,args) => args.flatMap(fv).toSet
+  private def fv(gt:TypedGroundTerm):Set[String] = gt match {
+    case TypedPort(x,_) => Set(x)
+    case TypedConst(q,_,targs) => targs.flatMap(fv).toSet
   }
 
   /**

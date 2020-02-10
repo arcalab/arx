@@ -38,22 +38,26 @@ object DSL {
 
   def unify(cons:Set[TCons]):(Map[TVar,TExp],Set[TCons]) = Unify(cons)
 
-  def infer(program: Program):(Context,TExp,Set[TCons]) = Infer(program)
+  def infer(program: Program):(Context,TExp,Set[TCons],TypedProgram) = Infer(program)
 
-  def typeCheck(prog:Program):Context = {
+  def typeCheck(prog:Program):(TypedProgram,Context) = {
+    println("Infer Program")
     // mk type constraints
-    val (ctx,t,cons) = infer(prog)
+    val (ctx,t,cons,tp) = infer(prog)
+    println("TypeCheck Program")
     // solve type constraints base on context
     val substitution = TypeCheck.solve(cons,ctx)
     // apply substitution to context
-    val substCtx:Context = substitution(ctx)
+    println("Substitute types")
+    val (subsProgram,substCtx) = substitution(tp,ctx)
     //add program type to context
     // todo: get type of the inputs
     val (program,programType) = ("program",FunEntry(TFun(TUnit,Simplify(substitution(t))),Context()))
+    println("Prettify Program")
     // prettify context
     Prettify.reset()
     val prettyCtx = Prettify(substCtx.add(program,programType))
-    prettyCtx
+    (Prettify(subsProgram),prettyCtx)
   }
 
   /* DSL for Stream builders */
@@ -69,7 +73,8 @@ object DSL {
   def get(v:String):Guard = Get(v)
   def und(v:String):Guard = Und(v)
   def ask(v:String):Guard = Ask(v)
+  def isQ(n:String,v:String):Guard = IsQ(n,v)
 
-  def encode(prog:Program,typeCtx:Context):SemanticResult = Encode(prog,typeCtx)
+  def encode(prog:TypedProgram,ctx:Context):SemanticResult = Encode(prog,ctx)
 
 }

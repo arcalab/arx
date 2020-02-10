@@ -2,6 +2,7 @@ package dsl.backend
 
 import dsl.analysis.semantics.{SBContext, StreamBuilder}
 import dsl.analysis.semantics.StreamBuilder.StreamBuilderEntry
+import dsl.analysis.types.TypedProgram.TypedBlock
 import dsl.analysis.types._
 
 /**
@@ -28,6 +29,35 @@ object Prettify {
     val nPorts =
       ctx.ports.map(p => p._1 -> p._2.map(apply))
     Context(ctx.adts,nFuns,nPorts)
+  }
+
+  def apply(p:TypedProgram):TypedProgram = TypedProgram(p.imports,p.types,apply(p.typedBlock))
+
+  def apply(tb:TypedBlock):TypedBlock = tb.map(apply)
+
+  def apply(s:TypedStatement):TypedStatement = s match {
+    case TypedFunDef(f,t,tb) => TypedFunDef(f,apply(t),apply(tb))
+    case TypedSFunDef(f,t,tb) => TypedSFunDef(f,apply(t),apply(tb))
+    case TypedAssignment(a,tlhs,trhs) => TypedAssignment(a,tlhs.map(apply),apply(trhs))
+    case se:TypedStreamExpr => apply(se)
+  }
+
+  def apply(tsf:TypedStreamFun):TypedStreamFun = tsf match {
+    case TypedFunName(f,t)  => TypedFunName(f,apply(t))
+    case TypedBuild(t,ta)   => TypedBuild(apply(t),apply(ta))
+    case TypedMatch(t,ta)   => TypedMatch(apply(t),apply(ta))
+    case TypedSeqFun(t1,t2) => TypedSeqFun(apply(t1),apply(t2))
+    case TypedParFun(t1,t2) => TypedParFun(apply(t1),apply(t2))
+  }
+
+  def apply(tse:TypedStreamExpr):TypedStreamExpr = tse match {
+    case TypedFunApp(sf,t,ta) => TypedFunApp(apply(sf),apply(t),ta.map(apply))
+    case tgt:TypedGroundTerm => apply(tgt)
+  }
+
+  def apply(tgt:TypedGroundTerm):TypedGroundTerm = tgt match {
+    case TypedConst(q, t, tArgs) => TypedConst(q, apply(t), tArgs.map(apply))
+    case TypedPort(p, t) => TypedPort(p,apply(t))
   }
 
   /**
