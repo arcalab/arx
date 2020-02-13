@@ -64,6 +64,23 @@ object Encode{
       val sbFresh = fresh(sbE,remap)
       // return fresh stream builder
       (sbFresh,List(),sbECtx)
+    case TRAssignment(RAssignment(List(x),Port(y)),tlhs, trhs)  =>
+      val m = freshVar()
+      val sbra = sb withCommands(
+        ask(m) -> ("x" := Port(m)),
+        get(y) -> (m := Port(y))
+      ) ins y outs x mems m
+      (sbra,List(x),sbCtx)
+    case TRAssignment(rasg,tlhs, trhs) =>
+      // get fresh variables for the lhs variables
+      val freshLhs:List[String] = rasg.variables.map(_=>freshVar())
+      // create a regular assignment from the rhs expression to the fresh variables
+      val asg = TAssignment(Assignment(freshLhs,rasg.expr),tlhs,trhs)
+      // create a new 1-to-1 rasg from fresh variables to original ones
+      val nrasgs:List[TRAssignment] = rasg.variables.zip(freshLhs).zip(tlhs)
+        .map({case ((x,y),t) => TRAssignment(RAssignment(List(x),Port(y)),List(t),TPort(y,t))})
+      // encode new block
+      encode(asg::nrasgs,sbCtx,typeCtx)
     case TFunDef(fd, te, tb) =>
       // get the stream builder of the block
       val (sbB,sbBOuts,sbBCtx) = encode(tb,sbCtx,typeCtx)

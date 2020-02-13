@@ -21,10 +21,11 @@ object TProgram {
 }
 
 sealed abstract class TStatement
-sealed abstract class TStreamExpr                                         extends TStatement
-case class TFunDef(f:FunDef, t:TExp, tBlock:TBlock)                       extends TStatement
-case class TSFunDef(sFunDef:SFunDef, t:TExp, tBlock:TStreamFun)           extends TStatement
-case class TAssignment(asg:Assignment, tLhs:List[TExp], tRhs:TStreamExpr) extends TStatement
+sealed abstract class TStreamExpr                                           extends TStatement
+case class TFunDef(f:FunDef, t:TExp, tBlock:TBlock)                         extends TStatement
+case class TSFunDef(sFunDef:SFunDef, t:TExp, tBlock:TStreamFun)             extends TStatement
+case class TAssignment(asg:Assignment, tLhs:List[TExp], tRhs:TStreamExpr)   extends TStatement
+case class TRAssignment(asg:RAssignment, tLhs:List[TExp], tRhs:TStreamExpr) extends TStatement
 
 sealed abstract class TGroundTerm                                       extends TStreamExpr
 case class TFunApp(tSFun:TStreamFun, tOut:TExp, tIn:List[TGroundTerm])  extends TStreamExpr

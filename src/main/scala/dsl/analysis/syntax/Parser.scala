@@ -173,11 +173,12 @@ object Parser extends RegexParsers {
 
   /* Assignments */
 
-  def assignment:Parser[Assignment] =
-    repsep(lowerCaseId,",")~":="~strExpr ^^ {
-      case ids~_~expr =>
+  def assignment:Parser[Statement] =
+    repsep(lowerCaseId,",")~":=|<~".r~strExpr ^^ {
+      case ids~typ~expr =>
         ids.foreach(id => sym = sym.add(id,VAR))
-        Assignment(ids,expr)
+        if (typ.matches(":=")) Assignment(ids,expr)
+        else RAssignment(ids,expr)
     }
 
 }

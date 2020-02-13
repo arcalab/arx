@@ -41,6 +41,7 @@ case class Substitution(sub:Map[TVar,TExp]) {
     case TFunDef(f,t,tb) => TFunDef(f,apply(t,ctx),apply(tb,ctx))
     case TSFunDef(f,t,tb) => TSFunDef(f,apply(t,ctx),apply(tb,ctx))
     case TAssignment(a,tlhs,trhs) => TAssignment(a,tlhs.map(a=>apply(a,ctx)),apply(trhs,ctx))
+    case TRAssignment(a,tlhs,trhs) => TRAssignment(a,tlhs.map(a=>apply(a,ctx)),apply(trhs,ctx))
     case se:TStreamExpr => apply(se,ctx)
   }
 

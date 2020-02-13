@@ -64,6 +64,8 @@ object Net {
           constToNet(q, args) ++ apply(tail)
         case TAssignment(Assignment(vars, _),_,texpr) =>
           assgnToNet(vars, texpr) ++ apply(tail)
+        case TRAssignment(RAssignment(vars, _),_,texpr) =>
+          assgnToNet(vars, texpr) ++ apply(tail)
         case TFunApp(tsfun,_,tIn) =>
           val res = funAppToNet(tsfun, tIn, tail)
           //println(s"got funAppToNet - $res")

@@ -125,21 +125,11 @@ object Infer {
   private def infer(st:Statement,ctx:Context):STypeResult = st match {
     case se:StreamExpr => infer(se,ctx)
     case a@Assignment(variables, expr) =>
-      //check that each variable on the lhs, if it exists, is a variable (VAR) and names don't repeat
-      TypeCheck.lhsAssigAreVars(variables,ctx)
-      // new context
-      var nctx = ctx
-      // creat a fresh variable for each lhs variable
-      val lhsTypes = variables.map(v=> TVar(freshVar()))
-      // add each variable as an Output variable
-      variables.zip(lhsTypes).foreach(v => nctx = nctx.add(v._1,PortEntry(v._2,Out)))
-      // get the type of the expression
-      val (ectx,et,etcons,ete) = infer(expr,nctx)
-      // create a tensor type for the lhs variables
-      val lhsTTensor = Simplify(lhsTypes.foldRight[TExp](TUnit)(TTensor))
-      // create a type constraint
-      val tcons = TCons(lhsTTensor,et)
-      (ectx,TUnit,etcons+tcons,TAssignment(a,lhsTypes,ete))
+      val (ectx,tcons,lhsTypes,etse) = inferAsg(variables,expr,ctx)
+      (ectx,TUnit,tcons,TAssignment(a,lhsTypes,etse))
+    case a@RAssignment(variables, expr) =>
+      val (ectx,tcons,lhsTypes,etse) = inferAsg(variables,expr,ctx)
+      (ectx,TUnit,tcons,TRAssignment(a,lhsTypes,etse))
     case fd@FunDef(name, params, typ, block) if !ctx.context.contains(name) =>
       val insNames = params.map(i=> i.name).toSet
       if (insNames.size != params.size)
@@ -179,6 +169,24 @@ object Infer {
       throw new RuntimeException(s"Name $name already defined in the context")
 //    TODO: case SFunDef(name, typ, sfun) =>
 //      _
+  }
+
+  private def inferAsg(variables:List[String],expr:StreamExpr,ctx:Context):(Context,Set[TCons],List[TExp],TStreamExpr) = {
+    //check that each variable on the lhs, if it exists, is a variable (VAR) and names don't repeat
+    TypeCheck.lhsAssigAreVars(variables,ctx)
+    // new context
+    var nctx = ctx
+    // creat a fresh variable for each lhs variable
+    val lhsTypes = variables.map(v=> TVar(freshVar()))
+    // add each variable as an Output variable
+    variables.zip(lhsTypes).foreach(v => nctx = nctx.add(v._1,PortEntry(v._2,Out)))
+    // get the type of the expression
+    val (ectx,et,etcons,ete) = infer(expr,nctx)
+    // create a tensor type for the lhs variables
+    val lhsTTensor = Simplify(lhsTypes.foldRight[TExp](TUnit)(TTensor))
+    // create a type constraint
+    val tcons = TCons(lhsTTensor,et)
+    (ectx,etcons+tcons,lhsTypes,ete)
   }
 
   private def getSecifiedType(tn:MaybeTypeName,ctx:Context):TExp = tn match {

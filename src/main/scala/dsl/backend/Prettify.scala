@@ -39,6 +39,7 @@ object Prettify {
     case TFunDef(f,t,tb) => TFunDef(f,apply(t),apply(tb))
     case TSFunDef(f,t,tb) => TSFunDef(f,apply(t),apply(tb))
     case TAssignment(a,tlhs,trhs) => TAssignment(a,tlhs.map(apply),apply(trhs))
+    case TRAssignment(a,tlhs,trhs) => TRAssignment(a,tlhs.map(apply),apply(trhs))
     case se:TStreamExpr => apply(se)
   }
 

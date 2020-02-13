@@ -25,6 +25,8 @@ case class SFunDef(name:String,
 
 case class Assignment(variables:List[String],
                       expr:StreamExpr) extends Statement
+case class RAssignment(variables:List[String],
+                      expr:StreamExpr) extends Statement
 
 sealed abstract class GroundTerm               extends StreamExpr
 case class FunctionApp(sfun: StreamFun,
