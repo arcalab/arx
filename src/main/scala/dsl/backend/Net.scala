@@ -2,6 +2,8 @@ package dsl.backend
 
 import dsl.analysis.syntax.Program.Block
 import dsl.analysis.syntax._
+import dsl.analysis.types._
+import dsl.analysis.types.TProgram.TBlock
 import dsl.backend.Net.{Connector, Interface}
 import dsl.backend.PortType
 
@@ -29,17 +31,17 @@ object Net {
   case class Connector(name: String, ins: Interface, out: Interface)
   type IPort = Int
   type Interface = Set[IPort]
-  type FunBlock = (List[String],Block)
+  type FunBlock = (List[String],TBlock)
 
 //  sealed abstract class PType
 //  case object In extends PType
 //  case object Out extends PType
 //  case object Mix extends PType
 
-  def apply(prog: Program): (Net,Int) = {
+  def apply(prog: TProgram): (Net,Int) = {
 //    println(s"--- starting prog-to-net --- ")
     val gamma = new BuildContext()
-    val net = apply(prog.block)(gamma)
+    val net = apply(prog.tBlock)(gamma)
     (cleanInputs(net)(gamma),gamma.maxPort)
   }
 
@@ -51,33 +53,33 @@ object Net {
     Net(net.prims,net.ins.filter(p => portTypes.get(p) contains In),net.outs)
   }
 
-  def apply(b: Block)(implicit gm: BuildContext): Net = b match {
+  def apply(b: TBlock)(implicit gm: BuildContext): Net = b match {
     case Nil => Net(Nil, Set(), Set())
     case st :: tail =>
       //println(s"[[${st}]] ")
       st match {
-        case Port(x) =>
+        case TPort(x,_) =>
           portToNet(x) ++ apply(tail)
-        case Const(q, args) =>
+        case TConst(Const(q, args),_,_) =>
           constToNet(q, args) ++ apply(tail)
-        case Assignment(vars, expr) =>
-          assgnToNet(vars, expr) ++ apply(tail)
-        case FunctionApp(sfun, args) =>
-          val res = funAppToNet(sfun, args, tail)
+        case TAssignment(Assignment(vars, _),_,texpr) =>
+          assgnToNet(vars, texpr) ++ apply(tail)
+        case TFunApp(tsfun,_,tIn) =>
+          val res = funAppToNet(tsfun, tIn, tail)
           //println(s"got funAppToNet - $res")
           res
-        case FunDef(name, params, _, block) =>
-          gm.fun += name -> (params.map(_.name), block)
+        case TFunDef(fd,t,tblock) =>
+          gm.fun += fd.name -> (fd.params.map(_.name), tblock)
           apply(tail)
         //TODO: add SFunDef
       }
   }
 
-  def assgnToNet(vars: List[String], expr: StreamExpr)
+  def assgnToNet(vars: List[String], expr: TStreamExpr)
                 (implicit gm:BuildContext): Net = {
 
     val netE: Net = expr match { //apply(List(expr))
-      case Port(nm) =>
+      case TPort(nm,_) =>
         val x = gm.getPort(nm,In)
         val out = gm.getPort(vars.head,Out) // vars must be singleton to type check
         Net(List(Connector("id",Set(x),Set(out))),Set(x),Set())
@@ -97,7 +99,7 @@ object Net {
     Net(netAssg.prims,netAssg.ins,Set()) // clean outs
   }
 
-  def funAppToNet(fun: StreamFun, args: List[GroundTerm], rest: Block)
+  def funAppToNet(fun: TStreamFun, args: List[TGroundTerm], rest: TBlock)
                  (implicit gm: BuildContext): Net = {
 //    println(s"<${fun}> ")
 //    println(s"  * processed Args ${args.mkString(",")}")
@@ -110,7 +112,7 @@ object Net {
     val gm2 = gm.cleanedPorts
 
     fun match {
-      case FunName(nm) =>
+      case TFunName(nm,_) =>
         val hide = nm.lastOption.contains('_')
         val name = if (hide) nm.dropRight(1) else nm
         gm.fun.get(name) match {
@@ -145,18 +147,29 @@ object Net {
               netArgs ++ mkNet(name,newIns.map(_._1).toSet,Set(gm.fresh)) ++ apply(rest)
           }
         }
-      case Build =>
+      case TBuild(tin,tout) =>
         //val (netArgs,newIns) = processArgs(args)
         netArgs ++ mkNet("BUILD",newIns.map(_._1).toSet,Set(gm.fresh)) ++ apply(rest)
-      case Match => throw new RuntimeException("Match not supported yet.")
+      case TMatch(tin,tout) =>
+        // get number of outputs from type of match
+        val newOuts = getTensorOuts(tout)
+        //println(s"Match:${Show(tin)} -> ${Show(tout)}\nOutputs:${newOuts.mkString(",")}")
+        netArgs ++ mkNet("MATCH",newIns.map(_._1).toSet,newOuts.toSet) ++ apply(rest)
+        // todo
+        //throw new RuntimeException("Match not supported yet.")
     }
+  }
+
+  private def getTensorOuts(texp:TExp)(implicit gm:BuildContext):List[IPort] = texp match {
+    case TTensor(t1,t2) => getTensorOuts(t1) ++ getTensorOuts(t2)
+    case _ => List(gm.fresh)
   }
 
   /** From actual arguments, eg, (x,True), build:
     *  - Net([id1: []->True_p] , Nil, Nil ) - for the generated port True_p for "True" (and other constructors if they exist)
     *  - [x_p, True_p] - the port numbers of each actual argument.
     */
-  private def processArgs(args: List[GroundTerm])(implicit gm:BuildContext): (Net,List[(IPort,PortType)]) = {
+  private def processArgs(args: List[TGroundTerm])(implicit gm:BuildContext): (Net,List[(IPort,PortType)]) = {
     val (newPorts,nets) = args.map(mkPort).unzip
     ( nets.fold(Net(Nil,Set(),Set()))(_++_) ,
       newPorts)
@@ -192,11 +205,11 @@ object Net {
     Net(Nil,Set(),Set(x))
   }
 
-  def mkPort(gt:GroundTerm)(implicit gm:BuildContext): ((IPort,PortType),Net) = gt match {
-    case Port(x) =>
+  def mkPort(gt:TGroundTerm)(implicit gm:BuildContext): ((IPort,PortType),Net) = gt match {
+    case TPort(x,_) =>
       gm.getPort(x,In)
       (gm.ports(x),Net(Nil,Set(),Set()))
-    case Const(q, args) =>
+    case TConst(Const(q, args),_,_) =>
       val nc = constToNet(q,args)
       ((nc.outs.head,Out),Net(nc.prims,Set(),Set()))
   }

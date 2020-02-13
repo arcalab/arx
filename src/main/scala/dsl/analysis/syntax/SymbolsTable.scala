@@ -36,24 +36,18 @@ class SymbolsTable {
     * @param symType
     * @return
     */
-  def add(sym: String, symType: SymbolType): SymbolsTable =  {
+  def add(sym: String, symType: SymbolType): SymbolsTable =
     if (this.conflict(sym,symType)) {
-      println("Symbols table:"+ tables.last)
-      println(s"trying to add symbol $sym as $symType")
       throw new ParsingException(s"Symbol name $sym is already used within the scope")
     }
-    else {
-      if ((symType == VAR) && this.contains(sym))
-        this
+    else
+      if ((symType == VAR) && this.contains(sym)) this
       else {
-
         val old = tables
         new SymbolsTable {
-          override val tables = old.init++List((old.last + (sym -> symType)))
+          override val tables = old.init++List(old.last + (sym -> symType))
         }
       }
-    }
-  }
 
   def addLevel():SymbolsTable = {
     val old = tables
@@ -79,11 +73,15 @@ class SymbolsTable {
     * @param sym
     * @return whether there is a conflict
     */
-  private def conflict(sym:String,symType:SymbolType):Boolean = this(sym) match {
-    case None => false
-    case Some(t) => ((symType == FUN) && this.contains(sym)) ||
-      Set(TYPE,CONST,FUN).contains(t) //||
+  private def conflict(sym:String,symType:SymbolType):Boolean = {
+    //println(s"Checking conflict for ${sym} in tables: ${tables} ")
+    val res = this(sym) match {
+      case None => false
+      case Some(t) => ((symType == FUN) && this.contains(sym)) ||
+        Set(TYPE,CONST,FUN).contains(t) //||
       //(Set(INPUT,DATA).contains(symType) && this.contains(sym))
+    }
+    res
   }
 }
 

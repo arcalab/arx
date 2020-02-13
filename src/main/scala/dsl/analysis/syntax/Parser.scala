@@ -3,7 +3,7 @@ package dsl.analysis.syntax
 import dsl.analysis.syntax.Program.Block
 import dsl.analysis.syntax.SymbolType._
 import dsl.analysis.types.{Pull, Push}
-import dsl.backend.Import
+import dsl.backend.{Import, Prelude, Show}
 import dsl.common.ParsingException
 
 import scala.util.matching.Regex
@@ -15,14 +15,9 @@ import scala.util.parsing.combinator.RegexParsers
 
 object Parser extends RegexParsers {
 
-//  private var adts:List[TypeDecl2] = List()
-  //private var conns:List[ConnDef] = List()
-//  private var names:List[String] = List() // no need for scopes for now.
   private var sym: SymbolsTable = new SymbolsTable
-
+  //todo: fix error with fun def not creating new level in symbols table
   def parseProgram(code:String):ParseResult[Program] = {
-//    adts = List()
-    //conns = List()
     sym = new SymbolsTable
     parseAll(program,code)
   }
@@ -40,8 +35,8 @@ object Parser extends RegexParsers {
   val id:Parser[String] = """[a-zA-Z][a-zA-Z0-9_]*""".r
 
   // todo: use it
-  val keywords: Set[String] = Set("data","def","match","build")
-  // add later predef types "True","False","Left","Right","U","Bool","List","Either","Map","Int","Pair","Unit"
+  val keywords: Set[String] =
+    Set("data","def","match","build") ++ Prelude.primitiveFunctionNames()
 
   /* Program */
 
@@ -63,8 +58,9 @@ object Parser extends RegexParsers {
   def block: Parser[Block] =
     rep(statement)
 
-  def statement: Parser[Statement] =
+  def statement: Parser[Statement] = {
     funDef | assignment | strExpr
+  }
 
   def strExpr: Parser[StreamExpr] =
     strFun~args ^^ {
@@ -135,8 +131,9 @@ object Parser extends RegexParsers {
   def tparams:Parser[List[TypeName]] =
     "<" ~> tnames <~ ">"
 
-  def funDef: Parser[Statement] =
-    "def" ~>  restFunDef
+  def funDef: Parser[Statement] = {
+    "def" ~> restFunDef
+  }
 
   def restFunDef:Parser[Statement] = {
     sym = sym.addLevel()

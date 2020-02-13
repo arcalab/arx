@@ -1,5 +1,6 @@
 package dsl.analysis.types
 
+import dsl.analysis.types.TProgram.TBlock
 import dsl.backend.{Show, Simplify}
 import dsl.common.TypeException
 
@@ -28,13 +29,10 @@ object Destructor {
 
   def expand(destr: TExp,ctx:Context):TExp = destr match {
     case TDestr(t) => apply(ctx,t)
+    case TTensor(t1,t2) => TTensor(expand(t1,ctx),expand(t2,ctx))
+    case TFun(tin,tou) => TFun(expand(tin,ctx),expand(tou,ctx))
     case _ => destr
   }
-
-//  def expand(destr: TExp,tExp:TExp):TExp = destr match {
-//    case TDestr(t) => tExp
-//    case _ => destr
-//  }
 
   private def destruct(ctx:Context,paramTypes:List[TExp]):TExp =  paramTypes match {
     case Nil => ctx.adts("Unit").tExp //TBase("Unit",List())

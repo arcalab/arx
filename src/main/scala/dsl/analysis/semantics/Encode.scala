@@ -5,7 +5,7 @@ import dsl.DSL._
 import dsl.analysis.semantics.StreamBuilder.StreamBuilderEntry
 import dsl.analysis.syntax.Program.Block
 import dsl.analysis.syntax._
-import dsl.analysis.types.TypedProgram.TypedBlock
+import dsl.analysis.types.TProgram.TBlock
 import dsl.analysis.types._
 import dsl.backend.Show
 
@@ -22,11 +22,11 @@ object Encode{
   private var vars:Int = 0
   private def freshVar():String = {vars+=1; s"v${vars-1}"}
 
-  def apply(program:TypedProgram,typeCtx:Context):SemanticResult = {
+  def apply(program:TProgram, typeCtx:Context):SemanticResult = {
     // create context with primitive functions
     val ctx = loadPrimitives()
     // encode program block
-    val (sbB,sbBOuts,sbBCtx) = encode(program.typedBlock,ctx,typeCtx)
+    val (sbB,sbBOuts,sbBCtx) = encode(program.tBlock,ctx,typeCtx)
     (sbB,sbBOuts,sbBCtx)
   }
 
@@ -37,7 +37,7 @@ object Encode{
     * @param typeCtx known context of types for program elements
     * @return a semantic encoding for block
     */
-  private def encode(block:TypedBlock,sbCtx:SBContext,typeCtx:Context):SemanticResult = block match {
+  private def encode(block:TBlock, sbCtx:SBContext, typeCtx:Context):SemanticResult = block match {
     case Nil => (StreamBuilder.empty,List(),sbCtx)
     case b::bs =>
       // encode b
@@ -53,9 +53,9 @@ object Encode{
     * @param st program statement
     * @return a semantic encoding for a statement
     */
-  private def encode(st:TypedStatement, sbCtx:SBContext,typeCtx:Context):SemanticResult = st match {
-    case se:TypedStreamExpr => encode(se,sbCtx,typeCtx)
-    case TypedAssignment(asg,lhs, rhs) =>
+  private def encode(st:TStatement, sbCtx:SBContext, typeCtx:Context):SemanticResult = st match {
+    case se:TStreamExpr => encode(se,sbCtx,typeCtx)
+    case TAssignment(asg,lhs, rhs) =>
       // get the stream builder entry of the expression
       val (sbE,sbEOuts,sbECtx) = encode(rhs,sbCtx,typeCtx)
       // create a map from sbEOuts to variables
@@ -64,7 +64,7 @@ object Encode{
       val sbFresh = fresh(sbE,remap)
       // return fresh stream builder
       (sbFresh,List(),sbECtx)
-    case TypedFunDef(fd, te, tb) =>
+    case TFunDef(fd, te, tb) =>
       // get the stream builder of the block
       val (sbB,sbBOuts,sbBCtx) = encode(tb,sbCtx,typeCtx)
       // create an stream builder entry for the function
@@ -78,12 +78,12 @@ object Encode{
 
   }
 
-  private def encode(gt:TypedGroundTerm,sbCtx: SBContext):SemanticResult = gt match {
-    case TypedPort(x,_) =>
+  private def encode(gt:TGroundTerm, sbCtx: SBContext):SemanticResult = gt match {
+    case TPort(x,_) =>
       var out = freshVar()
       var gc  = Get(x) -> (out := Port(x))
       (StreamBuilder(Set(),Set(gc),Set(x),Set(out)),List(out),sbCtx)
-    case q@TypedConst(const,_,targs) =>
+    case q@TConst(const,_,targs) =>
       var fvq = fv(q)
       var gets = fvq.map(Get).foldRight[Guard](True)(_&_)
       var out = freshVar()
@@ -96,15 +96,15 @@ object Encode{
     * @param se
     * @return stream builder for se
     */
-  private def encode(se:TypedStreamExpr, sbCtx:SBContext,typeCtx:Context):SemanticResult = se match {
-    case gt:TypedGroundTerm => encode(gt,sbCtx)
-    case TypedFunApp(TypedMatch(tb@TBase(name, _), tmargs),_,targs) =>
+  private def encode(se:TStreamExpr, sbCtx:SBContext, typeCtx:Context):SemanticResult = se match {
+    case gt:TGroundTerm => encode(gt,sbCtx)
+    case TFunApp(TMatch(TBase(name, _), _),_,targs) =>
       val constructors:List[ConstEntry] = typeCtx.adts(name).constructors
       mkMatch(constructors,targs.head,sbCtx)
-    case TypedFunApp(TypedBuild(tb@TBase(name,_),tbargs), _, targs) =>
+    case TFunApp(TBuild(_, TBase(name,_)), _, targs) =>
       val constructors:List[ConstEntry] = typeCtx.adts(name).constructors
       mkBuild(constructors,targs,sbCtx)
-    case TypedFunApp(TypedFunName(name,_),_, args) =>
+    case TFunApp(TFunName(name,_),_, args) =>
       // get the stream builder entry associated to name
       val (sb,sbIns,sbOuts) = if (sbCtx.contains(name)) sbCtx(name) else sbCtx("id") //otherwise, assume 1->1 function
       // get a stream builder for each argument todo: probably just for free variables.
@@ -127,7 +127,7 @@ object Encode{
   }
 
   private def mkBuild(qs:List[ConstEntry]
-                      , args:List[TypedGroundTerm]
+                      , args:List[TGroundTerm]
                       , sbCtx:SBContext): SemanticResult = {
     val out = freshVar()
     val (gcs,sbs) = mkGCBuild(qs,args,sbCtx,out)
@@ -136,7 +136,7 @@ object Encode{
   }
 
   private def mkGCBuild(qs:List[ConstEntry]
-                     , args:List[TypedGroundTerm]
+                     , args:List[TGroundTerm]
                      , sbCtx:SBContext,out:String): (List[GuardedCommand],StreamBuilder) = qs match {
     case Nil => (List(),DSL.sb)
     case q::more =>
@@ -161,7 +161,7 @@ object Encode{
   }
 
   private def mkMatch(qs:List[ConstEntry]
-                    , arg:TypedGroundTerm
+                    , arg:TGroundTerm
                     , sbCtx:SBContext): SemanticResult = {
     val (sbIn,in,_) = encode(arg,sbCtx)
     val (gcs,sbs,outs) = mkGCMatch(qs,sbCtx,in.head)
@@ -183,8 +183,13 @@ object Encode{
       for (p<-q.params.zipWithIndex) {
         val out = freshVar()
         outputs  :+= out
-        commands :+= (out := Const(s"get${q.name}${if(q.params.isEmpty)""else p._2.toString}",Port(in)::Nil))
+        commands :+= (out := Const(s"get${q.name}${p._2.toString}",Port(in)::Nil))
         //todo add custom class
+      }
+      if (q.params.isEmpty) {
+        val out = freshVar()
+        outputs  :+= out
+        commands :+= (out := Const(s"get${q.name}0",Port(in)::Nil))
       }
       val gcq = guard -> (commands:_*)
       // get the rest of the guarded commands
@@ -225,9 +230,9 @@ object Encode{
     * @param gt ground term
     * @return a set of free variables' names
     */
-  private def fv(gt:TypedGroundTerm):Set[String] = gt match {
-    case TypedPort(x,_) => Set(x)
-    case TypedConst(q,_,targs) => targs.flatMap(fv).toSet
+  private def fv(gt:TGroundTerm):Set[String] = gt match {
+    case TPort(x,_) => Set(x)
+    case TConst(q,_,targs) => targs.flatMap(fv).toSet
   }
 
   /**

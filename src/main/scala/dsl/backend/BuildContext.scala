@@ -3,6 +3,7 @@ package dsl.backend
 import dsl.DSL
 import dsl.analysis.syntax.{Const, GroundTerm, Port}
 import dsl.analysis.syntax.Program.Block
+import dsl.analysis.types.TProgram.TBlock
 import dsl.backend.BuildContext.NetBuilder
 import dsl.backend.Net.{FunBlock, IPort, Interface}
 import dsl.backend.PortType
@@ -23,7 +24,7 @@ object BuildContext {
 class BuildContext {
 
 
-  val ports: mutable.Map[String, (IPort,PortType)]        = mutable.Map()
+  val ports: mutable.Map[String, (IPort,PortType)]     = mutable.Map()
   val fun:   mutable.Map[String, FunBlock]             = mutable.Map()
   val prims: mutable.Map[String, (NetBuilder,Int,Int)] = BuildContext.reoPrims
   protected var seed:IPort = 0
@@ -57,7 +58,7 @@ class BuildContext {
     val b = this
     new BuildContext {
       seed = b.seed
-      override val fun: mutable.Map[String, (List[String], Block)] =
+      override val fun: mutable.Map[String, (List[String], TBlock)] =
         b.fun.clone()
       override val prims: mutable.Map[String, (NetBuilder, IPort, IPort)] =
         b.prims.clone()

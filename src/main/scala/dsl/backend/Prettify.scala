@@ -2,7 +2,7 @@ package dsl.backend
 
 import dsl.analysis.semantics.{SBContext, StreamBuilder}
 import dsl.analysis.semantics.StreamBuilder.StreamBuilderEntry
-import dsl.analysis.types.TypedProgram.TypedBlock
+import dsl.analysis.types.TProgram.TBlock
 import dsl.analysis.types._
 
 /**
@@ -31,33 +31,33 @@ object Prettify {
     Context(ctx.adts,nFuns,nPorts)
   }
 
-  def apply(p:TypedProgram):TypedProgram = TypedProgram(p.imports,p.types,apply(p.typedBlock))
+  def apply(p:TProgram):TProgram = TProgram(p.imports,p.userTypes,apply(p.tBlock))
 
-  def apply(tb:TypedBlock):TypedBlock = tb.map(apply)
+  def apply(tb:TBlock):TBlock = tb.map(apply)
 
-  def apply(s:TypedStatement):TypedStatement = s match {
-    case TypedFunDef(f,t,tb) => TypedFunDef(f,apply(t),apply(tb))
-    case TypedSFunDef(f,t,tb) => TypedSFunDef(f,apply(t),apply(tb))
-    case TypedAssignment(a,tlhs,trhs) => TypedAssignment(a,tlhs.map(apply),apply(trhs))
-    case se:TypedStreamExpr => apply(se)
+  def apply(s:TStatement):TStatement = s match {
+    case TFunDef(f,t,tb) => TFunDef(f,apply(t),apply(tb))
+    case TSFunDef(f,t,tb) => TSFunDef(f,apply(t),apply(tb))
+    case TAssignment(a,tlhs,trhs) => TAssignment(a,tlhs.map(apply),apply(trhs))
+    case se:TStreamExpr => apply(se)
   }
 
-  def apply(tsf:TypedStreamFun):TypedStreamFun = tsf match {
-    case TypedFunName(f,t)  => TypedFunName(f,apply(t))
-    case TypedBuild(t,ta)   => TypedBuild(apply(t),apply(ta))
-    case TypedMatch(t,ta)   => TypedMatch(apply(t),apply(ta))
-    case TypedSeqFun(t1,t2) => TypedSeqFun(apply(t1),apply(t2))
-    case TypedParFun(t1,t2) => TypedParFun(apply(t1),apply(t2))
+  def apply(tsf:TStreamFun):TStreamFun = tsf match {
+    case TFunName(f,t)  => TFunName(f,apply(t))
+    case TBuild(t,ta)   => TBuild(apply(t),apply(ta))
+    case TMatch(t,ta)   => TMatch(apply(t),apply(ta))
+    case TSeqFun(t1,t2) => TSeqFun(apply(t1),apply(t2))
+    case TParFun(t1,t2) => TParFun(apply(t1),apply(t2))
   }
 
-  def apply(tse:TypedStreamExpr):TypedStreamExpr = tse match {
-    case TypedFunApp(sf,t,ta) => TypedFunApp(apply(sf),apply(t),ta.map(apply))
-    case tgt:TypedGroundTerm => apply(tgt)
+  def apply(tse:TStreamExpr):TStreamExpr = tse match {
+    case TFunApp(sf,t,ta) => TFunApp(apply(sf),apply(t),ta.map(apply))
+    case tgt:TGroundTerm => apply(tgt)
   }
 
-  def apply(tgt:TypedGroundTerm):TypedGroundTerm = tgt match {
-    case TypedConst(q, t, tArgs) => TypedConst(q, apply(t), tArgs.map(apply))
-    case TypedPort(p, t) => TypedPort(p,apply(t))
+  def apply(tgt:TGroundTerm):TGroundTerm = tgt match {
+    case TConst(q, t, tArgs) => TConst(q, apply(t), tArgs.map(apply))
+    case TPort(p, t) => TPort(p,apply(t))
   }
 
   /**

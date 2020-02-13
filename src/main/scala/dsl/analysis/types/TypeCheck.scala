@@ -14,18 +14,24 @@ object TypeCheck {
   def solve(cons:Set[TCons],ctx:Context):Substitution = {
     // try to unify constraints (unsolvedCons have destructors that need another round)
     val (solvedCons,unsolvedCons) = Unify(cons)
+    //println(s"Initial constraints: ${cons.mkString(",")}")
     var subst:Map[TVar,TExp] = Substitute(solvedCons)
     var substitute = Substitution(subst)
     // try to substitute known variables in unsolved destructor constraints
     val substDestr:Set[TCons] = unsolvedCons.map(tc => TCons(substitute(tc.l),substitute(tc.r)))
+    //println(s"Substituted destructors: ${substDestr.mkString(",")}")
     // expand destructors in unsolved constraints
     val expandDestrCons:Set[TCons]= substDestr.map(tc=> TCons(Destructor.expand(tc.l,ctx),Destructor.expand(tc.r,ctx)))
+    //println(s"Expanded destructors: ${expandDestrCons.mkString(",")}")
     // try to unify expanded unsolved constraints
     val (solved,unsolved) = Unify(expandDestrCons)
+    //println(s"New solved from destructors: ${solved.mkString("\n")}")
     if (unsolved.nonEmpty)
       throw new TypeException(s"Impossible to unify type constraints:\n ${unsolved.map(Show(_)).mkString(",")}")
     // otherwise add new know variables to the substitution
+    //println(s"Solved from before: ${subst.mkString("\n")}")
     subst=  Substitute(solved++subst)
+    //println(s"Joint Solved : ${subst.mkString("\n")}")
     // return substitution
     Substitution(subst)
   }

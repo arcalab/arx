@@ -5,7 +5,7 @@ import dsl.analysis.syntax.Program.{Block, MaybeTypeName}
 import dsl.analysis.syntax._
 import dsl.common.{TypeException, UndefinedNameException}
 import dsl.analysis.syntax.SymbolType._
-import dsl.analysis.types.TypedProgram.TypedBlock
+import dsl.analysis.types.TProgram.TBlock
 import dsl.backend._
 
 /**
@@ -14,12 +14,12 @@ import dsl.backend._
 
 object Infer {
 
-  type TypeResult =   (Context,TExp,Set[TCons],TypedProgram)
-  type GTTypeResult = (Context,TExp,Set[TCons],TypedGroundTerm)
-  type SFTypeResult = (Context,TExp,Set[TCons],TypedStreamFun)
-  type SETypeResult = (Context,TExp,Set[TCons],TypedStreamExpr)
-  type STypeResult  = (Context,TExp,Set[TCons],TypedStatement)
-  type BTypeResult  = (Context,TExp,Set[TCons],TypedBlock)
+  type TypeResult =   (Context,TExp,Set[TCons],TProgram)
+  type GTTypeResult = (Context,TExp,Set[TCons],TGroundTerm)
+  type SFTypeResult = (Context,TExp,Set[TCons],TStreamFun)
+  type SETypeResult = (Context,TExp,Set[TCons],TStreamExpr)
+  type STypeResult  = (Context,TExp,Set[TCons],TStatement)
+  type BTypeResult  = (Context,TExp,Set[TCons],TBlock)
 
   private var tVars:Int = 0
   private def freshVar():String = {tVars+=1; (tVars-1).toString}
@@ -47,7 +47,7 @@ object Infer {
 //      throw new TypeException(s"Input/Output Typing Context not closed in main program")
     // match input/output context
     val inOutTCons = portsMatch(pctx.ports)
-    (pctx,Simplify(pt),ptcons++inOutTCons,TypedProgram(prog.imports,prog.types,tb))
+    (pctx,Simplify(pt),ptcons++inOutTCons,TProgram(prog.imports,prog.types,tb))
   }
 
   private def loadImports(imp:List[Import],ctx:Context):Context = {
@@ -139,7 +139,7 @@ object Infer {
       val lhsTTensor = Simplify(lhsTypes.foldRight[TExp](TUnit)(TTensor))
       // create a type constraint
       val tcons = TCons(lhsTTensor,et)
-      (ectx,TUnit,etcons+tcons,TypedAssignment(a,lhsTypes,ete))
+      (ectx,TUnit,etcons+tcons,TAssignment(a,lhsTypes,ete))
     case fd@FunDef(name, params, typ, block) if !ctx.context.contains(name) =>
       val insNames = params.map(i=> i.name).toSet
       if (insNames.size != params.size)
@@ -174,7 +174,7 @@ object Infer {
       val subsTFun = TFun(Simplify(substitution(tfun.tIn)),Simplify(substitution(tfun.tOut)))
       // create a function entry
       val funEntry = FunEntry(subsTFun,substitution(fctx)) //todo: update if we eventually have recursion
-      (ctx.add(name,funEntry),TUnit,Set(),TypedFunDef(fd,funEntry.tExp,substitution(btb,bctx)))//Set())//btcons++inOutTCons)
+      (ctx.add(name,funEntry),TUnit,Set(),TFunDef(fd,funEntry.tExp,substitution(btb,bctx)))//Set())//btcons++inOutTCons)
     case FunDef(name, params, typ, block)  => // already defined
       throw new RuntimeException(s"Name $name already defined in the context")
 //    TODO: case SFunDef(name, typ, sfun) =>
@@ -204,7 +204,7 @@ object Infer {
       // create a new type variable
       val pt = TVar(freshVar())
       // add it to the context as a new Input port
-      (ctx.add(x,PortEntry(pt,In)),pt,Set(),TypedPort(x,pt))
+      (ctx.add(x,PortEntry(pt,In)),pt,Set(),TPort(x,pt))
     case const@Const(q,args) if ctx.constructors.contains(q)  => // if the constructor exists
       // get constructor entry
       val qentry:ConstEntry = ctx.constructors(q)
@@ -228,7 +228,7 @@ object Infer {
       // get type constraints from actual to formal params
       val tcons = apType.map(t => t._2).zip(fpType).map(p => TCons(p._1,p._2))
       // return the result, add type constraints obtained when inferring actual params type
-      (nctx,qFType,apType.flatMap(t=>t._3).toSet++tcons,TypedConst(const,qFType,apType.map(_._4)))
+      (nctx,qFType,apType.flatMap(t=>t._3).toSet++tcons,TConst(const,qFType,apType.map(_._4)))
     case Const(q,_) => throw new UndefinedNameException(s"Undefined Constructor name $q")
   }
 
@@ -252,7 +252,7 @@ object Infer {
       // get type constraints from actual to formal params
       val tcons  = Set(TCons(actualPsType,sfType.tIn))
       // return the result
-      (nctx,sfType.tOut,apType.flatMap(r=> r._3).toSet++tcons,TypedFunApp(sfTypeRes._4,sfType.tOut,apType.map(_._4)))
+      (nctx,sfType.tOut,apType.flatMap(r=> r._3).toSet++tcons,TFunApp(sfTypeRes._4,sfType.tOut,apType.map(_._4)))
   }
 
   private def infer(sf:StreamFun,ctx:Context):SFTypeResult = sf match {
@@ -262,7 +262,7 @@ object Infer {
       // get fresh type for the function
       val subst = Substitution(fEntry.tExp.vars.map(v => v->TVar(freshVar())).toMap)
       val fFType = subst(fEntry.tExp)
-      (ctx,fFType,Set(),TypedFunName(f,fFType))
+      (ctx,fFType,Set(),TFunName(f,fFType))
     case FunName(f) => //TODO: Check if it makes sense
       // special case, if it doesn't exists assume it has to be a 1->1 sync with a name
       val tVar = TVar(freshVar())
@@ -270,7 +270,7 @@ object Infer {
       val ftype = TFun(tVar,tVar)
       // add dummy function to the context?
       val funEntry = FunEntry(ftype,Context(ctx.adts,ctx.functions,Map()))
-      (ctx.add(f,funEntry),ftype,Set(),TypedFunName(f,ftype))
+      (ctx.add(f,funEntry),ftype,Set(),TFunName(f,ftype))
     case SeqFun(f1,f2) =>
       val (f1ctx,f1t,f1tcons,sft1) = infer(f1,ctx)
       val (f2ctx,f2t,f2tcons,sft2) = infer(f2,f1ctx)
@@ -279,7 +279,7 @@ object Infer {
       // create a type constraint from f1 out to f2 in
       val tcons = Set(TCons(tf1.tOut,tf2.tIn))
       val ft = TFun(tf1.tIn,tf2.tOut)
-      (f2ctx,ft,f1tcons++f2tcons++tcons,TypedSeqFun(sft1,sft2))
+      (f2ctx,ft,f1tcons++f2tcons++tcons,TSeqFun(sft1,sft2))
     case ParFun(f1,f2) =>
       val (f1ctx,f1t,f1tcons,sft1) = infer(f1,ctx)
       val (f2ctx,f2t,f2tcons,sft2) = infer(f2,f1ctx)
@@ -288,15 +288,15 @@ object Infer {
       val nInType = TTensor(tf1.tIn,tf2.tIn)
       val nOutType = TTensor(tf1.tOut,tf2.tOut)
       val ft = Simplify(TFun(nInType,nOutType))
-      (f2ctx,ft,f1tcons++f2tcons,TypedParFun(sft1,sft2))
+      (f2ctx,ft,f1tcons++f2tcons,TParFun(sft1,sft2))
     case Match =>
       val tVar = TVar(freshVar())
       val mtype = TFun(tVar,TDestr(tVar))
-      (ctx,mtype,Set(),TypedMatch(tVar,TDestr(tVar)))
+      (ctx,mtype,Set(),TMatch(tVar,TDestr(tVar)))
     case Build =>
       val tVar = TVar(freshVar())
       val btype = TFun(TDestr(tVar),tVar)
-      (ctx,btype,Set(),TypedBuild(tVar,TDestr(tVar)))
+      (ctx,btype,Set(),TBuild(TDestr(tVar),tVar))
   }
 
 }
