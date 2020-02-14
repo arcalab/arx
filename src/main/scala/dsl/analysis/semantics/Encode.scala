@@ -285,6 +285,7 @@ object Encode{
   private def rename(t:Term,remap:Map[String,String]):Term = t match {
     case Var(x) => Var(remap.getOrElse(x,x))
     case Q(name,args) => Q(name,args.map(a=>rename(a,remap)))
+    case GetQ(name,index,arg) => GetQ(name,index,rename(arg,remap))
   }
 
   private def toTerm(gt:GroundTerm):Term = gt match {

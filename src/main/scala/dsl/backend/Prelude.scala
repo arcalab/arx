@@ -2,7 +2,7 @@ package dsl.backend
 
 import dsl.DSL
 import dsl.DSL._
-import dsl.analysis.syntax.{Port}
+import dsl.analysis.semantics.Var
 import dsl.common.UndefinedNameException
 
 
@@ -52,47 +52,47 @@ object Prelude {
   /* Stream builders for primitive function  */
 
   private lazy val fifosb = (sb withCommands (
-    (get("in") & und("m"))->("m":= Port("in")),
-    get("m") -> ("out":= Port("m"))
+    (get("in") & und("m"))->("m":= Var("in")),
+    get("m") -> ("out":= Var("m"))
   ) ins "in" outs "out" mems "m", List("in"),List("out"))
 
-  private lazy val fifoFullsb = (fifosb._1 initially ("m" := Port("_p1")),fifosb._2,fifosb._3)
+  private lazy val fifoFullsb = (fifosb._1 initially ("m" := Var("_p1")),fifosb._2,fifosb._3)
 
   private lazy val idsb = (sb withCommands (
-    get("in")->("out":=Port("in"))
+    get("in")->("out":=Var("in"))
   ) ins "in" outs "out",List("in"),List("out"))
 
   private lazy val syncsb = idsb
 
   private lazy val lossysb = (sb withCommands (
-    get("in")->("out":=Port("in")),
+    get("in")->("out":=Var("in")),
     get("in")->()
   ) ins "in" outs "out",List("in"),List("out"))
 
   private lazy val duplsb = (sb withCommands (
-    get("in") -> ("out1":=Port("in"),"out2":= Port("in"))
+    get("in") -> ("out1":=Var("in"),"out2":= Var("in"))
   ) ins "in" outs("out1","out2"),List("in"),List("out1","out2"))
 
   private lazy val mergersb = (sb withCommands (
-    get("in1") -> ("out":= Port("in1")),
-    get("in2") -> ("out":= Port("in2"))
+    get("in1") -> ("out":= Var("in1")),
+    get("in2") -> ("out":= Var("in2"))
   ) ins ("in1","in2") outs "out", List("in1","in2"),List("out"))
 
   private lazy val xorsb = (sb withCommands (
-    get("in") -> ("out1":=Port("in")),
-    get("in") -> ("out2":= Port("in"))
+    get("in") -> ("out1":=Var("in")),
+    get("in") -> ("out2":= Var("in"))
   ) ins "in" outs("out1","out2"),List("in"),List("out1","out2"))
 
   private lazy val drainsb = (sb withCommands (
     (get("in1") & get("in2")) -> ()
   ) ins ("in1","in2"),List("in1","in2"),List())
 
-  private lazy val writersb = (sb initially ("m" := Port("_p1")) withCommands (
-      get("m") -> ("out":= Port("m"))
+  private lazy val writersb = (sb initially ("m" := Var("_p1")) withCommands (
+      get("m") -> ("out":= Var("m"))
   ) outs "out" mems "m", List(),List("out"))
 
   private lazy val readersb = (sb withCommands (
-      get("in") -> ("m":= Port("in"))
+      get("in") -> ("m":= Var("in"))
     ) ins "in" mems "m",List("in"),List())
 
   /* Signature for primitive functions */

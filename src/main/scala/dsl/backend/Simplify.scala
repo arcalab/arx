@@ -27,7 +27,8 @@ object Simplify {
       case (True,True) => True
       case (True,g3) => g3
       case (g3,True) => g3
-      case (g3,g4) => And(g3,g4)
+      case (g3,g4) if g3==g4 => g3
+      case (g3,g4)  => And(g3,g4)
     }
     case _ => g
   }
