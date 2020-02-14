@@ -67,8 +67,8 @@ object Encode{
     case TRAssignment(RAssignment(List(x),Port(y)),tlhs, trhs)  =>
       val m = freshVar()
       val sbra = sb withCommands(
-        ask(m) -> ("x" := Port(m)),
-        get(y) -> (m := Port(y))
+        ask(m) -> (x := Var(m)),
+        get(y) -> (m := Var(y))
       ) ins y outs x mems m
       (sbra,List(x),sbCtx)
     case TRAssignment(rasg,tlhs, trhs) =>
@@ -98,13 +98,13 @@ object Encode{
   private def encode(gt:TGroundTerm, sbCtx: SBContext):SemanticResult = gt match {
     case TPort(x,_) =>
       var out = freshVar()
-      var gc  = Get(x) -> (out := Port(x))
+      var gc  = Get(x) -> (out := Var(x))
       (StreamBuilder(Set(),Set(gc),Set(x),Set(out)),List(out),sbCtx)
     case q@TConst(const,_,targs) =>
       var fvq = fv(q)
       var gets = fvq.map(Get).foldRight[Guard](True)(_&_)
       var out = freshVar()
-      var gc = gets -> (out := const)
+      var gc = gets -> (out := toTerm(const))
       (StreamBuilder(Set(),Set(gc),fvq,Set(out)),List(out),sbCtx)
   }
 
@@ -173,7 +173,7 @@ object Encode{
       // get the rest of the guarded commands
       val gcMore = mkGCBuild(more,restArgs,sbCtx,out)
       // make the actual guarded command for this constructor
-      val gcq = getArgs -> (out := constructor)
+      val gcq = getArgs -> (out := toTerm(constructor))
       (gcq::gcMore._1,compArgs*gcMore._2)
   }
 
@@ -183,7 +183,7 @@ object Encode{
     val (sbIn,in,_) = encode(arg,sbCtx)
     val (gcs,sbs,outs) = mkGCMatch(qs,sbCtx,in.head)
     val buildSb = sb withCommands (gcs:_*) outs (outs:_*) ins in.head
-    (buildSb*sbs,outs,sbCtx)
+    (buildSb*sbs*sbIn,outs,sbCtx)
   }
 
   private def mkGCMatch(qs:List[ConstEntry]
@@ -200,13 +200,13 @@ object Encode{
       for (p<-q.params.zipWithIndex) {
         val out = freshVar()
         outputs  :+= out
-        commands :+= (out := Const(s"get${q.name}${p._2.toString}",Port(in)::Nil))
+        commands :+= (out := GetQ(q.name,p._2,Var(in)))//(out :=Const(s"get${q.name}${p._2.toString}",Port(in)::Nil))
         //todo add custom class
       }
       if (q.params.isEmpty) {
         val out = freshVar()
         outputs  :+= out
-        commands :+= (out := Const(s"get${q.name}0",Port(in)::Nil))
+        commands :+= (out := GetQ(q.name,0,Var(in)))//(out := Const(s"get${q.name}0",Port(in)::Nil))
       }
       val gcq = guard -> (commands:_*)
       // get the rest of the guarded commands
@@ -282,8 +282,13 @@ object Encode{
   private def rename(c:Command,remap:Map[String,String]):Command =
     Command(remap.getOrElse(c.variable,c.variable),rename(c.term,remap))
 
-  private def rename(t:GroundTerm,remap:Map[String,String]):GroundTerm = t match {
-    case Port(x) => Port(remap.getOrElse(x,x))
-    case Const(name,args) => Const(name,args.map(a=>rename(a,remap)))
+  private def rename(t:Term,remap:Map[String,String]):Term = t match {
+    case Var(x) => Var(remap.getOrElse(x,x))
+    case Q(name,args) => Q(name,args.map(a=>rename(a,remap)))
+  }
+
+  private def toTerm(gt:GroundTerm):Term = gt match {
+    case Port(x) => Var(x)
+    case Const(name,args) => Q(name,args.map(a=>toTerm(a)))
   }
 }

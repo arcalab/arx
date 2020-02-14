@@ -60,7 +60,7 @@ object DSL {
   /* DSL for Stream builders */
 
   class Var(name:String) {
-    def :=(term:GroundTerm):Command = Command(name,term)
+    def :=(term:Term):Command = Command(name,term)
   }
 
   implicit def toVar(s:String):Var = new Var(s)

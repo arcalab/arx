@@ -49,6 +49,12 @@ object Show {
   def apply(cmd:Command):String =
     cmd.variable + ":=" + apply(cmd.term)
 
+  def apply(t:Term):String = t match {
+    case Var(v) => v
+    case Q(name,args) => name+(if (args.nonEmpty) "("+args.map(s=>apply(s)).mkString(",")+")" else "")
+    case GetQ(name,index,term) => s"get$name$index(${apply(term)})"
+  }
+
   def apply(gc:Guard):String = gc match {
     case And(g1,g2) => apply(g1) + ", " + apply(g2)
     case Get(v) => s"get($v)"

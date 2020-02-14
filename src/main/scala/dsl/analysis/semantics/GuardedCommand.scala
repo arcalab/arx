@@ -22,7 +22,17 @@ case class GuardedCommand(guard:Guard, cmd:Set[Command]) {
   * @param port
   * @param term
   */
-case class Command(variable:String,term:GroundTerm) {}
+case class Command(variable:String,term:Term) {}
+
+/**
+  * Terms in guarded commands  
+  * //todo: to use instead of GroundTerm for better displaying of commands
+  */ 
+sealed trait Term 
+
+case class Var(name:String)                       extends Term
+case class Q(name:String, args:List[Term])        extends Term
+case class GetQ(name:String,index:Int,term:Term)  extends Term
 
 /**
   * Guards for commands
