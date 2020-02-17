@@ -45,7 +45,7 @@ object DSL {
     val (ctx,t,cons,tp) = infer(prog)
     //add program type to context
     // todo: get type of the inputs
-    val (program,programType) = ("program",FunEntry(TFun(TUnit,t),Context()))
+    val (program,programType) = ("Program",FunEntry(TFun(TUnit,t),Context()))
     val pctx = ctx.add(program,programType)
     // solve type constraints base on context
     val substitution = TypeCheck.solve(cons,pctx)
@@ -72,6 +72,12 @@ object DSL {
   def ask(v:String):Guard = Ask(v)
   def isQ(n:String,v:String):Guard = IsQ(n,v)
 
-  def encode(prog:TProgram, ctx:Context):SemanticResult = Encode(prog,ctx)
+  //def encode(prog:TProgram, ctx:Context):SemanticResult =  Encode(prog,ctx)
+
+  def encode(prog:TProgram, ctx:Context):SBContext = {
+    val (sb,sbOuts,sbCtx)  =  Encode(prog,ctx)
+    sbCtx.add("Program",(sb,List(),sbOuts)) // todo find program list of inputs when typechecking
+  }
+
 
 }

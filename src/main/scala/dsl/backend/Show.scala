@@ -14,7 +14,7 @@ object Show {
 
   def apply(te:TExp):String = te match {
     case TVar(n) => s"$n"
-    case TFun(ins,outs) => apply(ins) + " -> " + apply(outs)
+    case TFun(ins,outs) => apply(ins) + " → " + apply(outs)
     case TTensor(t1,t2) => apply(t1) + " x " + apply(t2)
     case TBase(n, ps) => n + (if (ps.isEmpty) "" else ps.map(apply).mkString("<",",",">"))
     case TUnit => "()"
@@ -37,21 +37,21 @@ object Show {
 
   def apply(sb:StreamBuilder):String = {
     s"""<${sb.memory.mkString(",")}> =
-       |  interface: [${sb.inputs.mkString(",")}|${sb.outputs.mkString(",")}]
-       |  init:${sb.init.map(apply).mkString(",")}
+       |  interface: [${sb.inputs.mkString(", ")}|${sb.outputs.mkString(", ")}]
+       |  init:${sb.init.map(apply).mkString(", ")}
        |  guarded commands:\n    ${sb.gcs.map(apply).mkString(",\n    ")}""".stripMargin
   }
 
   def apply(gc:GuardedCommand):String = {
-    s"""${apply(gc.guard)} → [${gc.cmd.map(apply).mkString(",")}]""".stripMargin
+    s"""${apply(gc.guard)} → [${gc.cmd.map(apply).mkString(", ")}]""".stripMargin
   }
 
   def apply(cmd:Command):String =
-    cmd.variable + ":=" + apply(cmd.term)
+    cmd.variable + " := " + apply(cmd.term)
 
   def apply(t:Term):String = t match {
     case Var(v) => v
-    case Q(name,args) => name+(if (args.nonEmpty) "("+args.map(s=>apply(s)).mkString(",")+")" else "")
+    case Q(name,args) => name+(if (args.nonEmpty) "("+args.map(s=>apply(s)).mkString(", ")+")" else "")
     case GetQ(name,index,term) => s"get$name$index(${apply(term)})"
   }
 
