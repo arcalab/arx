@@ -47,7 +47,7 @@ object Show {
   }
 
   def apply(cmd:Command):String =
-    cmd.variable + " := " + apply(cmd.term)
+    cmd.variable + ":=" + apply(cmd.term)
 
   def apply(t:Term):String = t match {
     case Var(v) => v
