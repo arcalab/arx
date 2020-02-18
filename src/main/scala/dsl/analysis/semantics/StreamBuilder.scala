@@ -35,7 +35,7 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
     // composes two guarded commands
     def compose(gc1:GuardedCommand,gc2:GuardedCommand):GuardedCommand = {
       val hide    = gc1.outputs ++ gc2.outputs
-      val nguards = Simplify(hideMix(gc1.guard & gc2.guard,hide))
+      val nguards = hideMix(gc1.guard & gc2.guard,hide) //Simplify(hideMix(gc1.guard & gc2.guard,hide))
       val ncmds   = gc1.cmd ++ gc2.cmd
 
       GuardedCommand(nguards,ncmds)
@@ -84,11 +84,20 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
     * @param hide
     * @return new guard without mix ports in [Get] and [Und] guards
     */
-  private def hideMix(guard:Guard,hide:Set[String]):Guard = guard match {
-    case And(g1,g2) => And(hideMix(g1,hide),hideMix(g2,hide))
-    case Get(v) => if (hide.contains(v))  True else guard
-    case Ask(v) => if (hide.contains(v))  True else guard
-    case _ => guard
+  private def hideMix(guard:Guard,hide:Set[String]):Guard = 
+    Guard(guard.guards.flatMap(gi=>hideMix(gi,hide)))
+
+  /**
+    * After composition of gc, hides all variables that were input streams but are now both,
+    * input and output streams.
+    * @param guard guard item 
+    * @param hide variable names to hide
+    * @return new guard without mix ports in [Get] and [Und] guards
+    */
+  private def hideMix(guard:GuardItem,hide:Set[String]):Set[GuardItem] = guard match {
+    case Get(v) if (hide.contains(v))  => Set() //else guard
+    case Ask(v) if (hide.contains(v))  => Set() //else guard
+    case _ => Set(guard)
   }
 }
 

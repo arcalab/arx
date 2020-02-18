@@ -55,13 +55,16 @@ object Show {
     case GetQ(name,index,term) => s"get$name$index(${apply(term)})"
   }
 
-  def apply(gc:Guard):String = gc match {
-    case And(g1,g2) => apply(g1) + ", " + apply(g2)
+  def apply(gc:Guard):String = 
+    gc.guards.map(apply).mkString(", ")
+
+  def apply(gc:GuardItem):String = gc match {
+    //case And(g1,g2) => apply(g1) + ", " + apply(g2)
     case Get(v) => s"get($v)"
     case Ask(v) => s"ask($v)"
     case Und(v) => s"und($v)"
     case IsQ(q, v) => s"is$q($v)"
-    case True => s"true"
+    //case True => s"true"
   }
   //////////////////
   def apply(p:Program): String =

@@ -1,5 +1,7 @@
 package dsl
 
+import scala.language.implicitConversions
+
 import dsl.analysis.syntax.{FunDef, GroundTerm, Parser, Program}
 
 import dsl.analysis.semantics.Encode.SemanticResult
@@ -65,12 +67,14 @@ object DSL {
 
   implicit def toVar(s:String):Var = new Var(s)
 
+  implicit def toGuard(gi:GuardItem):Guard = Guard(Set(gi))
+
   def sb:StreamBuilder = StreamBuilder.empty
 
-  def get(v:String):Guard = Get(v)
-  def und(v:String):Guard = Und(v)
-  def ask(v:String):Guard = Ask(v)
-  def isQ(n:String,v:String):Guard = IsQ(n,v)
+  def get(v:String):Guard = Guard(Set(Get(v)))
+  def und(v:String):Guard = Guard(Set(Und(v)))
+  def ask(v:String):Guard = Guard(Set(Ask(v)))
+  def isQ(n:String,v:String):Guard = Guard(Set(IsQ(n,v)))
 
   //def encode(prog:TProgram, ctx:Context):SemanticResult =  Encode(prog,ctx)
 

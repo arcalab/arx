@@ -102,7 +102,7 @@ object Encode{
       (StreamBuilder(Set(),Set(gc),Set(x),Set(out)),List(out),sbCtx)
     case q@TConst(const,_,targs) =>
       var fvq = fv(q)
-      var gets = fvq.map(Get).foldRight[Guard](True)(_&_)
+      var gets = Guard(fvq.map(Get).toSet) //fvq.map(Get).foldRight[Guard](True)(_&_)
       var out = freshVar()
       var gc = gets -> (out := toTerm(const))
       (StreamBuilder(Set(),Set(gc),fvq,Set(out)),List(out),sbCtx)
@@ -141,7 +141,7 @@ object Encode{
       (sbRmIns * argsComp,sbOuts.map(remap),sbCtx)
     case _ => throw new RuntimeException(s"Stream Expression ${se} of type ${se.getClass} not supported.")
     // todo: Any kind of StreamFun if we go back to having this option,
-    //  but if will required sequence of inputs as well.
+    //    but if will required sequence of inputs as well.
   }
 
   private def mkBuild(qs:List[ConstEntry]
@@ -164,7 +164,7 @@ object Encode{
       // make a stream builder for each argument
       val sbArgs:List[SemanticResult] = qArgs.map(a=> encode(a,sbCtx))
       // make gets for the output variable of each sb in the previous step
-      val getArgs = sbArgs.map(_._2.head).map(p => Get(p)).foldRight[Guard](True)(_&_)
+      val getArgs = Guard(sbArgs.map(_._2.head).map(p => Get(p)).toSet) //.foldRight[Guard](True)(_&_)
       // remove these arguments from the list
       val restArgs = args.drop(if (numArgs==0) 1 else numArgs)
       // build the constructor
@@ -272,11 +272,14 @@ object Encode{
   private def rename(gc:GuardedCommand,remap:Map[String,String]):GuardedCommand =
     GuardedCommand(rename(gc.guard,remap),gc.cmd.map(c=>rename(c,remap)))
 
-  private def rename(g:Guard,remap:Map[String,String]):Guard = g match {
+  private def rename(g:Guard,remap:Map[String,String]):Guard = 
+    Guard(g.guards.map(gi=>rename(gi,remap)))
+
+  private def rename(g:GuardItem,remap:Map[String,String]):GuardItem = g match {
     case Get(v) if remap.contains(v) => Get(remap(v))
     case Ask(v) if remap.contains(v) => Ask(remap(v))
     case Und(v) if remap.contains(v) => Und(remap(v))
-    case And(g1,g2) => And(rename(g1,remap),rename(g2,remap))
+    //case And(g1,g2) => And(rename(g1,remap),rename(g2,remap))
     case IsQ(q,v) if remap.contains(v) => IsQ(q,remap(v))
     case _ => g
   }

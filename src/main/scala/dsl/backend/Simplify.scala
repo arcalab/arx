@@ -1,6 +1,5 @@
 package dsl.backend
 
-import dsl.analysis.semantics.{And, Guard, GuardedCommand, True}
 import dsl.analysis.types._
 
 /**
@@ -22,17 +21,17 @@ object Simplify {
     case _ => tExp
   }
 
-  def apply(g:Guard):Guard = g match {
-    case And(g1,g2) =>(apply(g1),apply(g2)) match {
-      case (True,True) => True
-      case (True,g3) => g3
-      case (g3,True) => g3
-      case (g3,g4) if g3==g4 => g3
-      case (g3,g4)  => And(g3,g4)
-    }
-    case _ => g
-  }
+  // def apply(g:Guard):Guard = g match {
+  //   case And(g1,g2) =>(apply(g1),apply(g2)) match {
+  //     case (True,True) => True
+  //     case (True,g3) => g3
+  //     case (g3,True) => g3
+  //     case (g3,g4) if g3==g4 => g3
+  //     case (g3,g4)  => And(g3,g4)
+  //   }
+  //   case _ => g
+  // }
 
-  def apply(gc:GuardedCommand):GuardedCommand =
-    GuardedCommand(apply(gc.guard),gc.cmd)
+  // def apply(gc:GuardedCommand):GuardedCommand =
+  //   GuardedCommand(apply(gc.guard),gc.cmd)
 }
