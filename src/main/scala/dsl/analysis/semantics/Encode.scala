@@ -126,18 +126,19 @@ object Encode{
       val (sb,sbIns,sbOuts) = if (sbCtx.contains(name)) sbCtx(name) else sbCtx("id") //otherwise, assume 1->1 function
       // get a stream builder for each argument todo: probably just for free variables.
       val argsSb:List[SemanticResult]  = args.map(a=> encode(a,sbCtx,typeCtx))
-      // zip inputs with the output of the corresponding argument (we know they have only 1 output)
-      val remapInputs:List[(String,String)] = sbIns.zip(argsSb.map(_._2.head))
-      // fresh variables new inputs correspond with args, new outputs and memories are fresh variables
-      val remap  = (remapInputs ++
-        sbOuts.map(o=> (o,freshVar())) ++
-        sb.memory.map(m=> (m,freshVar()))).toMap
+      // fresh variables for all variables in sb
+      val remap  = (sb.inputs ++sb.outputs++sb.memory).map(v=> (v,freshVar())).toMap
       // get a fresh instantiation of the stream builder based on the new name mapping
       val sbFresh = fresh(sb,remap)
+      //println("Fresh map:\n" + remap.mkString(","))
+      // zip fresh inputs with the output of the corresponding argument (we know they have only 1 output)
+      val remapInputs:List[(String,String)] = remap.filter(k => sbIns.contains(k._1)).values.toList.zip(argsSb.map(_._2.head))
+      // rename inputs in fresh stream builder based on remapInputs
+      val sbRmIns = fresh(sbFresh,remapInputs.toMap)
       // compose stream builders from arguments
       val argsComp = argsSb.map(_._1).foldRight[StreamBuilder](DSL.sb)(_*_)
       // return result, and remap outputs of the function to the corresponding fresh names
-      (sbFresh * argsComp,sbOuts.map(remap),sbCtx)
+      (sbRmIns * argsComp,sbOuts.map(remap),sbCtx)
     case _ => throw new RuntimeException(s"Stream Expression ${se} of type ${se.getClass} not supported.")
     // todo: Any kind of StreamFun if we go back to having this option,
     //  but if will required sequence of inputs as well.
@@ -276,6 +277,7 @@ object Encode{
     case Ask(v) if remap.contains(v) => Ask(remap(v))
     case Und(v) if remap.contains(v) => Und(remap(v))
     case And(g1,g2) => And(rename(g1,remap),rename(g2,remap))
+    case IsQ(q,v) if remap.contains(v) => IsQ(q,remap(v))
     case _ => g
   }
 
