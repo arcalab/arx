@@ -56,7 +56,8 @@ object Show {
   }
 
   def apply(gc:Guard):String = 
-    gc.guards.map(apply).mkString(", ")
+    if (gc.guards.isEmpty) "true" else gc.guards.map(apply).mkString(", ")
+    
 
   def apply(gc:GuardItem):String = gc match {
     //case And(g1,g2) => apply(g1) + ", " + apply(g2)
@@ -66,6 +67,26 @@ object Show {
     case IsQ(q, v) => s"is$q($v)"
     //case True => s"true"
   }
+
+  /* Stream Builders Automata */
+
+  def apply(a:SBAutomata):String = {
+    s"init: ${apply(a.init)}\ntrans:\n${a.trans.map(apply).mkString("\n ")}"
+  }
+
+  def apply(t: SBTrans): String = t match  {
+    case UpdTrans(from,gc,ins,outs,to) =>
+      apply(from) + " → " + apply(to) + " by " + apply(gc)
+    case PushTrans(from, push, to) =>
+      apply(from) + " → " + apply(to) + " by " + s"push(${push})"
+    case PullTrans(from, pull, to) =>
+      apply(from) + " → " + apply(to) + " by " + s"pull(${pull})"
+  }
+
+  def apply(s:SBState):String = {
+    s"[ ${s.memories.mkString(",")} | ${s.activeIns.mkString(",")} | ${s.activeOuts.mkString(",")}]"
+  }
+
   //////////////////
   def apply(p:Program): String =
     p.imports.map(apply).mkString("\n")+

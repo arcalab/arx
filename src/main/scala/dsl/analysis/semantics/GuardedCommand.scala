@@ -12,9 +12,11 @@ import dsl.analysis.syntax.{Const, GroundTerm, Port}
 case class GuardedCommand(guard:Guard, cmd:Set[Command]) {
 
   def vars:Set[String] = this.outputs ++ this.inputs
+  
   def outputs:Set[String] = cmd.map(c=>c.variable)
-  def inputs:Set[String]  = guard.variables
-
+  
+  // be carful because some might be memories, given a stream builde remove the memories
+  def inputs:Set[String]  = guard.variables 
 }
 
 /**
