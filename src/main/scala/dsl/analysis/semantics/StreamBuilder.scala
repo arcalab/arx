@@ -1,6 +1,6 @@
 package dsl.analysis.semantics
 
-import dsl.backend.Simplify
+import dsl.backend.{Show, Simplify}
 
 /**
   * A stream builder consists of an initial configuration (of commands),
@@ -30,7 +30,8 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
 
     // checks if two gc can execute synchronously
     def together(gc1:GuardedCommand,gc2:GuardedCommand):Boolean =
-      ((gc1.vars--this.memory) intersect sync) == ((gc2.vars--other.memory) intersect sync)
+      ((gc1.vars--this.memory) intersect sync) == ((gc2.vars--other.memory) intersect sync) &&
+      outputs.intersect(other.outputs) == Set()
 
     // composes two guarded commands
     def compose(gc1:GuardedCommand,gc2:GuardedCommand):GuardedCommand = {
@@ -49,17 +50,40 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
 
     var ngcs = Set[GuardedCommand]()
 
-    for (gc <- this.gcs ; if alone(gc))
+    for (gc <- this.gcs ; if alone(gc)) {
+      //println(s"Alone ${Show(gc)} (other.I: ${other.inputs.mkString(",")} - other.O: ${other.outputs.mkString(",")})")
       ngcs += gc
+    }
 
-    for (gc <- other.gcs ; if alone(gc))
+    for (gc <- other.gcs ; if alone(gc)) {
+      //println(s"Alone ${Show(gc)}")
       ngcs += gc
+    }
 
-    for (gc1 <- this.gcs; gc2 <- other.gcs; if together(gc1,gc2))
+    for (gc1 <- this.gcs; gc2 <- other.gcs; if together(gc1,gc2)) {
+      //println(s"${Show(gc1)} ++ ${Show(gc2)}\n= ${Show(compose(gc1,gc2))} (ok to compose: O1=${outputs} O2=${other.outputs})")
       ngcs += compose(gc1,gc2)
+    }
 
     StreamBuilder(ninit,ngcs,nins,nouts,nmem)
   }
+  /** Leaves only commands that assign `outs` or memory variables. */
+  def filterOut(outs:Set[String]): StreamBuilder =
+    StreamBuilder(init,gcs.map(filterOut(_,outs ++ memory)),inputs,outputs intersect outs, memory)
+
+  private def filterOut(gc: GuardedCommand, outs:Set[String]): GuardedCommand = {
+    val (okCmds,oldCmds) = gc.cmd.partition(outs contains _.variable)
+    val oldMap = oldCmds.map(x => x.variable -> x.term).toMap
+    val closedCmds = okCmds.map(x => Command(x.variable,closeTerm(x.term,oldMap)))
+    GuardedCommand(gc.guard,closedCmds)
+  }
+  private def closeTerm(term: Term, cmds: Map[String, Term]): Term = term match {
+    case Var(name) if cmds contains name => closeTerm(cmds(name),cmds)
+    case _:Var  => term
+    case Q(name, args) =>Q(name,args.map(closeTerm(_,cmds)))
+    case GetQ(name, index, term2) => GetQ(name,index,closeTerm(term2,cmds))
+  }
+
 
   def ins(is:String*):StreamBuilder =
     StreamBuilder(this.init,this.gcs,this.inputs++is.toSet,this.outputs,this.memory)
