@@ -25,8 +25,12 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
       this.inputs.intersect(other.inputs)
 
     // checks if a gc can execute independently
-    def alone(gc:GuardedCommand):Boolean =
-      ((gc.vars--this.memory) intersect sync).isEmpty
+    def alone(gc:GuardedCommand,gcins:Set[String]):Boolean = {
+      val r = ((gc.outputs -- this.memory -- gcins) intersect sync).isEmpty
+      println(s"Alone ${Show(gc)}: $r (outs: ${gc.outputs.mkString(",")} - sync: ${sync.mkString(",")})")
+      r
+    }
+    //      ((gc.vars--this.memory) intersect sync).isEmpty
 
     // checks if two gc can execute synchronously
     def together(gc1:GuardedCommand,gc2:GuardedCommand):Boolean =
@@ -37,6 +41,8 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
     def compose(gc1:GuardedCommand,gc2:GuardedCommand):GuardedCommand = {
       val hide    = gc1.outputs ++ gc2.outputs
       val nguards = hideMix(gc1.guard & gc2.guard,hide) //Simplify(hideMix(gc1.guard & gc2.guard,hide))
+      //
+//      val nguards = gc1.guard & gc2.guard
       val ncmds   = gc1.cmd ++ gc2.cmd
 
       GuardedCommand(nguards,ncmds)
@@ -45,17 +51,17 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
     // new set of input, output, and memory variables
     val ninit = this.init++other.init
     val nouts = this.outputs++other.outputs
-    val nins  = this.inputs++other.inputs -- nouts
+    val nins  = this.inputs++other.inputs // -- nouts
     val nmem  = this.memory++other.memory
 
     var ngcs = Set[GuardedCommand]()
 
-    for (gc <- this.gcs ; if alone(gc)) {
+    for (gc <- this.gcs ; if alone(gc,this.inputs)) {
       //println(s"Alone ${Show(gc)} (other.I: ${other.inputs.mkString(",")} - other.O: ${other.outputs.mkString(",")})")
       ngcs += gc
     }
 
-    for (gc <- other.gcs ; if alone(gc)) {
+    for (gc <- other.gcs ; if alone(gc,other.inputs)) {
       //println(s"Alone ${Show(gc)}")
       ngcs += gc
     }
@@ -65,6 +71,11 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
       ngcs += compose(gc1,gc2)
     }
 
+    println(s"Composing:\n  [${gcs.map(Show.apply).mkString(" / ")}]" +
+      s"\n  [${other.gcs.map(Show.apply).mkString(" / ")}]" +
+      s"\n------------" +
+      s"\n  [${ngcs.map(Show.apply).mkString(" / ")}]" +
+      s"\n  I:${nins.mkString(",")}  O:${nouts.mkString(",")}")
     StreamBuilder(ninit,ngcs,nins,nouts,nmem)
   }
   /** Leaves only commands that assign `outs` or memory variables. */
