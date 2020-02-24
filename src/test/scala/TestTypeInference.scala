@@ -36,11 +36,11 @@ class TestTypeInference extends FlatSpec{
         |data Bool = True | False
         |data Nat = Zero | Succ(Nat)
         |
-        |x = Nil
-        |y = Cons(True,Nil)
-        |z = Cons(True,Cons(False,x))
-        |w = Cons(False,z)
-        |s = Cons(Zero,Nil)
+        |x <- Nil
+        |y <- Cons(True,Nil)
+        |z <- Cons(True,Cons(False,x))
+        |w <- Cons(False,z)
+        |s <- Cons(Zero,Nil)
      """.stripMargin)
 
   OK(s"""
@@ -48,14 +48,16 @@ class TestTypeInference extends FlatSpec{
        |data Bool = True | False
        |data Nat = Zero | Succ(Nat)
        |
-       |def conn = {
-       |	dupl;fifo*lossy
+       |def conn(x) = {
+       |	//dupl;fifo*lossy
+       |  out<-fifo(x) out<-lossy(x)
+       |  out
        |}
        |
-       |y = Cons(True,Nil)
-       |o = conn(y)
-       |o1,o2 = conn(y)
-       |o3,o4 = conn(Zero,out1,out2)
+       |y <- Cons(True,Nil)
+       |o <- conn(y)
+       |o1,o2 <- conn(y)
+       |o3,o4 <- conn(Zero,out1,out2)
      """.stripMargin)
 
   illegalParam(
@@ -63,10 +65,12 @@ class TestTypeInference extends FlatSpec{
        |data Nat = Zero | Succ(Nat)
        |
        |def conn = {
-       |	dupl;fifo*lossy
+       |	//dupl;fifo*lossy
+       |  out<-fifo(x) out<-lossy(x)
+       |  out
        |}
        |
-       |o = conn(Zero,True)
+       |o <- conn(Zero,True)
      """.stripMargin)
 
   illegalParam(
@@ -75,19 +79,19 @@ class TestTypeInference extends FlatSpec{
        |data Bool = True | False
        |data Nat = Zero | Succ(Nat)
        |
-       |def conn = {
-       |	dupl;fifo*lossy
+       |	//dupl;fifo*lossy
+       |  out<-fifo(x) out<-lossy(x)
+       |  out
        |}
-       |
-       |o = conn(Zero,o1,o2,o3)
+       |o <- conn(Zero,o1,o2,o3)
      """.stripMargin)
 
   undefinedId(s"""
         |data List<a> = Nil | Cons(a,List<a>)
         |data Bool = True | False
         |
-        |x = Nild
-        |y = Cons(True,x)
+        |x <- Nild
+        |y <- Cons(True,x)
      """.stripMargin)
 
   incompatibleType(
@@ -95,8 +99,8 @@ class TestTypeInference extends FlatSpec{
        |data Bool = True | False
        |data Nat = Zero | Succ(Nat)
        |
-       |x = Zero
-       |y = Cons(True,Cons(x,Nil))
+       |x <- Zero
+       |y <- Cons(True,Cons(x,Nil))
      """.stripMargin)
 
   def OK(code:String) =

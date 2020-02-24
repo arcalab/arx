@@ -27,7 +27,11 @@ object Encode{
     val ctx = loadPrimitives()
     // encode program block
     val (sbB,sbBOuts,sbBCtx) = encode(program.tBlock,ctx,typeCtx)
-    (sbB,sbBOuts,sbBCtx)
+    // filter only relevant outputs
+    //println(s"[Encode] filtering $sbBOuts from ${Show(sbB)}")
+    val sbB2 = sbB.filterOut(sbBOuts.toSet)
+    //println(s"[Encode] got ${Show(sbB2)}")
+    (sbB2,sbBOuts,sbBCtx)
   }
 
   /**
@@ -84,8 +88,10 @@ object Encode{
     case TFunDef(fd, te, tb) =>
       // get the stream builder of the block
       val (sbB,sbBOuts,sbBCtx) = encode(tb,sbCtx,typeCtx)
+      // hide all outs but sbBouts and memory variables
+      val sbB2 = sbB.filterOut(sbBOuts.toSet)
       // create an stream builder entry for the function
-      val fEntry = (sbB,fd.params.map(tv=>tv.name),sbBOuts)
+      val fEntry = (sbB2,fd.params.map(tv=>tv.name),sbBOuts)
       // add the entry to the context returned by encoding the block
       val nSbCtx = sbBCtx.add(fd.name,fEntry)
       // return the new context and an empty stream builder and outputs

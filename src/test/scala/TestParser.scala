@@ -40,24 +40,24 @@ class TestParser extends FlatSpec {
        |data List<a> = Nil | Cons(a,List<a>)
        |data Bool = True | False
        |
-       |x = Nild
-       |y = Cons(True,Nil)
-       |z = Cons(True,Cons(False,Nil))
+       |x <- Nild
+       |y <- Cons(True,Nil)
+       |z <- Cons(True,Cons(False,Nil))
      """.stripMargin,p1)
 
   OK(s"""
         |data List<a> = Nil | Cons(a,List<a>)
         |data Bool = True | False
         |
-        |x = Nil
-        |y = Cons(True,x)
+        |x <- Nil
+        |y <- Cons(True,x)
      """.stripMargin,p2)
 
   notOK(
     s"""
        |data Bool = True | False
        |
-       |y = Cons(True,Nil)
+       |y <- Cons(True,Nil)
      """.stripMargin)
 
   def OK(code:String,ast:AST) =
