@@ -84,7 +84,7 @@ object Show {
   }
 
   def apply(s:SBState):String = {
-    s"[ ${s.memories.mkString(",")} | ${s.activeIns.mkString(",")} | ${s.activeOuts.mkString(",")}]"
+    s"[ ${s.memories.mkString(",")} | ${s.activeIns.mkString(",")} | ${s.activeOuts.mkString(",")} ]"
   }
 
   //////////////////
