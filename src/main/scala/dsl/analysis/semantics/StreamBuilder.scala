@@ -18,24 +18,39 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
     * @return composed stream builder
     */
   def *(other:StreamBuilder):StreamBuilder = {
+    println(s"====\nI1:${inputs.mkString(",")}  O1:${outputs.mkString(",")}\nI2:${other.inputs.mkString(",")}  O2:${other.outputs.mkString(",")}")
     // set of ports that must synchronize together
     lazy val sync =
       this.outputs.intersect(other.inputs) ++
       this.inputs.intersect(other.outputs) ++
-      this.inputs.intersect(other.inputs)
+      this.inputs.intersect(other.inputs) --
+      this.memory -- other.memory
 
     // checks if a gc can execute independently
-    def alone(gc:GuardedCommand,gcins:Set[String]):Boolean = {
-      val r = ((gc.outputs -- this.memory -- gcins) intersect sync).isEmpty
+    def alone(gc:GuardedCommand, sbins:Set[String], osbins:Set[String]):Boolean = {
+//      val r = ((gc.outputs -- this.memory -- gcins) intersect sync).isEmpty &&
+      val r = ((gc.outputs -- sbins) intersect sync).isEmpty &&
+        (gc.inputs intersect osbins).isEmpty
       println(s"Alone ${Show(gc)}: $r (outs: ${gc.outputs.mkString(",")} - sync: ${sync.mkString(",")})")
       r
     }
     //      ((gc.vars--this.memory) intersect sync).isEmpty
 
     // checks if two gc can execute synchronously
-    def together(gc1:GuardedCommand,gc2:GuardedCommand):Boolean =
-      ((gc1.vars--this.memory) intersect sync) == ((gc2.vars--other.memory) intersect sync) &&
-      outputs.intersect(other.outputs) == Set()
+    def together(gc1:GuardedCommand,gc2:GuardedCommand):Boolean = {
+//      val r =
+//        ((gc1.vars--this.memory) intersect sync) == ((gc2.vars--other.memory) intersect sync) &&
+      val r1 = gc1.outputs.intersect(sync) .subsetOf(gc2.inputs)
+      val r2 = gc2.outputs.intersect(sync) .subsetOf(gc1.inputs)
+      val r3 = gc1.inputs .intersect(sync) .subsetOf(gc2.vars)
+      val r4 = gc1.inputs .intersect(sync) .subsetOf(gc1.vars)
+      val r5 = gc1.outputs.intersect(gc2.outputs).isEmpty
+      val r = r1 && r2 && r3 && r4 && r5
+      println(s"Together ${Show(gc1)} * ${Show(gc2)}: $r\n($r1,$r2,$r3,$r4,$r5)" +
+        s"(vars1: ${gc1.vars.mkString(",")} - vars2: ${gc2.vars.mkString(",")} - sync: ${sync.mkString(",")})" +
+        s"\n  (outs1: ${outputs}, outs2: ${other.outputs}")
+      r
+    }
 
     // composes two guarded commands
     def compose(gc1:GuardedCommand,gc2:GuardedCommand):GuardedCommand = {
@@ -56,20 +71,14 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
 
     var ngcs = Set[GuardedCommand]()
 
-    for (gc <- this.gcs ; if alone(gc,this.inputs)) {
-      //println(s"Alone ${Show(gc)} (other.I: ${other.inputs.mkString(",")} - other.O: ${other.outputs.mkString(",")})")
+    for (gc <- this.gcs ; if alone(gc,this.inputs,other.inputs))
       ngcs += gc
-    }
 
-    for (gc <- other.gcs ; if alone(gc,other.inputs)) {
-      //println(s"Alone ${Show(gc)}")
+    for (gc <- other.gcs ; if alone(gc,other.inputs,this.inputs))
       ngcs += gc
-    }
 
-    for (gc1 <- this.gcs; gc2 <- other.gcs; if together(gc1,gc2)) {
-      //println(s"${Show(gc1)} ++ ${Show(gc2)}\n= ${Show(compose(gc1,gc2))} (ok to compose: O1=${outputs} O2=${other.outputs})")
+    for (gc1 <- this.gcs; gc2 <- other.gcs; if together(gc1,gc2))
       ngcs += compose(gc1,gc2)
-    }
 
     println(s"Composing:\n  [${gcs.map(Show.apply).mkString(" / ")}]" +
       s"\n  [${other.gcs.map(Show.apply).mkString(" / ")}]" +
@@ -79,8 +88,11 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
     StreamBuilder(ninit,ngcs,nins,nouts,nmem)
   }
   /** Leaves only commands that assign `outs` or memory variables. */
-  def filterOut(outs:Set[String]): StreamBuilder =
-    StreamBuilder(init,gcs.map(filterOut(_,outs ++ memory)),inputs,outputs intersect outs, memory)
+  def filterOutAndClean(outs:Set[String]): StreamBuilder = {
+    val sb = cleanMix
+    StreamBuilder(sb.init,sb.gcs.map(filterOut(_,outs ++ sb.memory)),sb.inputs,sb.outputs intersect outs, sb.memory)
+//    this
+  }
 
   private def filterOut(gc: GuardedCommand, outs:Set[String]): GuardedCommand = {
     val (okCmds,oldCmds) = gc.cmd.partition(outs contains _.variable)
@@ -95,6 +107,11 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
     case GetQ(name, index, term2) => GetQ(name,index,closeTerm(term2,cmds))
   }
 
+  def cleanMix: StreamBuilder = {
+    val mix = inputs.intersect(outputs) -- memory
+    println(s"clean mix:${mix.mkString(",")}\n  in:${inputs}  out:${outputs}")
+    StreamBuilder(init,gcs.filter(g => g.inputs.intersect(mix).isEmpty),inputs--mix,outputs,memory)
+  }
 
   def ins(is:String*):StreamBuilder =
     StreamBuilder(this.init,this.gcs,this.inputs++is.toSet,this.outputs,this.memory)

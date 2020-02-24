@@ -29,7 +29,7 @@ object Encode{
     val (sbB,sbBOuts,sbBCtx) = encode(program.tBlock,ctx,typeCtx)
     // filter only relevant outputs
     //println(s"[Encode] filtering $sbBOuts from ${Show(sbB)}")
-    val sbB2 = sbB.filterOut(sbBOuts.toSet)
+    val sbB2 = sbB.filterOutAndClean(sbBOuts.toSet)
     //println(s"[Encode] got ${Show(sbB2)}")
     (sbB2,sbBOuts,sbBCtx)
   }
@@ -89,7 +89,7 @@ object Encode{
       // get the stream builder of the block
       val (sbB,sbBOuts,sbBCtx) = encode(tb,sbCtx,typeCtx)
       // hide all outs but sbBouts and memory variables
-      val sbB2 = sbB.filterOut(sbBOuts.toSet)
+      val sbB2 = sbB.filterOutAndClean(sbBOuts.toSet)
       // create an stream builder entry for the function
       val fEntry = (sbB2,fd.params.map(tv=>tv.name),sbBOuts)
       // add the entry to the context returned by encoding the block
