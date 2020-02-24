@@ -23,7 +23,29 @@ case class SBState(memories:Set[String],activeIns:Set[String],activeOuts:Set[Str
 /**
   * Transition of a [[SBAutomata]]
   */
-sealed trait SBTrans
+sealed trait SBTrans {
+  val from,to:SBState;
+
+  def label:String = this match {
+    case UpdTrans(from, gc, ins, outs, to) =>
+      val getvars = gc.guard.guards.collect({case g:Get=>g}).map(_.variable).mkString(",")
+      val askvars = gc.guard.guards.collect({case g:Ask=>g}).map(_.variable).mkString(",")
+      val undvars = gc.guard.guards.collect({case g:Und=>g}).map(_.variable).mkString(",")
+      val isqs = gc.guard.guards.collect({case g:IsQ=>g}).map(v=>s"is${v.q}${v.variable}").mkString(",")
+
+      val gets = if (getvars.isEmpty) "" else s"Get($getvars)"
+      val asks = if (askvars.isEmpty) "" else s"Ask($askvars)"
+      val unds = if (undvars.isEmpty) "" else s"Und($undvars)"
+
+      val guard = Set(gets,asks,unds,isqs).mkString(",")
+
+      val upds = gc.cmd.map(Show(_)).mkString(",")
+
+      guard +"~"+ (ins++outs).mkString(",")+"~"+ upds
+    case PushTrans(from,push,to) => "" + "~" + s"push(${push})" + "~" + ""
+    case PullTrans(from,pull,to) => "" + "~" + s"pull(${pull})" + "~" + ""
+  }
+}
 case class UpdTrans(from:SBState, gc:GuardedCommand, ins:Set[String], outs:Set[String], to:SBState) extends SBTrans {}
 case class PushTrans(from:SBState,push:String,to:SBState) extends SBTrans {}
 case class PullTrans(from:SBState,pull:String,to:SBState) extends SBTrans {}
@@ -37,7 +59,7 @@ object SBAutomata {
   def emptySate:SBState = SBState(Set(),Set(),Set())
   def empty:SBAutomata = SBAutomata (Set(),emptySate,Set(),StreamBuilder.empty)
 
-  def apply(sb:StreamBuilder, timeout:Int=2000, mode:BuildMode=ClosedMode):SBAutomata = {
+  def apply(sb:StreamBuilder, timeout:Int=5000, mode:BuildMode=NoneMode):SBAutomata = {
     var steps = 0
     def tick(): Unit =  {
       steps+=1
@@ -69,7 +91,7 @@ object SBAutomata {
 
 
         // make push/pull transitions for st if st has no update transitions states and if relevant mode selected
-        if (utrans.isEmpty && mode!=ClosedMode ) {
+        if (utrans.isEmpty && mode!=NoneMode ) {
           var pushres,pullres:(Set[SBTrans],Set[SBState]) = (Set(),Set())
 
           if (mode == PushMode || mode == AllMode) pushres = mkPushs(st,sb)
@@ -112,7 +134,7 @@ object SBAutomata {
         from.activeIns--ins,
         (from.activeOuts--outs) ++outs.intersect(sb.memory)) // todo: check if it makes sens now
       // new transition
-      val t = UpdTrans(from,gc,ins,outs,to)
+      val t = UpdTrans(from,gc,ins--sb.memory,outs--sb.memory,to)
       trans += t
       // update set of states
       sts += to
@@ -130,7 +152,7 @@ object SBAutomata {
     var trans:Set[SBTrans] = Set()
     var sts:Set[SBState] = Set()
     // make push transitions for st if st has no update transitions states
-    for (v<- sb.inputs) {
+    for (v<- sb.inputs; if !from.activeIns.contains(v)) {
       val to = SBState(from.memories,from.activeIns+v,from.activeOuts)
       val t = PushTrans(from,v,to)
       trans += t
@@ -149,7 +171,7 @@ object SBAutomata {
     var trans:Set[SBTrans] = Set()
     var sts:Set[SBState] = Set()
     // make push transitions for st if st has no update transitions states
-    for (v<- sb.outputs) {
+    for (v<- sb.outputs; if !from.activeOuts.contains(v)) {
       val to = SBState(from.memories,from.activeIns,from.activeOuts+v)
       val t = PullTrans(from,v,to)
       trans += t
@@ -173,7 +195,7 @@ object SBAutomata {
     val outsc = gc.cmd.map(_.variable)
     val res = gc.guard.guards.forall(gi=>satisfies(gi,st,sb))  &&
       (insg.intersect(st.activeIns).nonEmpty || outsc.intersect(st.activeOuts).nonEmpty)
-    println(s"${Show(gc)} is satisfied by $st: $res")
+//    println(s"${Show(gc)} is satisfied by $st: $res")
     res
   }
 
