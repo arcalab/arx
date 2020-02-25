@@ -23,6 +23,7 @@ object Encode{
   private def freshVar():String = {vars+=1; s"v${vars-1}"}
 
   def apply(program:TProgram, typeCtx:Context):SemanticResult = {
+    vars = 0
     // create context with primitive functions
     val ctx = loadPrimitives()
     // encode program block

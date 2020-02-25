@@ -139,28 +139,28 @@ object Prelude {
   private lazy val counter =
     """def counter(tick): Nat = {
       |    drain(tick,n)
-      |    succ:=build(U,n) // build<Nat>
-      |    next:=fifo(succ)
-      |    iter:=fifofull(next) // filled with Zero
-      |    n,res:=xor(iter)
-      |    zero:=Zero
+      |    succ<-build(U,n) // build<Nat>
+      |    next<-fifo(succ)
+      |    iter<-fifofull(next) // filled with Zero
+      |    n,res<-xor(iter)
+      |    zero<-Zero
       |    drain(res,zero)
-      |    succ:=zero
+      |    succ<-zero
       |    res
       |  }
     """.stripMargin
 
   private lazy val alt =
     """def alt(i1,i2) = {
-       |  a:=in1(i1) b:=in2(i2)
+       |  a<-in1(i1) b<-in2(i2)
        |  drain(a, b)
-       |  x:=a x:=fifo(b)
+       |  x<-a x<-fifo(b)
        |  out(x)
        |}
        |alt(x,y)"""
 
   private lazy val lossyfifo =
-    """y:=lossy(x)
+    """y<-lossy(x)
       |fifo(y)"""
 
   private lazy val miscdata =
@@ -171,21 +171,21 @@ object Prelude {
       |data Either<a,b> = Left(a) | Right(b)
       |data Unit = U
       |
-      |x := Cons(Zero,Nil)
-      |y := Cons(Zero,x)
-      |z := Cons(Succ(Succ(Zero)),y)
-      |w := True
-      |a,b,c := dupl3(x)
+      |x <- Cons(Zero,Nil)
+      |y <- Cons(Zero,x)
+      |z <- Cons(Succ(Succ(Zero)),y)
+      |w <- True
+      |a,b,c <- dupl3(x)
       |
       |def alt(i1,i2) = {
-      |  a:=in1(i1) b:=in2(i2)
+      |  a<-in1(i1) b<-in2(i2)
       |  drain(a, b)
-      |  o:=a o:=fifo(b)
+      |  o<-a o<-fifo(b)
       |  o
       |}
       |// If Then Else
       |def ite(b:Bool,then:A,else:A): A = {
-      |    t,f := match(b)
+      |    t,f <- match(b)
       |    drain(t,ok)
       |    drain(f,ko)
       |    ok
@@ -194,41 +194,41 @@ object Prelude {
       |
       |// fibbonaci
       |def fib(): Nat = {
-      |  b:=fifoFull_Succ_Zero(a)
-      |  c:=fifo(b)
-      |  a := add(b,c)
+      |  b<-fifoFull_Succ_Zero(a)
+      |  c<-fifo(b)
+      |  a <- add(b,c)
       |  a
       |}
       |
       |// counts ticks (to check)
       |def counter(tick): Nat = {
       |  drain(tick,n)
-      |  succ:=build(nil,n)
-      |  next:=fifo(succ)
-      |  iter:=fifoFull_Zero(next)
-      |  n,res:=xor(iter)
-      |  zero:=Zero
+      |  succ<-build(nil,n)
+      |  next<-fifo(succ)
+      |  iter<-fifoFull_Zero(next)
+      |  n,res<-xor(iter)
+      |  zero<-Zero
       |  drain(res,zero)
-      |  succ:=zero
+      |  succ<-zero
       |  res
       |}
       |
       |// Addition of naturals (to check)
       |def add(a, b): Nat = {
       |  drain(a,b)
-      |  lockAll:=fifo(a)
-      |  lockA:=fifo(a)
-      |  waitB:=fifo(b)
-      |  next:=a
-      |  toMatch:=fifo(next)
-      |  zero,succ:=match(toMatch)
-      |  next:=fifo(succ)
-      |  res:=counter(succ)
-      |  aDone,bDone:=xor(zero)
+      |  lockAll<-fifo(a)
+      |  lockA<-fifo(a)
+      |  waitB<-fifo(b)
+      |  next<-a
+      |  toMatch<-fifo(next)
+      |  zero,succ<-match(toMatch)
+      |  next<-fifo(succ)
+      |  res<-counter(succ)
+      |  aDone,bDone<-xor(zero)
       |  drain(aDone,lockA)
       |  drain(aDone,waitB)
-      |  next:=waitB
-      |  lockB:=fito(waitB)
+      |  next<-waitB
+      |  lockB<-fito(waitB)
       |  drain(bDone,lockB)
       |  drain(bDone,lockAll)
       |  drain(bDone,res)
@@ -236,9 +236,9 @@ object Prelude {
       |}"""
 
   private lazy val sequencer3 =
-    """x1:=fifofull(x3) drain(o1,x1) out1(o1)
-      |x2:=    fifo(x1) drain(o2,x2) out2(o2)
-      |x3:=    fifo(x2) drain(o3,x3) out3(o3)
+    """x1<-fifofull(x3) drain(o1,x1) out1(o1)
+      |x2<-    fifo(x1) drain(o2,x2) out2(o2)
+      |x3<-    fifo(x2) drain(o3,x3) out3(o3)
       |"""
 
 

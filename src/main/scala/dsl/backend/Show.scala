@@ -43,7 +43,7 @@ object Show {
   }
 
   def apply(gc:GuardedCommand):String = {
-    s"""${apply(gc.guard)} → [${gc.cmd.map(apply).mkString(", ")}]""".stripMargin
+    s"""${apply(gc.guard)} → [${if (gc.cmd.isEmpty) "∅" else gc.cmd.map(apply).mkString(", ")}]""".stripMargin
   }
 
   def apply(cmd:Command):String =
