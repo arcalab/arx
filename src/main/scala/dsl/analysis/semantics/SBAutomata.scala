@@ -37,7 +37,7 @@ sealed trait SBTrans {
       val asks = if (askvars.isEmpty) "" else s"Ask($askvars)"
       val unds = if (undvars.isEmpty) "" else s"Und($undvars)"
 
-      val guard = Set(gets,asks,unds,isqs).mkString(",")
+      val guard = Set(gets,asks,unds,isqs).filterNot(_.isEmpty).mkString(",")
 
       val upds = gc.cmd.map(Show(_)).mkString(",")
 
