@@ -131,12 +131,13 @@ object Parser extends RegexParsers {
   def tparams:Parser[List[TypeName]] =
     "<" ~> tnames <~ ">"
 
-  def funDef: Parser[Statement] = {
-    "def" ~> restFunDef
-  }
+  def funDef: Parser[Statement] =
+    "def" ~> log(restFunDef)("") // log(restFunDef)("restFunDef")
+
 
   def restFunDef:Parser[Statement] = {
-    sym = sym.addLevel()
+    sym = sym.addLevel();
+    //println("entering fun def")
     lowerCaseId /* ~ opt("<" ~> dataFormalParams <~ ">")*/ ~ funParamsAndBody ^? ({
       case f ~ rest  if !keywords.contains(f) =>
         sym = sym.add(f, FUN) // quick hack to see if function name is not used/delared inside the function todo: fix it

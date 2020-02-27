@@ -74,7 +74,7 @@ class SymbolsTable {
     * @return whether there is a conflict
     */
   private def conflict(sym:String,symType:SymbolType):Boolean = {
-    //println(s"Checking conflict for ${sym} in tables: ${tables} ")
+//    println(s"Checking conflict for ${sym} in tables: ${tables} ")
     val res = this(sym) match {
       case None => false
       case Some(t) => ((symType == FUN) && this.contains(sym)) ||
