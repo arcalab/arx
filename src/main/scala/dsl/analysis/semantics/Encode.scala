@@ -213,7 +213,7 @@ object Encode{
       // get the arguments that correspond to the first constructor q
       val numArgs = q.params.size
       // make guard with get for the input variable and guard for isQ
-      val guard = Get(in) & IsQ(q.name,in)
+      val guard = Get(in) & IsQ(q.name, Var(in))
       // generate the outputs for this constructor
       var commands:List[Command] = List()
       var outputs:List[String] = List()
@@ -274,7 +274,7 @@ object Encode{
   /**
     * Substitutes a stream builder with fresh names based on a given mapping
     * todo: check if the sets can overlap, then do smart rename to remember new known names
-    * @param sbe stream builder entry
+    * @param sb stream builder entry
     * @param remap mapping from names to new names
     * @return sbe substituted based on remap
     */
@@ -298,7 +298,7 @@ object Encode{
     case Ask(v) if remap.contains(v) => Ask(remap(v))
     case Und(v) if remap.contains(v) => Und(remap(v))
     //case And(g1,g2) => And(rename(g1,remap),rename(g2,remap))
-    case IsQ(q,v) if remap.contains(v) => IsQ(q,remap(v))
+    case IsQ(q,t) => IsQ(q,rename(t,remap)) //if remap.contains(v) => IsQ(q,remap(v))
     case _ => g
   }
 

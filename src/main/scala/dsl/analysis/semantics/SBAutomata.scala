@@ -31,7 +31,7 @@ sealed trait SBTrans {
       val getvars = gc.guard.guards.collect({case g:Get=>g}).map(_.v).mkString(",")
       val askvars = gc.guard.guards.collect({case g:Ask=>g}).map(_.vars).mkString(",")
       val undvars = gc.guard.guards.collect({case g:Und=>g}).map(_.v).mkString(",")
-      val isqs = gc.guard.guards.collect({case g:IsQ=>g}).map(v=>s"is${v.q}${v.term}").mkString(",")
+      val isqs = gc.guard.guards.collect({case g:IsQ=>g}).map(v=>s"is${v.q}${v.arg}").mkString(",")
 
       val gets = if (getvars.isEmpty) "" else s"Get($getvars)"
       val asks = if (askvars.isEmpty) "" else s"Ask($askvars)"
@@ -124,7 +124,7 @@ object SBAutomata {
     for (gc <- sb.gcs ; if satisfies(gc,from,sb)) {
       // inputs get/ask, and outputs variables set
       val getsVars:Set[String] = gc.guard.guards.collect({case g:Get => g}).map(_.v)
-      val askVars  = gc.guard.guards.collect({case g:Ask => g}).map(_.vars)
+      val askVars  = gc.guard.guards.collect({case g:Ask => g}).map(_.v)
       // transition synchronized inputs and ouput
       val ins = getsVars ++ askVars
       val outs = gc.outputs //-- sb.memory
@@ -190,7 +190,7 @@ object SBAutomata {
     */
   private def satisfies(gc:GuardedCommand,st:SBState,sb:StreamBuilder):Boolean = {
     // get inputs of gc (variables in gets and asks in the guard)
-    val insg = gc.guard.guards.collect({case g:Get => g; case g:Ask => g}).map(_.term)
+    val insg = gc.guard.guards.collect({case g:Get => g.v; case g:Ask => g.v})
     // get outputs of gc (variables assigned in commands)
     val outsc = gc.cmd.map(_.variable)
     val res = gc.guard.guards.forall(gi=>satisfies(gi,st,sb))  &&

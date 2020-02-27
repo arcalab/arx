@@ -32,7 +32,7 @@ case class Command(variable:String,term:Term) {}
 sealed trait Term {
   def vars: Set[String] = this match {
     case Var(name) => Set(name)
-    case Q(name, args) => args.toSet.flatMap(_.vars)
+    case Q(name, args) => args.toSet.flatMap((x:Term) => x.vars)
     case GetQ(name, index, term) => term.vars
   }
 }
