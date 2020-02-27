@@ -85,8 +85,8 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
   }
   /** Leaves only commands that assign `outs` or memory variables. */
   def filterOutAndClean(outs:Set[String]): StreamBuilder = {
-    filterOut(cleanMix,outs)
-//    this
+//    filterOut(cleanMix,outs)
+    this
   }
 
   /** optimize commands, by including only `outs` and memory variables,
@@ -97,8 +97,13 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
   private def filterOut(gc: GuardedCommand, outs:Set[String]): GuardedCommand = {
     val (okCmds,oldCmds) = gc.cmd.partition(outs contains _.variable)
     val oldMap = oldCmds.map(x => x.variable -> x.term).toMap
+    val closedGuards = gc.guard.guards.map(g=>closeGuard(g))
     val closedCmds = okCmds.map(x => Command(x.variable,closeTerm(x.term,oldMap)))
-    GuardedCommand(gc.guard,closedCmds)
+    GuardedCommand(closedGuards,closedCmds)
+  }
+  private def closeGuard(item: GuardItem,cmds: Map[String,Term]): GuardItem = item match {
+    case IsQ(q, term) => IsQ(q,closeTerm(term,cmds))
+    case _ => item
   }
   private def closeTerm(term: Term, cmds: Map[String, Term]): Term = term match {
     case Var(name) if cmds contains name => closeTerm(cmds(name),cmds-name) // avoiding loops - not sure if it will stop too soon.
