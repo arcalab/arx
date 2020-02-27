@@ -131,8 +131,8 @@ object SBAutomata {
       // to state
       val to = SBState(
         (from.memories--getsVars)++gc.outputs.intersect(sb.memory),
-        from.activeIns--ins,
-        (from.activeOuts--outs) ++outs.intersect(sb.memory)) // todo: check if it makes sens now
+        from.activeIns--ins ++ outs.intersect(sb.memory),
+        (from.activeOuts--outs) /*++outs.intersect(sb.memory)*/) // todo: check if it makes sens now
       // new transition
       val t = UpdTrans(from,gc,ins--sb.memory,outs--sb.memory,to)
       trans += t
@@ -193,9 +193,11 @@ object SBAutomata {
     val insg = gc.guard.guards.collect({case g:Get => g; case g:Ask => g}).map(_.variable)
     // get outputs of gc (variables assigned in commands)
     val outsc = gc.cmd.map(_.variable)
+    println(s"insg: ${insg} --- activeIns: ${st.activeIns}")
+    println(s"outsc: ${outsc} --- activeOuts: ${st.activeOuts}")
     val res = gc.guard.guards.forall(gi=>satisfies(gi,st,sb))  &&
       (insg.intersect(st.activeIns).nonEmpty || outsc.intersect(st.activeOuts).nonEmpty)
-//    println(s"${Show(gc)} is satisfied by $st: $res")
+    println(s"${Show(gc)} is satisfied by $st: $res")
     res
   }
 

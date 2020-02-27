@@ -132,7 +132,7 @@ object Parser extends RegexParsers {
     "<" ~> tnames <~ ">"
 
   def funDef: Parser[Statement] =
-    "def" ~> log(restFunDef)("") // log(restFunDef)("restFunDef")
+    "def" ~> log(restFunDef)("restFunDef")
 
 
   def restFunDef:Parser[Statement] = {
