@@ -85,20 +85,28 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
   }
   /** Leaves only commands that assign `outs` or memory variables. */
   def filterOutAndClean(outs:Set[String]): StreamBuilder = {
-    filterOut(cleanMix,outs)
-//    this
+    val mix = inputs.intersect(outputs) -- memory
+    val sb = filterOut(this,outs)
+    sb.cleanMix(mix)
   }
 
   /** optimize commands, by including only `outs` and memory variables,
     * and their minimum dependencies  */
-  private def filterOut(sb:StreamBuilder, outs:Set[String]): StreamBuilder =
-    StreamBuilder(sb.init,sb.gcs.map(filterOut(_,outs ++ sb.memory)),sb.inputs,sb.outputs intersect outs, sb.memory)
+  private def filterOut(sb:StreamBuilder, outs:Set[String]): StreamBuilder = {
+    val newGcs = sb.gcs.map(filterOut(_, outs ++ sb.memory))
+    StreamBuilder(sb.init, newGcs, sb.inputs, sb.outputs intersect outs, sb.memory)
+  }
 
   private def filterOut(gc: GuardedCommand, outs:Set[String]): GuardedCommand = {
     val (okCmds,oldCmds) = gc.cmd.partition(outs contains _.variable)
     val oldMap = oldCmds.map(x => x.variable -> x.term).toMap
+    val closedGuards = gc.guard.guards.map(g=>closeGuard(g,oldMap))
     val closedCmds = okCmds.map(x => Command(x.variable,closeTerm(x.term,oldMap)))
-    GuardedCommand(gc.guard,closedCmds)
+    GuardedCommand(Guard(closedGuards),closedCmds)
+  }
+  private def closeGuard(item: GuardItem,cmds: Map[String,Term]): GuardItem = item match {
+    case IsQ(q, term) => IsQ(q,closeTerm(term,cmds))
+    case _ => item
   }
   private def closeTerm(term: Term, cmds: Map[String, Term]): Term = term match {
     case Var(name) if cmds contains name => closeTerm(cmds(name),cmds-name) // avoiding loops - not sure if it will stop too soon.
@@ -109,9 +117,10 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
 
   /** Discards guarded commands with guards that have mixed streams, i.e.,
     *  streams that are both input and output. */
-  def cleanMix: StreamBuilder = {
-    val mix = inputs.intersect(outputs) -- memory
-    //println(s"clean mix:${mix.mkString(",")}\n  in:${inputs}  out:${outputs}")
+  def cleanMix(mix:Set[String]): StreamBuilder = {
+    //val mix = inputs.intersect(outputs) -- memory
+//    println(s"clean mix:${mix.mkString(",")}\n  in:${inputs}  out:${outputs}")
+//    println(s"gcs: ${gcs.map{x => Show(x.guard)}} inputs: ${gcs.map(_.inputs)}")
     StreamBuilder(init,gcs.filter(g => g.inputs.intersect(mix).isEmpty),inputs--mix,outputs,memory)
   }
 

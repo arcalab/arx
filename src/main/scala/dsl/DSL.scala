@@ -74,7 +74,7 @@ object DSL {
   def get(v:String):Guard = Guard(Set(Get(v)))
   def und(v:String):Guard = Guard(Set(Und(v)))
   def ask(v:String):Guard = Guard(Set(Ask(v)))
-  def isQ(n:String,v:String):Guard = Guard(Set(IsQ(n,v)))
+  def isQ(n:String,v:Term):Guard = Guard(Set(IsQ(n,v)))
 
   //def encode(prog:TProgram, ctx:Context):SemanticResult =  Encode(prog,ctx)
 
