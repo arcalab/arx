@@ -45,14 +45,10 @@ object DSL {
   def typeCheck(prog:Program):(TProgram,Context) = {
     // mk type constraints
     val (ctx,t,cons,tp) = infer(prog)
-    //add program type to context
-    // todo: get type of the inputs
-    val (program,programType) = ("Program",FunEntry(TFun(TUnit,t),Context()))
-    val pctx = ctx.add(program,programType)
     // solve type constraints base on context
-    val substitution = TypeCheck.solve(cons,pctx)
+    val substitution = TypeCheck.solve(cons,ctx)
     // apply substitution to context and typed program, expanding destructors
-    val (subsProgram,substCtx) = substitution(tp,pctx)
+    val (subsProgram,substCtx) = substitution(tp,ctx)
     // prettify context
     Prettify.reset()
     val prettyCtx = Prettify(substCtx)

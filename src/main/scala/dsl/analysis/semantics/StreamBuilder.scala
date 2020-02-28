@@ -86,8 +86,10 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
   /** Leaves only commands that assign `outs` or memory variables. */
   def filterOutAndClean(outs:Set[String]): StreamBuilder = {
     val mix = inputs.intersect(outputs) -- memory
+    println(s"mix to delete: ${mix.mkString(",")}")
     val sb = filterOut(this,outs)
     sb.cleanMix(mix)
+    //sb
   }
 
   /** optimize commands, by including only `outs` and memory variables,
@@ -119,7 +121,7 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
     *  streams that are both input and output. */
   def cleanMix(mix:Set[String]): StreamBuilder = {
     //val mix = inputs.intersect(outputs) -- memory
-//    println(s"clean mix:${mix.mkString(",")}\n  in:${inputs}  out:${outputs}")
+    println(s"clean mix:${mix.mkString(",")}\n  in:${inputs}  out:${outputs}")
 //    println(s"gcs: ${gcs.map{x => Show(x.guard)}} inputs: ${gcs.map(_.inputs)}")
     StreamBuilder(init,gcs.filter(g => g.inputs.intersect(mix).isEmpty),inputs--mix,outputs,memory)
   }

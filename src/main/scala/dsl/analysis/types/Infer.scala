@@ -42,12 +42,15 @@ object Infer {
     prog.types.foreach(t => ctx = addUserTypes(t,ctx))
     // infer the type of the program block
     val(pctx,pt,ptcons,tb) = infer(prog.block,ctx)
-    // check the ports context is closed //TODO: how to handle this?
-//    if (!Check.isClosed(pctx.ports))
-//      throw new TypeException(s"Input/Output Typing Context not closed in main program")
     // match input/output context
     val inOutTCons = portsMatch(pctx.ports)
-    (pctx,Simplify(pt),ptcons++inOutTCons,TProgram(prog.imports,prog.types,tb))
+    // add inputs as program input type
+    val openInsType = pctx.ports.filter(p=> !p._2.exists(p => p.pType == Out))
+      .map(p=> p._2.head.tExp)
+    val programType = Simplify(TFun(Simplify(openInsType.foldRight[TExp](TUnit)(TTensor)),pt))
+    // add the program to the context
+    val npctx = pctx.add("Program",FunEntry(programType.asInstanceOf[TFun],ctx))
+    (npctx,programType,ptcons++inOutTCons,TProgram(prog.imports,prog.types,tb))
   }
 
   private def loadImports(imp:List[Import],ctx:Context):Context = {
@@ -72,13 +75,17 @@ object Infer {
   private def importPrimFuns():Map[String,FunEntry] =
     DSL.prelude.importPrimFunctions().map(mkPrimFunEntry).toMap
 
-  private def mkPrimFunEntry(fun:PrimFun):(String,FunEntry) = {
-    val tVar = TVar(freshVar())
-    val insT = (1 to fun.sb._1.inputs.size).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
-    val outsT =(1 to fun.sb._1.outputs.size).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
-    val funT = TFun(Simplify(insT),Simplify(outsT))
-    (fun.name,FunEntry(funT,Context()))
-  }
+  private def mkPrimFunEntry(fun:PrimFun):(String,FunEntry) =
+    if (fun.name == "drain"){
+      val funT = TFun(TTensor(TVar(freshVar()),TVar(freshVar())),TUnit)
+      (fun.name,FunEntry(funT,Context()))
+    } else {
+      val tVar = TVar(freshVar())
+      val insT = (1 to fun.sb._1.inputs.size).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
+      val outsT =(1 to fun.sb._1.outputs.size).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
+      val funT = TFun(Simplify(insT),Simplify(outsT))
+      (fun.name,FunEntry(funT,Context()))
+    }
 
   /**
     * Add user defines to the context
