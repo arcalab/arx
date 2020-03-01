@@ -71,7 +71,7 @@ object Encode{
       // return fresh stream builder
       (sbFresh,List(),sbECtx)
     case TRAssignment(RAssignment(List(x),Port(y)),tlhs, trhs)  =>
-      val m = freshVar()
+      val m = freshVarMem()
       val sbra = sb withCommands(
         ask(m) -> (x := Var(m)),
         get(y) -> (m := Var(y))
@@ -135,8 +135,8 @@ object Encode{
       val (sb,sbIns,sbOuts) = if (sbCtx.contains(name)) sbCtx(name) else sbCtx("id") //otherwise, assume 1->1 function
       // get a stream builder for each argument that is a term
       //val argsSb:List[SemanticResult]  = args.map(a=> encode(a,sbCtx,typeCtx))
-      val argsSb:List[Either[SemanticResult,Var]]  = args.map(a=> { a match {
-        case a:Var => Right(a)
+      val argsSb:List[Either[SemanticResult,TPort]]  = args.map(a=> { a match {
+        case a:TPort => Right(a)
         case _ => Left(encode(a,sbCtx,typeCtx))
       }})
       // fresh variables for all variables in sb
@@ -146,7 +146,7 @@ object Encode{
       val sbFresh = fresh(sb,remap)
       //println("Fresh map:\n" + remap.mkString(","))
       // zip fresh inputs with the output of the corresponding argument (we know they have only 1 output)
-      val argsNames = argsSb.map(r=> if (r.isLeft) r.left.get._2.head else r.right.get.name)
+      val argsNames = argsSb.map(r=> if (r.isLeft) r.left.get._2.head else r.right.get.p)
       val remapInputs:List[(String,String)] = remap.filter(k => sbIns.contains(k._1)).values.toList.zip(argsNames)
       // rename inputs in fresh stream builder based on remapInputs
       val sbRmIns = fresh(sbFresh,remapInputs.toMap)
@@ -178,17 +178,17 @@ object Encode{
       val qArgs = args.take(if (numArgs==0) 1 else numArgs)
       // make a stream builder for each argument that is a term
       //val sbArgs:List[SemanticResult] = qArgs.map(a=> encode(a,sbCtx))
-      val sbArgs:List[Either[SemanticResult,Var]]  = qArgs.map(a=> { a match {
-        case a:Var => Right(a)
+      val sbArgs:List[Either[SemanticResult,TPort]]  = qArgs.map(a=> { a match {
+        case a:TPort => Right(a)
         case _ => Left(encode(a,sbCtx))
       }})
       // make gets for the output variable of each sb in the previous step
-      val getArgs = Guard(sbArgs.map(r => if (r.isLeft) r.left.get._2.head else r.right.get.name)
+      val getArgs = Guard(sbArgs.map(r => if (r.isLeft) r.left.get._2.head else r.right.get.p)
         .map(p => Get(p)).toSet)
       // remove these arguments from the list
       val restArgs = args.drop(if (numArgs==0) 1 else numArgs)
       // build the constructor
-      val argsNames = sbArgs.map(r=> if (r.isLeft) r.left.get._2.head else r.right.get.name)
+      val argsNames = sbArgs.map(r=> if (r.isLeft) r.left.get._2.head else r.right.get.p)
       val constructor = Const(q.name,if (numArgs==0) List() else argsNames.map(p=> Port(p)))
       // composed arguments stream builders into a single stream builder
       val compArgs =  sbArgs.filter(_.isLeft).map(_.left.get._1).foldRight[StreamBuilder](DSL.sb)(_*_)
@@ -203,7 +203,7 @@ object Encode{
                     , arg:TGroundTerm
                     , sbCtx:SBContext): SemanticResult = {
     val (sbIn,in,_) = arg match {
-      case a:Var => (StreamBuilder.empty,List(a.name),sbCtx)
+      case a:TPort => (StreamBuilder.empty,List(a.p),sbCtx)
       case _ => encode(arg,sbCtx)}
     val (gcs,sbs,outs) = mkGCMatch(qs,sbCtx,in.head)
     val buildSb = sb withCommands (gcs:_*) outs (outs:_*) ins in.head
