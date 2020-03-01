@@ -64,7 +64,7 @@ object Show {
     case Get(v) => s"get($v)"
     case Ask(v) => s"ask($v)"
     case Und(v) => s"und($v)"
-    case IsQ(q, v) => s"is$q($v)"
+    case IsQ(q, v) => s"is$q(${Show(v)})"
     //case True => s"true"
   }
 
