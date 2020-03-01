@@ -21,6 +21,7 @@ object Encode{
 
   private var vars:Int = 0
   private def freshVar():String = {vars+=1; s"v${vars-1}"}
+  private def freshVarMem():String = {vars+=1; s"m${vars-1}"}
 
   def apply(program:TProgram, typeCtx:Context):SemanticResult = {
     vars = 0
@@ -139,7 +140,8 @@ object Encode{
         case _ => Left(encode(a,sbCtx,typeCtx))
       }})
       // fresh variables for all variables in sb
-      val remap  = (sb.inputs ++sb.outputs++sb.memory).map(v=> (v,freshVar())).toMap
+      val remap  =  sb.memory              .map(v=> (v,freshVarMem())).toMap ++
+                   (sb.inputs ++sb.outputs).map(v=> (v,freshVar())).toMap
       // get a fresh instantiation of the stream builder based on the new name mapping
       val sbFresh = fresh(sb,remap)
       //println("Fresh map:\n" + remap.mkString(","))
