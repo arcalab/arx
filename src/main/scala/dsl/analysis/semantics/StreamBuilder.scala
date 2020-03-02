@@ -18,7 +18,7 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
     * @return composed stream builder
     */
   def *(other:StreamBuilder):StreamBuilder = {
-//    println(s"====\nI1:${inputs.mkString(",")}  O1:${outputs.mkString(",")}\nI2:${other.inputs.mkString(",")}  O2:${other.outputs.mkString(",")}")
+    println(s"====\nI1:${inputs.mkString(",")}  O1:${outputs.mkString(",")}\nI2:${other.inputs.mkString(",")}  O2:${other.outputs.mkString(",")}")
     // set of ports that must synchronize together
     lazy val sync =
       this.outputs.intersect(other.inputs) ++
@@ -37,7 +37,7 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
     def together(gc1:GuardedCommand,gc2:GuardedCommand):Boolean = {
 //      val r =
       val r1 = gc1.outputs.intersect(other.inputs--other.outputs) .subsetOf(gc2.inputs) //&&
-      val r2 = gc2.outputs.intersect(this.inputs--other.outputs)  .subsetOf(gc1.inputs) //&&
+      val r2 = gc2.outputs.intersect(this.inputs--this.outputs)  .subsetOf(gc1.inputs) //&&
       val r3 = gc1.inputs .intersect(other.inputs ++ other.outputs) .subsetOf(gc2.vars) //&&
       val r4 = gc2.inputs .intersect(this.inputs  ++ this.outputs)  .subsetOf(gc1.vars) //&&
 //        gc2.inputs .intersect(sync) .subsetOf(gc1.vars) &&
