@@ -95,6 +95,9 @@ object Prelude {
       get("in") -> ("m":= Var("in"))
     ) ins "in" mems "m",List("in"),List())
 
+//  private lazy val emptyWrSb = (sb outs "out", List(), List("out"))
+//  private lazy val emptyRdSb = (sb ins "in", List("in"), List())
+
   /* Signature for primitive functions */
 
 //  private lazy val fifo = PrimFun("fifo",1,1)
@@ -120,6 +123,8 @@ object Prelude {
   private lazy val drain = PrimFun("drain",drainsb)
   private lazy val writer = PrimFun("writer",writersb)
   private lazy val reader = PrimFun("reader",readersb)
+//  private lazy val emptWr = PrimFun("emptWr", emptyWrSb)
+//  private lazy val emptRd = PrimFun("emptRd", emptyRdSb)
 
   private lazy val functions :Map[String,PrimFun] =
     List(fifo,fifofull,lossy,sync,id,dupl,xor,merger,drain,writer,reader)
