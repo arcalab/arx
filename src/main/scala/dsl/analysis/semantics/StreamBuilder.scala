@@ -36,10 +36,10 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
     // checks if two gc can execute synchronously
     def together(gc1:GuardedCommand,gc2:GuardedCommand):Boolean = {
 //      val r =
-      val r1 = gc1.outputs.intersect(other.inputs--other.outputs) .subsetOf(gc2.inputs) //&&
-      val r2 = gc2.outputs.intersect(this.inputs--this.outputs)  .subsetOf(gc1.inputs) //&&
-      val r3 = gc1.inputs .intersect(other.inputs ++ other.outputs) .subsetOf(gc2.vars) //&&
-      val r4 = gc2.inputs .intersect(this.inputs  ++ this.outputs)  .subsetOf(gc1.vars) //&&
+      val r1 = gc1.outputs.intersect(other.inputs/* --other.outputs*/) .subsetOf(gc2.inputs) //&&
+      val r2 = gc2.outputs.intersect(this.inputs/*  --this.outputs*/)  .subsetOf(gc1.inputs) //&&
+      val r3 = gc1.inputs .intersect(other.inputs/* ++ other.outputs*/) .subsetOf(gc2.vars) //&&
+      val r4 = gc2.inputs .intersect(this.inputs/*  ++ this.outputs*/)  .subsetOf(gc1.vars) //&&
 //        gc2.inputs .intersect(sync) .subsetOf(gc1.vars) &&
       val r5 = gc1.outputs.intersect(gc2.outputs).isEmpty
       val r = r1 && r2 && r3 && r4 && r5
