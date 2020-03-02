@@ -2,7 +2,7 @@ package dsl.backend
 
 import dsl.DSL
 import dsl.DSL._
-import dsl.analysis.semantics.Var
+import dsl.analysis.semantics.{Q, Var}
 import dsl.common.UndefinedNameException
 
 
@@ -57,6 +57,7 @@ object Prelude {
   ) ins "in" outs "out" mems "m", List("in"),List("out"))
 
   private lazy val fifoFullsb = (fifosb._1 initially ("m" := Var("_p1")),fifosb._2,fifosb._3)
+  private lazy val fifoFull0sb = (fifosb._1 initially ("m" := Q("Zero",List())),fifosb._2,fifosb._3)
 
   private lazy val idsb = (sb withCommands (
     get("in")->("out":=Var("in"))
@@ -114,6 +115,7 @@ object Prelude {
 
   private lazy val fifo = PrimFun("fifo",fifosb)
   private lazy val fifofull = PrimFun("fifofull",fifoFullsb)
+  private lazy val fifofull0 = PrimFun("fifofull0",fifoFull0sb)
   private lazy val lossy = PrimFun("lossy",lossysb)
   private lazy val sync = PrimFun("sync",syncsb)
   private lazy val id = PrimFun("id",idsb)
@@ -127,7 +129,7 @@ object Prelude {
 //  private lazy val emptRd = PrimFun("emptRd", emptyRdSb)
 
   private lazy val functions :Map[String,PrimFun] =
-    List(fifo,fifofull,lossy,sync,id,dupl,xor,merger,drain,writer,reader)
+    List(fifo,fifofull,fifofull0,lossy,sync,id,dupl,xor,merger,drain,writer,reader)
     .map(f=> f.name -> f).toMap
 
   // return the function type for function @name if known
