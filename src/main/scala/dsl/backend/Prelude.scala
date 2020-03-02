@@ -31,15 +31,16 @@ object Prelude {
       |data Unit = U"""
 
   // all primitive types indexed by name
-  private lazy val types:Map[String,PrimType] = mkTypes(List(unit,nat,list,bool,pair,either).mkString("\n"))
+  private lazy val types:Map[String,PrimType] =
+    mkTypes(List(unit,nat,list,bool,pair,either).mkString("\n"))
 
   // return a list of type declarations for all primitive types
-  def importTypes():List[PrimType] = types.map(t=>t._2).toList
+  def importTypes():List[PrimType] = types.values.toList
 
   // return the type declaration for type @name if known
   def importType(name:String):PrimType =
     if (types.contains(name)) types(name)
-    else throw new UndefinedNameException(s"Unknown type ${name}")
+    else throw new UndefinedNameException(s"Unknown type $name")
 
   // generate type declarations for primitive types
   private def mkTypes(typesDef:String):Map[String,PrimType] = {
@@ -96,8 +97,8 @@ object Prelude {
       get("in") -> ("m":= Var("in"))
     ) ins "in" mems "m",List("in"),List())
 
-//  private lazy val emptyWrSb = (sb outs "out", List(), List("out"))
-//  private lazy val emptyRdSb = (sb ins "in", List("in"), List())
+  private lazy val nowritersb = (sb outs "out", List(), List("out"))
+  private lazy val noreadersb = (sb ins "in", List("in"), List())
 
   /* Signature for primitive functions */
 
@@ -125,22 +126,22 @@ object Prelude {
   private lazy val drain = PrimFun("drain",drainsb)
   private lazy val writer = PrimFun("writer",writersb)
   private lazy val reader = PrimFun("reader",readersb)
-//  private lazy val emptWr = PrimFun("emptWr", emptyWrSb)
-//  private lazy val emptRd = PrimFun("emptRd", emptyRdSb)
+  private lazy val nowriter = PrimFun("nowriter", nowritersb)
+  private lazy val noreader = PrimFun("noreader", noreadersb)
 
   private lazy val functions :Map[String,PrimFun] =
-    List(fifo,fifofull,fifofull0,lossy,sync,id,dupl,xor,merger,drain,writer,reader)
+    List(fifo,fifofull,fifofull0,lossy,sync,id,dupl,xor,merger,drain,writer,reader,nowriter,noreader)
     .map(f=> f.name -> f).toMap
 
   // return the function type for function @name if known
   def importPrimFun(name:String):PrimFun =
     if (functions.contains(name)) functions(name)
-    else throw new UndefinedNameException(s"Unknown function ${name}")
+    else throw new UndefinedNameException(s"Unknown function $name")
 
   // returns a list of function types for all primitive functions
-  def importPrimFunctions():List[PrimFun] = functions.map(f=>f._2).toList
+  def importPrimFunctions():List[PrimFun] = functions.values.toList
 
-  def primitiveFunctionNames():Set[String] = functions.map(f=>f._1).toSet
+  def primitiveFunctionNames():Set[String] = functions.keySet
   // Complex functions
 
   private lazy val counter =
@@ -272,7 +273,8 @@ object Prelude {
         } else throw new UndefinedNameException(s"Unknown module name ${i.module}")
     }
 
-  private def findModule(names:List[String],namespace:Map[String,Module]):Option[Module] = names match {
+  @scala.annotation.tailrec
+  private def findModule(names:List[String], namespace:Map[String,Module]):Option[Module] = names match {
     case Nil => None
     case n :: Nil if namespace.contains(n) => Some(namespace(n))
     case n :: ns if namespace.contains(n) =>

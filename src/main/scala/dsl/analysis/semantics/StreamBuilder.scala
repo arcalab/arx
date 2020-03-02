@@ -40,7 +40,6 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
         gc2.outputs.intersect(this.inputs/*  --this.outputs*/)  .subsetOf(gc1.inputs) &&
         gc1.inputs .intersect(other.inputs/* ++ other.outputs*/) .subsetOf(gc2.vars) &&
         gc2.inputs .intersect(this.inputs/*  ++ this.outputs*/)  .subsetOf(gc1.vars) &&
-//        gc2.inputs .intersect(sync) .subsetOf(gc1.vars) &&
         gc1.outputs.intersect(gc2.outputs).isEmpty
 //      val r = r1 && r2 && r3 && r4 && r5
 //      println(s"Together ${Show(gc1)} * ${Show(gc2)}: $r  ($r1,$r2,$r3,$r4,$r5)\n" +
@@ -90,8 +89,6 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
 //    println(s"mix to delete: ${mix.mkString(",")}")
     val sb = filterOut(this,outs)
     sb.cleanMix(mix)
-//    sb
-//    this
   }
 
   /** optimize commands, by including only `outs` and memory variables,

@@ -75,17 +75,22 @@ object Infer {
   private def importPrimFuns():Map[String,FunEntry] =
     DSL.prelude.importPrimFunctions().map(mkPrimFunEntry).toMap
 
-  private def mkPrimFunEntry(fun:PrimFun):(String,FunEntry) =
-    if (fun.name == "drain"){
+  private def mkPrimFunEntry(fun:PrimFun):(String,FunEntry) = fun.name match {
+    case "drain" =>
       val funT = TFun(TTensor(TVar(freshVar()),TVar(freshVar())),TUnit)
       (fun.name,FunEntry(funT,Context()))
-    } else {
+    case "nowriter" =>
+      (fun.name , FunEntry(TFun(TUnit, TVar(freshVar())) , Context()))
+    case "noreader" =>
+      (fun.name , FunEntry(TFun(TVar(freshVar()),TUnit) , Context()))
+
+    case _ =>
       val tVar = TVar(freshVar())
       val insT = (1 to fun.sb._1.inputs.size).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
       val outsT =(1 to fun.sb._1.outputs.size).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
       val funT = TFun(Simplify(insT),Simplify(outsT))
       (fun.name,FunEntry(funT,Context()))
-    }
+  }
 
   /**
     * Add user defines to the context
