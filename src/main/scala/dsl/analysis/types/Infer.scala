@@ -35,9 +35,9 @@ object Infer {
     // create a new context
     var ctx = Context()
     // add primitive functions
-    ctx = Context(ctx.adts,importPrimFuns(),ctx.ports)
-    // load imports
-    ctx = loadImports(prog.imports,ctx)//Context()
+    //ctx = Context(ctx.adts,importPrimFuns(),ctx.ports)
+    // load imports and primitive funs
+    ctx = loadImportsAndPrims(prog.imports,ctx)//Context()
     // add the user defined types
     prog.types.foreach(t => ctx = addUserTypes(t,ctx))
     // infer the type of the program block
@@ -53,29 +53,37 @@ object Infer {
     (npctx,programType,ptcons++inOutTCons,TProgram(prog.imports,prog.types,tb))
   }
 
-  private def loadImports(imp:List[Import],ctx:Context):Context = {
-    val content:List[ModuleContent] = imp.flatMap(i=>Prelude.getImport(i))
-    loadContent(content,ctx)
+  private def loadImportsAndPrims(imp:List[Import],ctx:Context):Context = {
+    val mc:List[ModuleContent] = imp.flatMap(i=>Prelude.getImport(i))
+
+    val primTypes = mc.collect({case p:PrimType => p})
+    val primFuns = mc.collect({case p:PrimFun => p})
+    val complexFun = mc.collect({case p:ComplFun => p})
+
+    val tctx = loadContent(primTypes,ctx)
+    val pfctx = Context(ctx.adts,importPrimFuns(tctx),ctx.ports)
+    val fctx = loadContent(primFuns,pfctx)
+    val cfctx = loadContent(complexFun,fctx)
+    cfctx
   }
 
   private def loadContent(mc:List[ModuleContent],ctx:Context):Context = mc match {
     case Nil => ctx
     case PrimType(n,td)::ls =>
-      val nctx = loadContent(ls,ctx)
-      addUserTypes(td,nctx)
-    case PrimFun(n,sb)::ls =>
-      val nctx = loadContent(ls,ctx)
-      nctx.add(n,mkPrimFunEntry(PrimFun(n,sb))._2)
+      val nctx = addUserTypes(td,ctx)
+      loadContent(ls,nctx)
+    case PrimFun(n,sb,params)::ls =>
+      val nctx = ctx.add(n,mkPrimFunEntry(PrimFun(n,sb,params),ctx)._2)
+      loadContent(ls,nctx)
     case ComplFun(n,fd)::ls =>
-      val nctx = loadContent(ls,ctx)
-      val (nfctx,ft,cons,tfd) = infer(fd,nctx)
-      nfctx
+      val (nfctx,ft,cons,tfd) = infer(fd,ctx)
+      loadContent(ls,nfctx)
   }
 
-  private def importPrimFuns():Map[String,FunEntry] =
-    DSL.prelude.importPrimFunctions().map(mkPrimFunEntry).toMap
+  private def importPrimFuns(ctx:Context):Map[String,FunEntry] =
+    DSL.prelude.importPrimFunctions().map(mkPrimFunEntry(_,ctx)).toMap
 
-  private def mkPrimFunEntry(fun:PrimFun):(String,FunEntry) = fun.name match {
+  private def mkPrimFunEntry(fun:PrimFun,ctx:Context):(String,FunEntry) = fun.name match {
     case "drain" =>
       val funT = TFun(TTensor(TVar(freshVar()),TVar(freshVar())),TUnit)
       (fun.name,FunEntry(funT,Context()))
@@ -86,10 +94,12 @@ object Infer {
 
     case _ =>
       val tVar = TVar(freshVar())
+      // todo: to check, for now is ok to use same tvar because only fifofull supports instantiation:
+      val data = fun.params.map(_=>tVar)
       val insT = (1 to fun.sb._1.inputs.size).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
       val outsT =(1 to fun.sb._1.outputs.size).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
       val funT = TFun(Simplify(insT),Simplify(outsT))
-      (fun.name,FunEntry(funT,Context()))
+      (fun.name,FunEntry(funT,Context(),data))
   }
 
   /**
@@ -256,11 +266,11 @@ object Infer {
     case gt:GroundTerm => infer(gt,ctx)
     case FunctionApp(sfun, args) =>
       // get the type of the stream function
-      val sfTypeRes:SFTypeResult = infer(sfun,ctx)
-//      println("Function type: "+ sfTypeRes._2)
-      val sfType = TypeCheck.isFunType(sfTypeRes._2)
+      val (sfctx,sft,sfcons,tsf):SFTypeResult = infer(sfun,ctx)
+      //println("Function ctx: "+ sfctx)
+      val sfType = TypeCheck.isFunType(sft)
       // get the type of each actual param
-      var nctx = ctx
+      var nctx = sfctx
       var apType:List[GTTypeResult] = List()
       for (a <- args) {
         val aType = infer(a,nctx)
@@ -272,18 +282,38 @@ object Infer {
       // get type constraints from actual to formal params
       val tcons  = Set(TCons(actualPsType,sfType.tIn))
       // return the result
-      (nctx,sfType.tOut,apType.flatMap(r=> r._3).toSet++tcons,TFunApp(sfTypeRes._4,sfType.tOut,apType.map(_._4)))
+      (nctx,sfType.tOut,apType.flatMap(r=> r._3).toSet++tcons++sfcons,TFunApp(tsf,sfType.tOut,apType.map(_._4)))
   }
 
   private def infer(sf:StreamFun,ctx:Context):SFTypeResult = sf match {
-    case FunName(f) if ctx.functions.contains(f) =>
+    case FunName(f,d) if ctx.functions.contains(f) =>
       // get function entry
       val fEntry = ctx.functions(f)
-      // get fresh type for the function
-      val subst = Substitution(fEntry.tExp.vars.map(v => v->TVar(freshVar())).toMap)
+      // get fresh type for the function, including its data params
+      val subst = Substitution(fEntry.tExp.vars.map(v => v->TVar(freshVar())).toMap ++
+        fEntry.dps.flatMap(te=>te.vars).map(v=>v->TVar(freshVar())))
+      // substitute types accordingly
       val fFType = subst(fEntry.tExp)
-      (ctx,fFType,Set(),TFunName(f,fFType))
-    case FunName(f) => //TODO: Check if it makes sense
+      val dFtype = fEntry.dps.map(p => subst(p))
+      // infer the types of data params
+      var nctx = ctx
+      var dtype:List[GTTypeResult] = List()
+      for (a <- d) {
+        val aType = infer(a,nctx)
+        dtype :+= aType
+        nctx = aType._1
+      }
+      // tensor for data args type
+      val dataArgsType = Simplify(dtype.map(r => r._2).foldRight[TExp](TUnit)(TTensor))
+      //println(s"[FUN NAME]\nData Arguments Types:\n ${Show(dataArgsType)}")
+      // tensor for data params type
+      val dataPsType = Simplify(dFtype.foldRight[TExp](TUnit)(TTensor))
+      //println(s"[FUN NAME]\nData Params Types:\n ${dFtype.mkString(",")}\n ${Show(dataPsType)}")
+      // get type constraints from actual to formal params
+      val dcons  = Set(TCons(dataPsType,dataArgsType))
+      //println(s"[FUN NAME]\nConstraints: ${dcons.mkString(",")}")
+      (ctx,fFType,dcons,TFunName(f,fFType,dtype.map(r => r._4)))
+    case FunName(f,d) => //TODO: Check if it makes sense
       // special case, if it doesn't exists assume it has to be a 1->1 sync with a name
       val tVar = TVar(freshVar())
       // create dummy function type

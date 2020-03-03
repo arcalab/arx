@@ -57,8 +57,8 @@ object Prelude {
     get("m") -> ("out":= Var("m"))
   ) ins "in" outs "out" mems "m", List("in"),List("out"))
 
-  private lazy val fifoFullsb = (fifosb._1 initially ("m" := Var("_p1")),fifosb._2,fifosb._3)
-  private lazy val fifoFull0sb = (fifosb._1 initially ("m" := Q("Zero",List())),fifosb._2,fifosb._3)
+  private lazy val fifoFullsb = (fifosb._1 initially ("m" := Var("p1")),fifosb._2,fifosb._3)
+  //private lazy val fifoFull0sb = (fifosb._1 initially ("m" := Q("Zero",List())),fifosb._2,fifosb._3)
 
   private lazy val idsb = (sb withCommands (
     get("in")->("out":=Var("in"))
@@ -89,7 +89,7 @@ object Prelude {
     (get("in1") & get("in2")) -> ()
   ) ins ("in1","in2"),List("in1","in2"),List())
 
-  private lazy val writersb = (sb initially ("m" := Var("_p1")) withCommands (
+  private lazy val writersb = (sb initially ("m" := Var("p1")) withCommands (
       get("m") -> ("out":= Var("m"))
   ) outs "out" mems "m", List(),List("out"))
 
@@ -115,8 +115,8 @@ object Prelude {
 //  private lazy val reader = PrimFun("reader",1,0)
 
   private lazy val fifo = PrimFun("fifo",fifosb)
-  private lazy val fifofull = PrimFun("fifofull",fifoFullsb)
-  private lazy val fifofull0 = PrimFun("fifofull0",fifoFull0sb)
+  private lazy val fifofull = PrimFun("fifofull",fifoFullsb,List("p1"))
+  //private lazy val fifofull0 = PrimFun("fifofull0",fifoFull0sb,List("p1"))
   private lazy val lossy = PrimFun("lossy",lossysb)
   private lazy val sync = PrimFun("sync",syncsb)
   private lazy val id = PrimFun("id",idsb)
@@ -130,7 +130,7 @@ object Prelude {
   private lazy val noreader = PrimFun("noreader", noreadersb)
 
   private lazy val functions :Map[String,PrimFun] =
-    List(fifo,fifofull,fifofull0,lossy,sync,id,dupl,xor,merger,drain,writer,reader,nowriter,noreader)
+    List(fifo,fifofull,lossy,sync,id,dupl,xor,merger,drain,writer,reader,nowriter,noreader)
     .map(f=> f.name -> f).toMap
 
   // return the function type for function @name if known

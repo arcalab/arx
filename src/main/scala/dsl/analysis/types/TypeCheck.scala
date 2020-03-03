@@ -17,9 +17,10 @@ object TypeCheck {
     //println(s"Initial constraints: ${cons.mkString(",")}")
     var subst:Map[TVar,TExp] = Substitute(solvedCons)
     var substitute = Substitution(subst)
+    //println(s"Substitution: ${subst.mkString(",")}")
     // try to substitute known variables in unsolved destructor constraints
     val substDestr:Set[TCons] = unsolvedCons.map(tc => TCons(substitute(tc.l),substitute(tc.r)))
-    //println(s"Substituted destructors: ${substDestr.mkString(",")}")
+//    println(s"Substituted destructors: ${substDestr.mkString(",")}")
     // expand destructors in unsolved constraints
     val expandDestrCons:Set[TCons]= substDestr.map(tc=> TCons(Destructor.expand(tc.l,ctx),Destructor.expand(tc.r,ctx)))
     //println(s"Expanded destructors: ${expandDestrCons.mkString(",")}")
