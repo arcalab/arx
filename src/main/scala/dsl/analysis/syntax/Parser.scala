@@ -73,10 +73,13 @@ object Parser extends RegexParsers {
 
   def ground: Parser[GroundTerm] =
     lowerCaseId ^^ Port |
-    capitalId ~ opt(args) ^^ {
-      case q~as => Const(q,as.getOrElse(Nil))
-    }
+    groundQs
 
+
+  def groundQs:Parser[Const] =
+    capitalId ~ opt(args) ^^ {
+      case q ~ as => Const(q, as.getOrElse(Nil))
+    }
 //  def strFun: Parser[StreamFun] =
 //    oneStrFun | groupStrFun
 
@@ -94,7 +97,8 @@ object Parser extends RegexParsers {
 //      }
 
   def groupStrFun:Parser[StreamFun] =
-    lowerCaseId ^^ FunName |
+    lowerCaseId ~ opt( "<" ~> rep1sep(groundQs,",") <~ ">")^^ {
+      case f~qs => FunName(f,qs.getOrElse(List()))} |
     "{" ~> parOrSeq <~ "}"
 
 

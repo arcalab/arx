@@ -37,7 +37,7 @@ case class Const(q:String,
                  args:List[GroundTerm]) extends GroundTerm
 
 sealed abstract class StreamFun
-case class FunName(f:String) extends StreamFun
+case class FunName(f:String,data:List[Const]=List()) extends StreamFun
 case object Build            extends StreamFun
 case object Match            extends StreamFun
 case class SeqFun(f1:StreamFun, f2:StreamFun) extends StreamFun

@@ -44,7 +44,7 @@ object Prettify {
   }
 
   def apply(tsf:TStreamFun):TStreamFun = tsf match {
-    case TFunName(f,t)  => TFunName(f,apply(t))
+    case TFunName(f,t,d)  => TFunName(f,apply(t),d.map(apply))
     case TBuild(t,ta)   => TBuild(apply(t),apply(ta))
     case TMatch(t,ta)   => TMatch(apply(t),apply(ta))
     case TSeqFun(t1,t2) => TSeqFun(apply(t1),apply(t2))

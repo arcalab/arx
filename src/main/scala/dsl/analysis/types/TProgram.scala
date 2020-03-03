@@ -34,7 +34,7 @@ case class TPort(p:String, t:TExp)              extends TGroundTerm
 case class TConst(q:Const, t:TExp, tIn:List[TGroundTerm])  extends TGroundTerm
 
 sealed abstract class TStreamFun
-case class TFunName(name:String, t:TExp)           extends TStreamFun
+case class TFunName(name:String, t:TExp,data:List[TGroundTerm]=List()) extends TStreamFun
 case class TBuild(tIn:TExp, tOut:TExp)             extends TStreamFun
 case class TMatch(tIn:TExp, tOut:TExp)             extends TStreamFun
 case class TSeqFun(tf1:TStreamFun, tf2:TStreamFun) extends TStreamFun

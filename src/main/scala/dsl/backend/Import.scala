@@ -19,6 +19,6 @@ sealed trait ModuleContent {
 }
 
 //case class PrimFun(name:String,ins:Int,outs:Int) extends ModuleContent
-case class PrimFun(name:String,sb:StreamBuilderEntry) extends ModuleContent
+case class PrimFun(name:String,sb:StreamBuilderEntry,params:List[String]=List()) extends ModuleContent
 case class ComplFun(name:String,definition:FunDef) extends ModuleContent
 case class PrimType(name:String,declaration:TypeDecl) extends ModuleContent

@@ -46,7 +46,7 @@ case class Substitution(sub:Map[TVar,TExp]) {
   }
 
   def apply(tsf:TStreamFun, ctx:Context):TStreamFun = tsf match {
-    case TFunName(f,t)  => TFunName(f,apply(t,ctx))
+    case TFunName(f,t,ds)  => TFunName(f,apply(t,ctx),ds.map(d=>apply(d,ctx)))
     case TBuild(tin,tout)   => TBuild(apply(tin,ctx),apply(tout,ctx))//TBuild(Destructor.expand(apply(t,ctx),ctx),Destructor.expand(apply(ta),ctx))
     case TMatch(tin,tout)   => TMatch(apply(tin,ctx),apply(tout,ctx))//TMatch(Destructor.expand(apply(t,ctx),ctx),Destructor.expand(apply(ta),ctx))
     case TSeqFun(t1,t2) => TSeqFun(apply(t1,ctx),apply(t2,ctx))
