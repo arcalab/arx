@@ -65,7 +65,7 @@ object Net {
         case TAssignment(Assignment(vars, _),_,texpr) =>
           assgnToNet(vars, texpr) ++ apply(tail)
         case TRAssignment(RAssignment(vars, _),_,texpr) =>
-          assgnToNet(vars, texpr) ++ apply(tail)
+          assgnToNet(vars, texpr,reactive=true) ++ apply(tail)
         case TFunApp(tsfun,_,tIn) =>
           val res = funAppToNet(tsfun, tIn, tail)
           //println(s"got funAppToNet - $res")
@@ -77,15 +77,25 @@ object Net {
       }
   }
 
-  def assgnToNet(vars: List[String], expr: TStreamExpr)
+  def assgnToNet(vars: List[String], expr: TStreamExpr,reactive:Boolean=false)
                 (implicit gm:BuildContext): Net = {
 
     val netE: Net = expr match { //apply(List(expr))
       case TPort(nm,_) =>
         val x = gm.getPort(nm,In)
         val out = gm.getPort(vars.head,Out) // vars must be singleton to type check
-        Net(List(Connector("id",Set(x),Set(out))),Set(x),Set())
-      case _ => apply(List(expr))
+        Net(List(Connector(if (reactive) "rid" else "id",Set(x),Set(out))),Set(x),Set())
+      case _ =>
+        var e = apply(List(expr))
+        if (reactive) {
+          val nouts = e.outs.zip(e.outs.map(p=> gm.fresh))
+          val reactConns =  nouts.map(o => Connector("rid",Set(o._1),Set(o._2)))
+          val reactNet = Net(reactConns.toList++e.prims,e.ins,nouts.map(_._2))
+          //println(s"expression result: ${e}")
+          //println(s"reactive expression result: ${reactNet}")
+          e = reactNet
+        }
+        e
     }
     val sigma: Map[IPort,IPort] = vars.zip(netE.outs)
         .map((pair:(String,IPort)) => gm.ports.get(pair._1) match {
@@ -97,7 +107,9 @@ object Net {
             pair._2 -> pair._2
         })
         .toMap
+    //println(s"[netExp]: ${netE}")
     val netAssg = replace(sigma)(netE)
+    //println(s"[netAssg]: ${netAssg}")
     Net(netAssg.prims,netAssg.ins,Set()) // clean outs
   }
 
@@ -114,7 +126,7 @@ object Net {
     val gm2 = gm.cleanedPorts
 
     fun match {
-      case TFunName(nm,_) =>
+      case TFunName(nm,_,_) =>
         val hide = nm.lastOption.contains('_')
         val name = if (hide) nm.dropRight(1) else nm
         gm.fun.get(name) match {

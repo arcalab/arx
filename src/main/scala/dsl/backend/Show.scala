@@ -127,7 +127,7 @@ object Show {
       case None => ""
     })
   def apply(fun: StreamFun): String = fun match {
-    case FunName(f) => f
+    case FunName(f,_) => f
     case Build => "build"
     case Match => "match"
   }
