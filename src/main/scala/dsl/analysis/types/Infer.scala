@@ -61,7 +61,7 @@ object Infer {
     val complexFun = mc.collect({case p:ComplFun => p})
 
     val tctx = loadContent(primTypes,ctx)
-    val pfctx = Context(ctx.adts,importPrimFuns(tctx),ctx.ports)
+    val pfctx = Context(tctx.adts,importPrimFuns(tctx),tctx.ports)
     val fctx = loadContent(primFuns,pfctx)
     val cfctx = loadContent(complexFun,fctx)
     cfctx
