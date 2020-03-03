@@ -1,12 +1,10 @@
 package dsl.analysis.semantics
 
-import dsl.backend.{Show, Simplify}
-
 /**
   * A stream builder consists of an initial configuration (of commands),
   * and a list of guarded commands
  *
-  * @param gcs
+  * @param gcs guarded commands
   */
 case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
                          , inputs:Set[String]=Set(), outputs:Set[String]=Set(), memory:Set[String]=Set()) {
@@ -20,11 +18,11 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
   def *(other:StreamBuilder):StreamBuilder = {
 //    println(s"====\nI1:${inputs.mkString(",")}  O1:${outputs.mkString(",")}\nI2:${other.inputs.mkString(",")}  O2:${other.outputs.mkString(",")}")
     // set of ports that must synchronize together
-    lazy val sync =
-      this.outputs.intersect(other.inputs) ++
-      this.inputs.intersect(other.outputs) ++
-      this.inputs.intersect(other.inputs) --
-      this.memory -- other.memory
+//    lazy val sync =
+//      this.outputs.intersect(other.inputs) ++
+//      this.inputs.intersect(other.outputs) ++
+//      this.inputs.intersect(other.inputs) --
+//      this.memory -- other.memory
 
     // checks if a gc can execute independently
     def alone(gc:GuardedCommand, sbins:Set[String], osbins:Set[String]):Boolean = {
@@ -144,8 +142,8 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
   /**
     * After composition of gc, hides all variables that were input streams but are now both,
     * input and output streams.
-    * @param guard
-    * @param hide
+    * @param guard input guard to be transformed
+    * @param hide mixed ports that should be hidden
     * @return new guard without mix ports in [Get] and [Und] guards
     */
   private def hideMix(guard:Guard,hide:Set[String]):Guard = 
@@ -159,8 +157,8 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
     * @return new guard without mix ports in [Get] and [Und] guards
     */
   private def hideMix(guard:GuardItem,hide:Set[String]):Set[GuardItem] = guard match {
-    case Get(v) if (hide.contains(v))  => Set() //else guard
-    case Ask(v) if (hide.contains(v))  => Set() //else guard
+    case Get(v) if hide.contains(v)  => Set() //else guard
+    case Ask(v) if hide.contains(v)  => Set() //else guard
     case _ => Set(guard)
   }
 }
