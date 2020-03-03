@@ -128,9 +128,11 @@ object Encode{
     case TFunApp(TBuild(_, TBase(name,_)), _, targs) =>
       val constructors:List[ConstEntry] = typeCtx.adts(name).constructors
       mkBuild(constructors,targs,sbCtx)
-    case TFunApp(TFunName(name,_),_, args) =>
+    case TFunApp(TFunName(name,_,data),_, args) =>
       // get the stream builder entry associated to name
-      val (sb,sbIns,sbOuts) = if (sbCtx.contains(name)) sbCtx(name) else sbCtx("id") //otherwise, assume 1->1 function
+      val (sbf,sbIns,sbOuts) = if (sbCtx.contains(name)) sbCtx(name) else sbCtx("id") //otherwise, assume 1->1 function
+      // substitute data params by args if any //todo: for now only supported for primitive functions
+      val sb = instantiate(sbf,data)
       // get a stream builder for each argument that is a term
       //val argsSb:List[SemanticResult]  = args.map(a=> encode(a,sbCtx,typeCtx))
       val argsSb:List[Either[SemanticResult,TPort]]  = args.map {
@@ -155,6 +157,17 @@ object Encode{
     case _ => throw new RuntimeException(s"Stream Expression $se of type ${se.getClass} not supported.")
     // todo: Any kind of StreamFun if we go back to having this option,
     //    but if will required sequence of inputs as well.
+  }
+
+  private def instantiate(sb: StreamBuilder, data: List[TGroundTerm]):StreamBuilder = {
+    val map = data.zipWithIndex.map(d=> s"p${d._2+1}" -> toTerm(d._1)).toMap
+    val ninit = sb.init.map(c=>instantiate(c,map))
+    StreamBuilder(ninit,sb.gcs,sb.inputs,sb.outputs,sb.memory)
+  }
+
+  private def instantiate(cmd:Command,map:Map[String,Term]):Command = cmd match {
+    case Command(v,Var(n)) => Command(v,map.getOrElse(n,Var(n)))
+    case _ => cmd
   }
 
   private def mkBuild(qs:List[ConstEntry]
@@ -316,5 +329,9 @@ object Encode{
   private def toTerm(gt:GroundTerm):Term = gt match {
     case Port(x) => Var(x)
     case Const(name,args) => Q(name,args.map(a=>toTerm(a)))
+  }
+  private def toTerm(gt:TGroundTerm):Term = gt match {
+    case TPort(x,_) => Var(x)
+    case TConst(q,_,targs) => Q(q.q,targs.map(toTerm))
   }
 }
