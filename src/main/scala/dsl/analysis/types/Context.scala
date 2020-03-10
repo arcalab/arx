@@ -25,7 +25,7 @@ case class Context(adts : Map[String,TypeEntry],
         checkNotIn(name,functions++adts)
         var oldPortEntries:List[PortEntry] = ports.getOrElse(name,List())
         new Context(adts, functions, ports + (name -> (p::oldPortEntries)))
-    case f@FunEntry(_,_)=>
+    case f@FunEntry(_,_,_)=>
         checkNotIn(name,context)
         new Context(adts,functions+(name->f),ports)
     case t@TypeEntry(_,_) =>
