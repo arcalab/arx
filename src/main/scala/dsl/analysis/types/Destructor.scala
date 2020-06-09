@@ -35,7 +35,10 @@ object Destructor {
   }
 
   private def destruct(ctx:Context,paramTypes:List[TExp]):TExp =  paramTypes match {
-    case Nil => ctx.adts("Unit").tExp //TBase("Unit",List())
+    case Nil =>
+      if (!ctx.adts.contains("Unit"))
+        throw new TypeException(s"Stream fun build requires Unit type. Try 'import Types.Unit'")
+      else ctx.adts("Unit").tExp //TBase("Unit",List())
     case _ => Simplify(paramTypes.foldRight[TExp](TUnit)(TTensor))
     //case p::ps => TTensor(apply(ctx,p),destruct(ctx,ps))
   }
