@@ -145,6 +145,9 @@ object Infer {
   }
 
   private def infer(st:Statement,ctx:Context):STypeResult = st match {
+    case f@FunctionApp(Match,_) =>
+      throw new TypeException(s"Cannot infer the type of 'match' in ${Show(f)}. " +
+        s"Try assigning its output to a sequence of variables")
     case se:StreamExpr => infer(se,ctx)
     case a@Assignment(variables, expr) =>
       val (ectx,tcons,lhsTypes,etse) = inferAsg(variables,expr,ctx)
@@ -318,7 +321,7 @@ object Infer {
       val dataPsType = Simplify(dFtype.foldRight[TExp](TUnit)(TTensor))
       //println(s"[FUN NAME]\nData Params Types:\n ${dFtype.mkString(",")}\n ${Show(dataPsType)}")
       // get type constraints from actual to formal params
-      val dcons  = Set(TCons(dataPsType,dataArgsType))
+      val dcons:Set[TCons] = if (d.isEmpty) Set() else Set(TCons(dataPsType,dataArgsType))
       //println(s"[FUN NAME]\nConstraints: ${dcons.mkString(",")}")
       (ctx,fFType,dcons,TFunName(f,fFType,dtype.map(r => r._4)))
     case FunName(f,d) => //TODO: Check if it makes sense

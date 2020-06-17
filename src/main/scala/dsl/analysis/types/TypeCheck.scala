@@ -25,7 +25,7 @@ object TypeCheck {
     val expandDestrCons:Set[TCons]= substDestr.map(tc=> TCons(Destructor.expand(tc.l,ctx),Destructor.expand(tc.r,ctx)))
     //println(s"Expanded destructors: ${expandDestrCons.mkString(",")}")
     // try to unify expanded unsolved constraints
-    val (solved,unsolved) = Unify(expandDestrCons)
+    val (solved,unsolved) = Unify.withReplacedDestr(expandDestrCons)
     //println(s"New solved from destructors: ${solved.mkString("\n")}")
     if (unsolved.nonEmpty)
       throw new TypeException(s"Impossible to unify type constraints:\n ${unsolved.map(Show(_)).mkString(",")}")
