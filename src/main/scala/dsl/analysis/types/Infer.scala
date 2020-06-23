@@ -56,7 +56,7 @@ object Infer {
   private def loadImportsAndPrims(imp:List[Import],ctx:Context):Context = {
     val mc:List[ModuleContent] = imp.flatMap(i=>Prelude.getImport(i))
 
-    val primTypes = mc.collect({case p:PrimType => p})
+    val primTypes = Prelude.importPrimTypes() ++ mc.collect({case p:PrimType => p})
     val primFuns = mc.collect({case p:PrimFun => p})
     val complexFun = mc.collect({case p:ComplFun => p})
 

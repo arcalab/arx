@@ -35,7 +35,7 @@ object Prelude {
     mkTypes(List(unit,nat,list,bool,pair,either).mkString("\n"))
 
   // return a list of type declarations for all primitive types
-  def importTypes():List[PrimType] = types.values.toList
+  def importPrimTypes():List[PrimType] = types.values.toList
 
   // return the type declaration for type @name if known
   def importType(name:String):PrimType =
@@ -297,7 +297,7 @@ object Prelude {
 
   // MODULES
 
-  private lazy val typesMod = Module("Types",List(),importTypes())
+  private lazy val typesMod = Module("Types",List(),importPrimTypes())
   private lazy val connsMod = Module("Conn",List(primitiveMod,mathMod),List())
   private lazy val primitiveMod = Module("Prim",List(),importPrimFunctions())
   private lazy val mathMod = Module("Math",List(),loadComplexFunctions())
