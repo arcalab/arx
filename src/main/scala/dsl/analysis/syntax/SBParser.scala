@@ -3,6 +3,7 @@ package dsl.analysis.syntax
 import dsl.analysis.semantics._
 import dsl.backend.Show
 
+import scala.util.matching.Regex
 import scala.util.parsing.combinator.RegexParsers
 
 /**
@@ -16,10 +17,12 @@ object SBParser extends RegexParsers {
     parseAll(sb,sbs)
   }
 
+  override def skipWhitespace = true
+  override val whiteSpace: Regex = "( |\t|\r|\f|\n|//.*)+".r
+
   val lowerCaseId:Parser[String] = """[a-z][a-zA-Z0-9_]*""".r
   val upperCaseId:Parser[String] = """[A-Z][a-zA-Z0-9_]*""".r
   val num:Parser[Int] = """[0-9][0-9]*""".r ^^ {case n => n.toInt}
-
 
   def sb:Parser[StreamBuilder] =
     rep(sbdef) ~
