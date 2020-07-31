@@ -1,11 +1,10 @@
 package dsl.backend
 
-import dsl.analysis.syntax.Program.Block
 import dsl.analysis.syntax._
-import dsl.analysis.types._
 import dsl.analysis.types.TProgram.TBlock
+import dsl.analysis.types._
 import dsl.backend.Net.{Connector, Interface}
-import dsl.backend.PortType
+import dsl.common.PatternMatchingException
 
 
 /**
@@ -74,6 +73,8 @@ object Net {
           gm.fun += fd.name -> (fd.params.map(_.name), tblock)
           apply(tail)
         //TODO: add SFunDef
+        case TSFunDef(name,_,_) =>
+          throw new PatternMatchingException(s"def $name: pointfree functions not supported when depicting diagrams.")
       }
   }
 
@@ -126,7 +127,7 @@ object Net {
     val gm2 = gm.cleanedPorts
 
     fun match {
-      case TFunName(nm,_,_) =>
+      case TFunName(nm, _, _) =>
         val hide = nm.lastOption.contains('_')
         val name = if (hide) nm.dropRight(1) else nm
         gm.fun.get(name) match {
@@ -161,16 +162,20 @@ object Net {
               netArgs ++ mkNet(name,newIns.map(_._1).toSet,Set(gm.fresh)) ++ apply(rest)
           }
         }
-      case TBuild(tin,tout) =>
+      case TBuild(tin, tout) =>
         //val (netArgs,newIns) = processArgs(args)
         netArgs ++ mkNet("BUILD",newIns.map(_._1).toSet,Set(gm.fresh)) ++ apply(rest)
-      case TMatch(tin,tout) =>
+      case TMatch(tin, tout) =>
         // get number of outputs from type of match
         val newOuts = getTensorOuts(tout)
         //println(s"Match:${Show(tin)} -> ${Show(tout)}\nOutputs:${newOuts.mkString(",")}")
         netArgs ++ mkNet("MATCH",newIns.map(_._1).toSet,newOuts.toSet) ++ apply(rest)
         // todo
         //throw new RuntimeException("Match not supported yet.")
+      case TParFun(_,_) =>
+        throw new RuntimeException("Parallel functions not supported yet by Net construction.")
+      case TSeqFun(_,_) =>
+        throw new RuntimeException("Sequence of functions not supported yet by Net construction.")
     }
   }
 
