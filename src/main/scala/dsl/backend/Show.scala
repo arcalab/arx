@@ -100,7 +100,10 @@ object Show {
   }
 
   def apply(s:SBState):String = {
-    s"[ ${s.memories.mkString(",")} | ${s.activeIns.mkString(",")} | ${s.activeOuts.mkString(",")} ]"
+    val m = s.memories.toList.sorted
+    val i = s.activeIns.toList.sorted
+    val o = s.activeOuts.toList.sorted
+    s"[ ${m.mkString(",")} | ${i.mkString(",")} | ${o.mkString(",")} ]"
   }
 
   //////////////////
