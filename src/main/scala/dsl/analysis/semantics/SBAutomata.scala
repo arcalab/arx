@@ -29,9 +29,9 @@ sealed trait SBTrans {
   def label:String = this match {
     case UpdTrans(from, gc, ins, outs, to) =>
       val getvars = gc.guard.guards.collect({case g:Get=>g}).map(_.v).mkString(",")
-      val askvars = gc.guard.guards.collect({case g:Ask=>g}).map(_.vars).mkString(",")
+      val askvars = gc.guard.guards.collect({case g:Ask=>g}).flatMap(_.vars).mkString(",")
       val undvars = gc.guard.guards.collect({case g:Und=>g}).map(_.v).mkString(",")
-      val isqs = gc.guard.guards.collect({case g:IsQ=>g}).map(v=>s"is${v.q}${v.arg}").mkString(",")
+      val isqs = gc.guard.guards.collect({case g:IsQ=>g}).map(v=>s"is${v.q}(${Show(v.arg)})").mkString(",")
 
       val gets = if (getvars.isEmpty) "" else s"Get($getvars)"
       val asks = if (askvars.isEmpty) "" else s"Ask($askvars)"
@@ -59,7 +59,12 @@ object SBAutomata {
   def emptySate:SBState = SBState(Set(),Set(),Set())
   def empty:SBAutomata = SBAutomata (Set(),emptySate,Set(),StreamBuilder.empty)
 
-  def apply(sb:StreamBuilder, timeout:Int=5000, mode:BuildMode=NoneMode):SBAutomata = {
+  def apply(sb:StreamBuilder, timeout:Int=5000, mode:BuildMode=NoneMode):SBAutomata = mode match {
+    case SimpleMode => mkSimpleAut(sb,timeout)
+    case _ => mkPushPull(sb,timeout,mode)
+  }
+
+  def mkPushPull(sb:StreamBuilder, timeout:Int, mode:BuildMode=NoneMode):SBAutomata = {
     var steps = 0
     def tick(): Unit =  {
       steps+=1
@@ -110,6 +115,68 @@ object SBAutomata {
     SBAutomata(states,initState,trans,sb)
   }
 
+  def mkSimpleAut(sb:StreamBuilder, timeout:Int):SBAutomata = {
+    var steps = 0
+    def tick(): Unit =  {
+      steps+=1
+      if (steps==timeout) throw new
+          TimeoutException(s"When generating an automata for stream builder:\n ${Show(sb)}")
+    }
+
+    // mk initial state from memory variables in sb.init
+    val initState = SBState(sb.init.map(c => c.variable),Set(),Set())
+    // keep track of all states generated
+    var states:Set[SBState] = Set(initState)
+    // keep trach of all transitions generated
+    var trans:Set[SBTrans] = Set()
+
+    // keep track of the states generated that haven't been visited yet
+    var toVisit:Set[SBState] = states
+    // keep track of the states generated that have been visited now
+    var visited:Set[SBState] = Set()
+    while (toVisit.nonEmpty) {
+      val toCheck = toVisit
+      for (st<-toCheck) {
+        tick()
+        // make update transitions for guarded commands that satisfy a given state
+        val (utrans,usts) = mkSimpleUpds(st,sb)
+        // updates set of states and transitions
+        trans++=utrans
+        states++=usts
+        toVisit++=usts
+
+        visited += st
+      }
+      // update to visit
+      toVisit = toVisit -- visited
+    }
+    SBAutomata(states,initState,trans,sb)
+  }
+
+  private def mkSimpleUpds(from:SBState, sb:StreamBuilder):(Set[SBTrans],Set[SBState]) = {
+    var trans:Set[SBTrans] = Set()
+    var sts:Set[SBState] = Set()
+    // make update transitions for guarded commands that satisfy a given state
+    for (gc <- sb.gcs ; if gc.guard.guards.forall(gi=>satisfies(gi,from,sb))) {
+      // inputs get/ask, and outputs variables set
+      val getsVars:Set[String] = gc.guard.guards.collect({case g:Get => g}).map(_.v)
+      val askVars  = gc.guard.guards.collect({case g:Ask => g}).map(_.v)
+      // transition synchronized inputs and ouput
+      val ins = getsVars ++ askVars
+      val outs = gc.outputs //-- sb.memory
+      // to state
+      val to = SBState(
+        (from.memories--getsVars)++gc.outputs.intersect(sb.memory),
+        Set(),
+        Set())
+      // new transition
+      val t = UpdTrans(from,gc,ins--sb.memory,outs--sb.memory,to)
+      trans += t
+      // update set of states
+      sts += to
+    }
+    (trans,sts)
+  }
 
   /**
     * Make update transitions from a given state based on the guarded commands of a stream builder

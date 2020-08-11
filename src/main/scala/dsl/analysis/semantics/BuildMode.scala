@@ -13,6 +13,7 @@ package dsl.analysis.semantics
   * [[NoneMode]]  -- external entities can not do push/pull of streams
   */
 sealed trait BuildMode
+object SimpleMode extends BuildMode
 object AllMode extends BuildMode
 object PushMode extends BuildMode
 object PullMode extends BuildMode

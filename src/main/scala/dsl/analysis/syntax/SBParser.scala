@@ -45,10 +45,11 @@ object SBParser extends RegexParsers {
   def sbdef:Parser[Map[String,StreamBuilder]] =
 //    "def"~
       lowerCaseId~opt("<"~>rep1sep(lowerCaseId,",")<~">")~"="~"{"~opt(initS)~rep1sep(gc,";")~"}" ^^ {
-      case id~mems~_~_~initS~gcs~_ =>
-        val ins= gcs.flatMap(gc => gc.inputs).toSet
-        val outs = gcs.flatMap(gc => gc.outputs).toSet
-        Map(id->StreamBuilder(initS.getOrElse(Set()),gcs.toSet,ins,outs,mems.getOrElse(Set()).toSet))
+      case id~ms~_~_~initS~gcs~_ =>
+        val mems = ms.getOrElse(List()).toSet
+        val ins= gcs.flatMap(gc => gc.inputs).toSet -- mems
+        val outs = gcs.flatMap(gc => gc.outputs).toSet -- mems
+        Map(id->StreamBuilder(initS.getOrElse(Set()),gcs.toSet,ins,outs,mems))
     }
 
   def initS:Parser[Set[Command]] =
