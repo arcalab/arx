@@ -270,6 +270,7 @@ object Prelude {
       case None =>
         if (i.members.isEmpty) findModule(i.module.split("\\.").toList.init,modules) match {
           case Some(module) => getMembers(module,List(i.module.split("\\.").last))
+          case None => throw new UndefinedNameException(s"Unknown module name ${i.module}")
         } else throw new UndefinedNameException(s"Unknown module name ${i.module}")
     }
 
