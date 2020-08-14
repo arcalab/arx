@@ -1,8 +1,11 @@
 package dsl.analysis.syntax
 
+import dsl.analysis.semantics.{Command, GuardedCommand}
 import dsl.analysis.syntax.Program.{Block, MaybeReactType, MaybeTypeName}
 import dsl.analysis.types.RExp
 import dsl.backend.{Import, Show}
+
+import scala.util.parsing.input.Positional
 
 case class Program(imports:List[Import],types: List[TypeDecl], block: Block) {
   override def toString: String = Show(this)
@@ -13,7 +16,7 @@ object Program {
   type MaybeReactType = Option[RExp]
 }
 
-sealed abstract class Statement
+sealed abstract class Statement extends Positional
 sealed abstract class StreamExpr        extends Statement
 case class FunDef(name:String,
                   params:List[TypedVar],
@@ -22,7 +25,11 @@ case class FunDef(name:String,
 case class SFunDef(name:String,
                    typ: MaybeTypeName,
                    block:StreamFun)     extends Statement
-
+case class SBDef(name:String,
+                 mem:List[TypedVar],
+                 params:List[TypedVar],
+                 init:List[Command],
+                 gcs:Set[GuardedCommand]) extends Statement
 case class Assignment(variables:List[String],
                       expr:StreamExpr) extends Statement
 case class RAssignment(variables:List[String],
@@ -36,7 +43,7 @@ case class Port(x:String)               extends GroundTerm
 case class Const(q:String,
                  args:List[GroundTerm]) extends GroundTerm
 
-sealed abstract class StreamFun
+sealed abstract class StreamFun extends Positional
 case class FunName(f:String,data:List[Const]=List()) extends StreamFun
 case object Build            extends StreamFun
 case object Match            extends StreamFun
@@ -51,6 +58,6 @@ sealed trait TypeName {val name:String}
 case class AbsTypeName(name:String) extends TypeName
 case class ConTypeName(name:String,param:List[TypeName]=List()) extends TypeName
 
-case class TypeDecl(name:TypeName, constructors:List[Constructor])
+case class TypeDecl(name:TypeName, constructors:List[Constructor]) extends Positional
 
 case class Constructor(name:String, param:List[TypeName]=List()) {}

@@ -125,18 +125,24 @@ object Show {
 
   def apply(s: Statement)(implicit ind:Int = 0): String = fwd(ind) + (s match {
     case Assignment(variables, expr) =>
-      variables.mkString(",")+" <- "+apply(expr)(0)
+      variables.mkString(",") + " <- " + apply(expr)(0)
     case RAssignment(variables, expr) =>
-      variables.mkString(",")+" <~ "+apply(expr)(0)
+      variables.mkString(",") + " <~ " + apply(expr)(0)
     case FunDef(name, params, typ, block) =>
-      "def "+name+"("+params.map(apply).mkString(",")+")"+
-        (if (typ.isDefined) " : "+apply(typ.get) else "")+
-        " = {\n"+block.map(s=>apply(s)(ind+1)+"\n").mkString+
-        fwd(ind)+"}"
+      "def " + name + "(" + params.map(apply).mkString(",") + ")" +
+        (if (typ.isDefined) " : " + apply(typ.get) else "") +
+        " = {\n" + block.map(s => apply(s)(ind + 1) + "\n").mkString +
+        fwd(ind) + "}"
     case SFunDef(name, typ, block) =>
-      "def "+name+
-        (if (typ.isDefined) " : "+apply(typ.get) else "")+
-        " = {\n"+apply(block)+
+      "def " + name +
+        (if (typ.isDefined) " : " + apply(typ.get) else "") +
+        " = {\n" + apply(block) +
+        fwd(ind) + "}"
+    case SBDef(name, mem, params, init, gcs) =>
+      "sb " + name + "<" + mem.map(apply).mkString(",") + ">" +
+        "(" + params.map(apply).mkString(",") + ")" +
+        " = {\n" + init.map(s => apply(s)(ind + 1) + "\n").mkString +
+        gcs.map(gc=>apply(gc)).mkString("\n") +
         fwd(ind)+"}"
     case expr: StreamExpr => expr match {
       case FunctionApp(sfun, args) => apply(sfun)+"("+args.map(s=>apply(s)(0)).mkString(",")+")"

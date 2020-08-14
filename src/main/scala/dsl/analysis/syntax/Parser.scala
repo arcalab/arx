@@ -1,13 +1,14 @@
 package dsl.analysis.syntax
 
+import dsl.analysis.semantics._
 import dsl.analysis.syntax.Program.Block
 import dsl.analysis.syntax.SymbolType._
 import dsl.analysis.types.{Pull, Push}
-import dsl.backend.{Import, Prelude, Show}
-import dsl.common.ParsingException
+import dsl.backend.{Import, Prelude}
 
 import scala.util.matching.Regex
 import scala.util.parsing.combinator.RegexParsers
+import scala.util.parsing.input.{Position, Positional}
 
 /**
   * Created by guillecledou on 2019-05-31
@@ -30,9 +31,10 @@ object Parser extends RegexParsers {
   override def skipWhitespace = true
   override val whiteSpace: Regex = "( |\t|\r|\f|\n|//.*)+".r
 
-  val capitalId:Parser[String] = """[A-Z][a-zA-Z0-9_]*""".r
-  val lowerCaseId:Parser[String] = """[a-z][a-zA-Z0-9_]*""".r //possible can just be represented as a regular typename
+  val upId:Parser[String] = """[A-Z][a-zA-Z0-9_]*""".r
+  val lowId:Parser[String] = """[a-z][a-zA-Z0-9_]*""".r //possible can just be represented as a regular typename
   val id:Parser[String] = """[a-zA-Z][a-zA-Z0-9_]*""".r
+  val num:Parser[Int] = """[0-9][0-9]*""".r ^^ (n => n.toInt)
 
   // todo: use it
   val keywords: Set[String] =
@@ -41,13 +43,12 @@ object Parser extends RegexParsers {
   /* Program */
 
   def program:Parser[Program] =
-    rep(imports) ~
-    rep(dt) ~ block ^^ {
-      case imp~typs~bl => Program(imp,typs,bl)
-    }
+    rep(positioned(imports)) ~
+    rep(positioned(dt)) ~ block ^^ {
+      case imp~typs~bl => Program(imp,typs,bl)}
 
   def imports:Parser[Import] =
-    "import"~capitalId~rep("."~>capitalId)~opt(members) ^^ {
+    "import"~upId~rep("."~>upId)~opt(members) ^^ {
       case _~m~ms~mem => Import((m::ms).mkString("."),mem.getOrElse(List()))
     }
 
@@ -56,14 +57,14 @@ object Parser extends RegexParsers {
     "."~>id ^^ {List(_)}
 
   def block: Parser[Block] =
-    rep(statement)
+    rep(positioned(statement))
 
   def statement: Parser[Statement] = {
-    funDef | assignment | strExpr
+    funDef | sbDef | assignment | strExpr
   }
 
   def strExpr: Parser[StreamExpr] =
-    strFun~args ^^ {
+    positioned(strFun)~args ^^ {
       case f~as => FunctionApp(f,as)
     } |
     ground
@@ -72,16 +73,14 @@ object Parser extends RegexParsers {
     "("~>repsep(ground,",")<~")"
 
   def ground: Parser[GroundTerm] =
-    lowerCaseId ^^ Port |
+    lowId ^^ Port |
     groundQs
 
 
   def groundQs:Parser[Const] =
-    capitalId ~ opt(args) ^^ {
+    upId ~ opt(args) ^^ {
       case q ~ as => Const(q, as.getOrElse(Nil))
     }
-//  def strFun: Parser[StreamFun] =
-//    oneStrFun | groupStrFun
 
   def strFun: Parser[StreamFun] =
     "build" ^^^ Build |
@@ -97,7 +96,7 @@ object Parser extends RegexParsers {
 //      }
 
   def groupStrFun:Parser[StreamFun] =
-    lowerCaseId ~ opt( "<" ~> rep1sep(groundQs,",") <~ ">")^^ {
+    lowId ~ opt( "<" ~> rep1sep(groundQs,",") <~ ">")^^ {
       case f~qs => FunName(f,qs.getOrElse(List()))} |
     "{" ~> parOrSeq <~ "}"
 
@@ -108,9 +107,8 @@ object Parser extends RegexParsers {
 
   /* Type declaration and type parameters */
 
-
   def dt:Parser[TypeDecl] =
-    "data" ~ capitalId ~ opt(tparams) ~ "=" ~ constructors ^^ {
+    "data" ~ upId ~ opt(tparams) ~ "=" ~ constructors ^^ {
       case _~n~tps~_~vs => sym=sym.add(n,TYPE);TypeDecl(ConTypeName(n,tps.getOrElse(List())),vs)}
 
   // constructors
@@ -119,7 +117,7 @@ object Parser extends RegexParsers {
 
   // constructor
   def constructor:Parser[Constructor] =
-    capitalId ~ opt("(" ~> tnames <~ ")")^^ {
+    upId ~ opt("(" ~> tnames <~ ")")^^ {
       case n~tps => sym=sym.add(n,CONST); Constructor(n,tps.getOrElse(List()))}
 
   // a non empty sequence of type names
@@ -128,21 +126,22 @@ object Parser extends RegexParsers {
 
   // a type name
   def tname:Parser[TypeName] =
-    capitalId ~ opt(tparams)  ^^ {case n~opt =>  ConTypeName(n,opt.getOrElse(List()))} |
-    lowerCaseId ^^ {case n => AbsTypeName(n)}
+    upId ~ opt(tparams)  ^^ {case n~opt =>  ConTypeName(n,opt.getOrElse(List()))} |
+    lowId ^^ (n => AbsTypeName(n))
 
   // type parameters
   def tparams:Parser[List[TypeName]] =
     "<" ~> tnames <~ ">"
 
+  /* Function definition */
   def funDef: Parser[Statement] =
     "def" ~> log(restFunDef)("restFunDef")
 
 
   def restFunDef:Parser[Statement] = {
-    sym = sym.addLevel();
+    sym = sym.addLevel()
     //println("entering fun def")
-    lowerCaseId /* ~ opt("<" ~> dataFormalParams <~ ">")*/ ~ funParamsAndBody ^? ({
+    lowId /* ~ opt("<" ~> dataFormalParams <~ ">")*/ ~ funParamsAndBody ^? ({
       case f ~ rest  if !keywords.contains(f) =>
         sym = sym.add(f, FUN) // quick hack to see if function name is not used/delared inside the function todo: fix it
         sym = sym.rmLevel()
@@ -171,7 +170,7 @@ object Parser extends RegexParsers {
     }
 
   def typedVar: Parser[TypedVar] =
-    lowerCaseId~opt(":"~>tname)~opt("[!|?]".r) ^^ {
+    lowId~opt(":"~>tname)~opt("[!|?]".r) ^^ {
       case v~t~None => TypedVar(v,t,None)
       case v~t~Some(r) => TypedVar(v,t,if (r.matches("!")) Some(Push) else Some(Pull))
     }
@@ -179,11 +178,156 @@ object Parser extends RegexParsers {
   /* Assignments */
 
   def assignment:Parser[Statement] =
-    repsep(lowerCaseId,",")~"<-|<~".r~strExpr ^^ {
+    rep1sep(lowId,",")~"<-|<~".r~strExpr ^^ {
       case ids~typ~expr =>
         ids.foreach(id => sym = sym.add(id,VAR))
         if (typ.matches("<-")) Assignment(ids,expr)
         else RAssignment(ids,expr)
     }
+
+  /* Stream builder definition */
+
+  /**
+    * Stream builder definition parser
+    * @return a stream builder definition statement
+    */
+  def sbDef:Parser[Statement] = {
+    sym = sym.addLevel()
+    val res = "sb"~lowId~opt(memories)~opt(formalParams)~"="~"{"~opt(initSB)~rep1(gc)~"}" ^^ {
+      case _~id~mems~fp~_~_~init~gcs~_ =>
+        sym = sym.add(id, FUN)
+        sym = sym.rmLevel()
+        sym = sym.add(id, FUN)
+        SBDef(id,mems.getOrElse(List()),fp.getOrElse(List()),init.getOrElse(List()),gcs.toSet)
+    }
+    sym = sym.rmLevel()
+    res
+  }
+
+  /**
+    * Stream builder memory declaration parser
+    * @return a list of [typed] memory variables
+    */
+  def memories:Parser[List[TypedVar]] =
+    "<"~>typedParams<~">"
+
+  /**
+    * Stream builder formal parameter parser
+    * @return a list of [typed] input variables
+    */
+  def formalParams:Parser[List[TypedVar]] =
+    "("~>typedParams<~")"
+
+  /**
+    * List of [typed] variables parser
+    * @return a list of [typed] variables
+    */
+  def typedParams:Parser[List[TypedVar]] =
+    repsep(typedVar,",") ^^ { tvs =>
+      tvs.foreach(tv => sym = sym.add(tv.name,INPUT))
+      tvs
+    }
+
+  /**
+    * Stream builder initial state parser
+    * @return a set of commands initializing variables
+    */
+  def initSB:Parser[List[Command]] =
+    "init" ~> rep1sep(cmd, ",")
+
+  /**
+    * Stream builder command parser
+    * @return a command
+    */
+  def cmd:Parser[Command] =
+    lowId~":="~sbterm ^^ { case v~_~t => Command(v,t)}
+
+  /**
+    * Stream builder term parser
+    * @return a term, either a variable, destructor, or a constructor
+    */
+  def sbterm: Parser[Term] =
+    variable | sbdestructor | sbconstructor
+
+  /**
+    * Stream Builder variable parser
+    * @return a variable
+    */
+  def variable:Parser[Term] =
+    lowId ^^ { v => sym = sym.add(v, INPUT); Var(v) }
+
+  /**
+    * Stream builder destructor parser
+    * @return a destructor of a constructor, based on an index and a term
+    */
+  def sbdestructor:Parser[Term] =
+    "Get"~"<"~upId~","~num~">"~"("~sbterm~")" ^^ {
+      case _~_~tp~_~i~_~_~t~_ => GetQ(tp,i,t)
+    }
+
+  /**
+    * Stream builder constructor parser
+    * @return a constructor
+    */
+  def sbconstructor:Parser[Term] =
+    upId~opt("("~>rep1(sbterm)<~")") ^^ {case v~ts => Q(v,ts.getOrElse(List()))} |
+      "_" ^^ {case _ => Q("_",List())} // ss for () or don't care?
+
+  /**
+    * Guarded command parser
+    * @return a guarded command
+    */
+  def gc:Parser[GuardedCommand] =
+    guard~"->"~repsep(cmd,",") ^^ {case g~_~cs => GuardedCommand(g,cs.toSet)}
+
+  /**
+    * Stream builder guard parser
+    * @return a guard
+    */
+  def guard:Parser[Guard] =
+    repsep(guardItem,",") ^^ (gs => Guard(gs.foldRight[Set[GuardItem]](Set())(_.union(_))))
+
+  /**
+    * Guard item parser
+    * @return a get,und,isQ,or ask guard
+    */
+  def guardItem:Parser[Set[GuardItem]] =
+    gets | asks | isQs | unds
+
+  /**
+    * Get guard parser
+    * @return a get guard over one or more variabless
+    */
+  def gets:Parser[Set[GuardItem]] =
+    "get" ~> guardParam ^^ (ps => ps.map(s => Get(s)))
+
+  /**
+    * Ask guard parser
+    * @return an ask guard over one or more variables
+    */
+  def asks:Parser[Set[GuardItem]] =
+    "ask" ~> guardParam ^^ (ps => ps.map(s => Ask(s)))
+
+
+  /**
+    * Und guard parser
+    * @return an und guard over one or more variables
+    */
+  def unds:Parser[Set[GuardItem]] =
+    "und" ~> guardParam ^^ (ps => ps.map(s => Und(s)))
+
+  /**
+    * IsQ guard parser
+    * @return an isQ guard over one or more variables
+    */
+  def isQs:Parser[Set[GuardItem]] =
+    "is" ~ upId ~ "(" ~ sbterm ~ ")" ^^ { case _ ~ v ~ _ ~ t ~ _ => Set(IsQ(v, t)) }
+
+  /**
+    * Guard parameter parser
+    * @return a non-empty set of variables
+    */
+  def guardParam:Parser[Set[String]] =
+    "("~>rep1sep(lowId,",")<~")" ^^ { v => v.foreach(p => sym = sym.add(p, INPUT)); v.toSet }
 
 }

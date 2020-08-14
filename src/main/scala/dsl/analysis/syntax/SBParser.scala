@@ -17,6 +17,7 @@ object SBParser extends RegexParsers {
     parseAll(sb,sbs)
   }
 
+
   override def skipWhitespace = true
   override val whiteSpace: Regex = "( |\t|\r|\f|\n|//.*)+".r
 

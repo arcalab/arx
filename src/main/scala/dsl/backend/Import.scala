@@ -4,12 +4,14 @@ package dsl.backend
 import dsl.analysis.semantics.StreamBuilder.StreamBuilderEntry
 import dsl.analysis.syntax.{FunDef, GroundTerm, TypeDecl}
 
+import scala.util.parsing.input.Positional
+
 /**
   * Created by guillecledou on 2020-01-24
   */
 
 
-case class Import(module:String,members:List[String])
+case class Import(module:String,members:List[String]) extends Positional
 
 
 case class Module(name:String,childs:List[Module],content:List[ModuleContent])
