@@ -278,7 +278,7 @@ object Parser extends RegexParsers {
     * @return a guarded command
     */
   def gc:Parser[GuardedCommand] =
-    guard~"->"~repsep(cmd,",") ^^ {case g~_~cs => GuardedCommand(g,cs.toSet)}
+    guard~"->"~repsep(cmd,",") ^^ {case g~_~cs => (g -> cs.toSet)}
 
   /**
     * Stream builder guard parser

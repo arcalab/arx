@@ -9,7 +9,7 @@ import dsl.analysis.syntax.{Const, GroundTerm, Port}
 /**
   * A guarded command
   */
-case class GuardedCommand(guard:Guard, cmd:Set[Command]) {
+case class GuardedCommand(guard:Guard, cmd:Set[Command], highlights:Set[String]) {
 
   def vars:Set[String] = this.outputs ++ this.inputs
 
@@ -17,6 +17,13 @@ case class GuardedCommand(guard:Guard, cmd:Set[Command]) {
 
   // be carful because some might be memories, given a stream builde remove the memories
   def inputs:Set[String]  = guard.variables
+
+  // By default the set of variables with flow
+//  def defaultHighights: Set[String] = vars -- guard.guards.flatMap {
+//    case Und(v) => Set[String](v)
+//    case _ => Set[String]()
+//  }
+
 }
 
 /**
@@ -85,7 +92,16 @@ case class Guard(guards:Set[GuardItem]) {
     Guard(this.guards++other.guards)
 
   def ->(cmd:Command):GuardedCommand =
-    GuardedCommand(this,Set(cmd))
+    GuardedCommand(this,Set(cmd),defaultHhighlights(Set(cmd)))
+  def ->(cmd:Set[Command]):GuardedCommand =
+    GuardedCommand(this,cmd,defaultHhighlights(cmd))
   def ->(cmd:Command*):GuardedCommand =
-    GuardedCommand(this,cmd.toSet)  
+    this -> cmd.toSet
+
+    private def defaultHhighlights(cmds:Set[Command]): Set[String] =
+      variables ++ cmds.map(c=>c.variable) -- guards.flatMap {
+        case Und(v) => Set[String](v)
+        case _ => Set[String]()
+      }
+
 }

@@ -6,6 +6,7 @@ import dsl.analysis.semantics.StreamBuilder.StreamBuilderEntry
 import dsl.analysis.syntax._
 import dsl.analysis.types.TProgram.TBlock
 import dsl.analysis.types._
+import dsl.backend.ArxNet
 
 /**
   * Created by guillecledou on 2020-02-06
@@ -21,12 +22,12 @@ object Encode{
   private def freshVar():String = {vars+=1; s"v${vars-1}"}
   private def freshVarMem():String = {vars+=1; s"m${vars-1}"}
 
-  def apply(program:TProgram, typeCtx:Context):SemanticResult = {
+  def apply(program:TProgram, typeCtx:Context,net:ArxNet):SemanticResult = {
     vars = 0
     // create context with primitive functions
     val ctx = loadPrimitives()
     // encode program block
-    val (sbB,sbBOuts,sbBCtx) = encode(program.tBlock,ctx,typeCtx)
+    val (sbB,sbBOuts,sbBCtx) = encode(program.tBlock,ctx,typeCtx,net)
     // filter only relevant outputs
 //    println(s"[Encode] filtering $sbBOuts from ${Show(sbB)}")
     val sbB2 = sbB.filterOutAndClean(sbBOuts.toSet)
@@ -41,13 +42,13 @@ object Encode{
     * @param typeCtx known context of types for program elements
     * @return a semantic encoding for block
     */
-  private def encode(block:TBlock, sbCtx:SBContext, typeCtx:Context):SemanticResult = block match {
+  private def encode(block:TBlock, sbCtx:SBContext, typeCtx:Context, net:ArxNet):SemanticResult = block match {
     case Nil => (StreamBuilder.empty,List(),sbCtx)
     case b::bs =>
       // encode b
-      val (sbB,sbBOuts,sbBCtx) = encode(b,sbCtx,typeCtx)
+      val (sbB,sbBOuts,sbBCtx) = encode(b,sbCtx,typeCtx,net)
       // encode rest and compose it
-      val (sbBs,sbBsOuts,sbBsCtx) = encode(bs,sbBCtx,typeCtx)
+      val (sbBs,sbBsOuts,sbBsCtx) = encode(bs,sbBCtx,typeCtx,net)
       // compose stream builders and enqueue outputs
       (sbB*sbBs,sbBOuts++sbBsOuts,sbBsCtx)
   }
@@ -57,24 +58,33 @@ object Encode{
     * @param st program statement
     * @return a semantic encoding for a statement
     */
-  private def encode(st:TStatement, sbCtx:SBContext, typeCtx:Context):SemanticResult = st match {
-    case se:TStreamExpr => encode(se,sbCtx,typeCtx)
+  private def encode(st:TStatement, sbCtx:SBContext, typeCtx:Context,net:ArxNet):SemanticResult = st match {
+    case se:TStreamExpr => encode(se,sbCtx,typeCtx,net)
+    // asg.variables <- asg.expression
     case TAssignment(asg, _, rhs) =>
       // get the stream builder entry of the expression
-      val (sbE,sbEOuts,sbECtx) = encode(rhs,sbCtx,typeCtx)
+      val (sbE,sbEOuts,sbECtx) = encode(rhs,sbCtx,typeCtx,net)
       // create a map from sbEOuts to variables
       val remap = sbEOuts.zip(asg.variables).toMap
       // remap outputs in the sbE to variables
       val sbFresh = fresh(sbE,remap)
+      // add newVar->oldVar to net-mirrors
+      for (kv <- remap) net += (kv._1,kv._2)
+      // update net with syncs
+      for (kv <- remap) net += (Set(kv._1),Set(kv._2),"id")
       // return fresh stream builder
       (sbFresh,List(),sbECtx)
+    // x <~ y
     case TRAssignment(RAssignment(List(x),Port(y)), _, _)  =>
       val m = freshVarMem()
       val sbra = sb withCommands(
         ask(m) -> (x := Var(m)),
         get(y) -> (m := Var(y))
       ) ins y outs x mems m
+      // add rid:y->x to net
+      net += (Set(y),Set(x),"rid")
       (sbra,List(),sbCtx)
+    // lhs <~ rhs (generic case)
     case TRAssignment(rasg,tlhs, trhs) =>
       // get fresh variables for the lhs variables
       val freshLhs:List[String] = rasg.variables.map(_=>freshVar())
@@ -84,16 +94,18 @@ object Encode{
       val nrasgs:List[TRAssignment] = rasg.variables.zip(freshLhs).zip(tlhs)
         .map({case ((x,y),t) => TRAssignment(RAssignment(List(x),Port(y)),List(t),TPort(y,t))})
       // encode new block
-      encode(asg::nrasgs,sbCtx,typeCtx)
+      encode(asg::nrasgs,sbCtx,typeCtx,net)
+    // def fd
     case TFunDef(fd, _, tb) =>
+      val innerNet = new ArxNet
       // get the stream builder of the block
-      val (sbB,sbBOuts,sbBCtx) = encode(tb,sbCtx,typeCtx)
+      val (sbB,sbBOuts,sbBCtx) = encode(tb,sbCtx,typeCtx,innerNet)
       // hide all outs but sbBouts and memory variables
 //      println(s"[DEF] filtering $sbBOuts from ${Show(sbB)}")
       val sbB2 = sbB.filterOutAndClean(sbBOuts.toSet)
 //      println(s"[DEF] got ${Show(sbB2)}")
       // create an stream builder entry for the function
-      val fEntry = (sbB2,fd.params.map(tv=>tv.name),sbBOuts)
+      val fEntry = (sbB2,fd.params.map(tv=>tv.name),sbBOuts,innerNet)
       // add the entry to the context returned by encoding the block
       val nSbCtx = sbBCtx.add(fd.name,fEntry)
       // return the new context and an empty stream builder and outputs
@@ -102,10 +114,13 @@ object Encode{
     case _ =>throw new RuntimeException(s"Statement $st of type ${st.getClass} not supported.")
   }
 
-  private def encode(gt:TGroundTerm, sbCtx: SBContext):SemanticResult = gt match {
+  private def encode(gt:TGroundTerm, sbCtx: SBContext, net:ArxNet):SemanticResult = gt match {
     case TPort(x,_) =>
       var out = freshVar()
       val gc = Get(x) -> (out := Var(x))
+      // update net
+      net += (x,out)
+      net += (Set(x),Set(out),"id")
       (StreamBuilder(Set(),Set(gc),Set(x),Set(out)),List(out),sbCtx)
     case q@TConst(const,_, _) =>
       val fvq = fv(q)
@@ -120,38 +135,59 @@ object Encode{
     * @param se input stream expression
     * @return stream builder for se
     */
-  private def encode(se:TStreamExpr, sbCtx:SBContext, typeCtx:Context):SemanticResult = se match {
-    case gt:TGroundTerm => encode(gt,sbCtx)
+  private def encode(se:TStreamExpr, sbCtx:SBContext, typeCtx:Context,net:ArxNet):SemanticResult = se match {
+    case gt:TGroundTerm => encode(gt,sbCtx,net)
     case TFunApp(TMatch(TBase(name, _), _),_,targs) =>
       val constructors:List[ConstEntry] = typeCtx.adts(name).constructors
-      mkMatch(constructors,targs.head,sbCtx)
+      mkMatch(constructors,targs.head,sbCtx,net)
     case TFunApp(TBuild(_, TBase(name,_)), _, targs) =>
       val constructors:List[ConstEntry] = typeCtx.adts(name).constructors
-      mkBuild(constructors,targs,sbCtx)
+      mkBuild(constructors,targs,sbCtx,net)
     case TFunApp(TFunName(name,_,data),_, args) =>
       // get the stream builder entry associated to name
-      val (sbf,sbIns,sbOuts) = if (sbCtx.contains(name)) sbCtx(name) else sbCtx("id") //otherwise, assume 1->1 function
+      val (sbf,sbIns,sbOuts,sbNetOrig) =
+        if (sbCtx.contains(name)) sbCtx(name) else sbCtx("id") //otherwise, assume 1->1 function
+      val sbNet = sbNetOrig.clone() // cloning is CRUCIAL! (same MutNet for each primitivie type)
       // substitute data params by args if any //todo: for now only supported for primitive functions
       val sb = instantiate(sbf,data)
       // get a stream builder for each argument that is a term
       //val argsSb:List[SemanticResult]  = args.map(a=> encode(a,sbCtx,typeCtx))
       val argsSb:List[Either[SemanticResult,TPort]]  = args.map {
         case a: TPort => Right(a)
-        case a => Left(encode(a, sbCtx, typeCtx))
+        case a => Left(encode(a, sbCtx, typeCtx,net))
       }
       // fresh variables for all variables in sb
       val remap  =  sb.memory              .map(v=> (v,freshVarMem())).toMap ++
                    (sb.inputs ++sb.outputs).map(v=> (v,freshVar())).toMap
       // get a fresh instantiation of the stream builder based on the new name mapping
       val sbFresh = fresh(sb,remap)
+      // fix variables used in highlights
+      //println(s"\n/-----------------------\\ $name")
+      //println(s"[ENC] beginning: $sbNet -- ${Show(sb)}")
+      val sbFreshHL = fixHighlights(sbFresh,sbNet)
       //println("Fresh map:\n" + remap.mkString(","))
       // zip fresh inputs with the output of the corresponding argument (we know they have only 1 output)
       val argsNames = argsSb.map(r=> if (r.isLeft) r.left.get._2.head else r.right.get.p)
       val remapInputs:List[(String,String)] = remap.filter(k => sbIns.contains(k._1)).values.toList.zip(argsNames)
       // rename inputs in fresh stream builder based on remapInputs
-      val sbRmIns = fresh(sbFresh,remapInputs.toMap)
+      val sbRmIns = fresh(sbFreshHL,remapInputs.toMap)
       // compose stream builders from arguments
       val argsComp = argsSb.filter(_.isLeft).map(_.left.get._1).foldRight[StreamBuilder](DSL.sb)(_*_)
+      // updating sbNet with remap, and add it to net
+      //println("|-----------------------|")
+      //println(s"[ENC] replacing for $name: $remap + $remapInputs")
+      //println("|-----------------------|")
+      //println(s"[ENC] net: fresh+highlights: $sbNet")
+      val updNet = sbNet
+        .replace(remap)
+        .replace(remapInputs.toMap)
+//      for (kv <- remapInputs) sbNet += ("RM_"+kv._1,kv._2)
+      //println("|-----------------------|")
+      //println(s"[ENC] remapNet+: $updNet -- ${Show(sbRmIns * argsComp)}")
+      //println("|-----------------------|")
+      //println(s"[ENC] final SB: ${Show(sbRmIns * argsComp)}")
+      //println("\\-----------------------/\n")
+      net ++= updNet
       // return result, and remap outputs of the function to the corresponding fresh names
       (sbRmIns * argsComp,sbOuts.map(remap),sbCtx)
     case _ => throw new RuntimeException(s"Stream Expression $se of type ${se.getClass} not supported.")
@@ -172,16 +208,18 @@ object Encode{
 
   private def mkBuild(qs:List[ConstEntry]
                       , args:List[TGroundTerm]
-                      , sbCtx:SBContext): SemanticResult = {
+                      , sbCtx:SBContext
+                      , net:ArxNet): SemanticResult = {
     val out = freshVar()
-    val (gcs,sbs) = mkGCBuild(qs,args,sbCtx,out)
+    val (gcs,sbs) = mkGCBuild(qs,args,sbCtx,out,net)
     val buildSb = sb withCommands (gcs:_*) outs out ins (gcs.flatMap(gc=>gc.inputs):_*)
     (buildSb*sbs,List(out),sbCtx)
   }
 
   private def mkGCBuild(qs:List[ConstEntry]
                      , args:List[TGroundTerm]
-                     , sbCtx:SBContext,out:String): (List[GuardedCommand],StreamBuilder) = qs match {
+                     , sbCtx:SBContext,out:String
+                     , net:ArxNet): (List[GuardedCommand],StreamBuilder) = qs match {
     case Nil => (List(),DSL.sb)
     case q::more =>
       // get the arguments that correspond to the first constructor q
@@ -191,7 +229,7 @@ object Encode{
       //val sbArgs:List[SemanticResult] = qArgs.map(a=> encode(a,sbCtx))
       val sbArgs:List[Either[SemanticResult,TPort]]  = qArgs.map {
         case a: TPort => Right(a)
-        case a => Left(encode(a, sbCtx))
+        case a => Left(encode(a, sbCtx,net))
       }
       // make gets for the output variable of each sb in the previous step
       val getArgs = Guard(sbArgs.map(r => if (r.isLeft) r.left.get._2.head else r.right.get.p)
@@ -204,7 +242,7 @@ object Encode{
       // composed arguments stream builders into a single stream builder
       val compArgs =  sbArgs.filter(_.isLeft).map(_.left.get._1).foldRight[StreamBuilder](DSL.sb)(_*_)
       // get the rest of the guarded commands
-      val gcMore = mkGCBuild(more,restArgs,sbCtx,out)
+      val gcMore = mkGCBuild(more,restArgs,sbCtx,out,net)
       // make the actual guarded command for this constructor
       val gcq = getArgs -> (out := toTerm(constructor))
       (gcq::gcMore._1,compArgs*gcMore._2)
@@ -212,12 +250,15 @@ object Encode{
 
   private def mkMatch(qs:List[ConstEntry]
                     , arg:TGroundTerm
-                    , sbCtx:SBContext): SemanticResult = {
+                    , sbCtx:SBContext
+                    , net:ArxNet): SemanticResult = {
     val (sbIn,in,_) = arg match {
       case a:TPort => (StreamBuilder.empty,List(a.p),sbCtx)
-      case _ => encode(arg,sbCtx)}
+      case _ => encode(arg,sbCtx,net)}
     val (gcs,sbs,outs) = mkGCMatch(qs,sbCtx,in.head)
     val buildSb = sb withCommands (gcs:_*) outs (outs:_*) ins in.head
+    // Note: not tested yet
+    net += (Set(in.head),outs.toSet,"MATCH")
     (buildSb*sbs*sbIn,outs,sbCtx)
   }
 
@@ -302,8 +343,20 @@ object Encode{
     StreamBuilder(init,gcs,ins,outs,mems)
   }
 
+  private def fixHighlights(builder: StreamBuilder, net: ArxNet): StreamBuilder = {
+    val vars = builder.inputs++builder.outputs++builder.memory
+    val newVars = builder.gcs.flatMap(_.highlights) -- vars
+    val remap = newVars.map((_,freshVar())).toMap
+    //println(s"[ENC] fixing highlights: $remap")
+    net.replace(remap)
+    val res = fresh(builder,remap)
+    //println(s"[ENC] got sb: ${Show(res)}")
+    res
+  }
+
+
   private def rename(gc:GuardedCommand,remap:Map[String,String]):GuardedCommand =
-    GuardedCommand(rename(gc.guard,remap),gc.cmd.map(c=>rename(c,remap)))
+    GuardedCommand(rename(gc.guard,remap),gc.cmd.map(c=>rename(c,remap)),gc.highlights.map(rename(_,remap)))
 
   private def rename(g:Guard,remap:Map[String,String]):Guard = 
     Guard(g.guards.map(gi=>rename(gi,remap)))
@@ -317,8 +370,11 @@ object Encode{
     case _ => g
   }
 
+  private def rename(s:String,remap:Map[String,String]): String =
+    remap.getOrElse(s,s)
+
   private def rename(c:Command,remap:Map[String,String]):Command =
-    Command(remap.getOrElse(c.variable,c.variable),rename(c.term,remap))
+    Command(rename(c.variable,remap),rename(c.term,remap))
 
   private def rename(t:Term,remap:Map[String,String]):Term = t match {
     case Var(x) => Var(remap.getOrElse(x,x))
