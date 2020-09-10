@@ -4,6 +4,7 @@ import dsl.DSL
 import dsl.DSL._
 import dsl.analysis.semantics.StreamBuilder.StreamBuilderEntry
 import dsl.analysis.semantics.{Q, StreamBuilder, Var}
+import dsl.backend.ArxNet.Edge
 import dsl.common.UndefinedNameException
 
 
@@ -131,7 +132,7 @@ object Prelude {
   private lazy val noreader = mkPrimFun("noreader", noreadersb)
 
   def mkPrimFun(name:String,sb:(StreamBuilder,List[String],List[String]),params:List[String]=List()): PrimFun = {
-    val net = new ArxNet += (sb._2.toSet,sb._3.toSet,name)
+    val net = new ArxNet += Edge(sb._2.toSet,sb._3.toSet,name)
     PrimFun(name,(sb._1,sb._2,sb._3,net),params)
   }
 

@@ -6,7 +6,8 @@ import dsl.analysis.semantics.StreamBuilder.StreamBuilderEntry
 import dsl.analysis.syntax._
 import dsl.analysis.types.TProgram.TBlock
 import dsl.analysis.types._
-import dsl.backend.ArxNet
+import dsl.backend.{ArxNet, Show}
+import dsl.backend.ArxNet.Edge
 
 /**
   * Created by guillecledou on 2020-02-06
@@ -68,10 +69,10 @@ object Encode{
       val remap = sbEOuts.zip(asg.variables).toMap
       // remap outputs in the sbE to variables
       val sbFresh = fresh(sbE,remap)
-      // add newVar->oldVar to net-mirrors
-      for (kv <- remap) net += (kv._1,kv._2)
+      //// add newVar->oldVar to net-mirrors
+      //for (kv <- remap) net += (kv._1,kv._2)
       // update net with syncs
-      for (kv <- remap) net += (Set(kv._1),Set(kv._2),"id")
+      for (kv <- remap) net += Edge(Set(kv._1),Set(kv._2),"id")
       // return fresh stream builder
       (sbFresh,List(),sbECtx)
     // x <~ y
@@ -82,7 +83,7 @@ object Encode{
         get(y) -> (m := Var(y))
       ) ins y outs x mems m
       // add rid:y->x to net
-      net += (Set(y),Set(x),"rid")
+      net += Edge(Set(y),Set(x),"rid")
       (sbra,List(),sbCtx)
     // lhs <~ rhs (generic case)
     case TRAssignment(rasg,tlhs, trhs) =>
@@ -119,14 +120,16 @@ object Encode{
       var out = freshVar()
       val gc = Get(x) -> (out := Var(x))
       // update net
-      net += (x,out)
-      net += (Set(x),Set(out),"id")
+      //net += (x,out)
+      net += Edge(Set(x),Set(out),"id")
       (StreamBuilder(Set(),Set(gc),Set(x),Set(out)),List(out),sbCtx)
     case q@TConst(const,_, _) =>
       val fvq = fv(q)
       val gets = Guard(fvq.map(Get).toSet) //fvq.map(Get).foldRight[Guard](True)(_&_)
       var out = freshVar()
       val gc = gets -> (out := toTerm(const))
+      //println(s"[Enc] adding edge ${Show(const)}: $out")
+      net += Edge(Set(),Set(out),Show(const))
       (StreamBuilder(Set(),Set(gc),fvq,Set(out)),List(out),sbCtx)
   }
 
@@ -215,7 +218,9 @@ object Encode{
                       , net:ArxNet): SemanticResult = {
     val out = freshVar()
     val (gcs,sbs) = mkGCBuild(qs,args,sbCtx,out,net)
-    val buildSb = sb withCommands (gcs:_*) outs out ins (gcs.flatMap(gc=>gc.inputs):_*)
+    val in = gcs.flatMap(gc=>gc.inputs)
+    val buildSb = sb withCommands (gcs:_*) outs out ins (in:_*)
+    net += Edge(in.toSet,Set(out),"BUILD")
     (buildSb*sbs,List(out),sbCtx)
   }
 
@@ -260,8 +265,8 @@ object Encode{
       case _ => encode(arg,sbCtx,net)}
     val (gcs,sbs,outs) = mkGCMatch(qs,sbCtx,in.head)
     val buildSb = sb withCommands (gcs:_*) outs (outs:_*) ins in.head
-    // Note: not tested yet
-    net += (Set(in.head),outs.toSet,"MATCH")
+    // Add edge to the net
+    net += Edge(Set(in.head),outs.toSet,"MATCH")
     (buildSb*sbs*sbIn,outs,sbCtx)
   }
 

@@ -135,7 +135,7 @@ object Parser extends RegexParsers {
 
   /* Function definition */
   def funDef: Parser[Statement] =
-    "def" ~> log(restFunDef)("restFunDef")
+    "def" ~> restFunDef //log(restFunDef)("restFunDef")
 
 
   def restFunDef:Parser[Statement] = {

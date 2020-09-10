@@ -12,6 +12,8 @@ object ArxNet {
 }
 
 class ArxNet()  {
+  def clearMirrors(): Unit = mirrors.clear()
+
   protected val edges:mutable.Set[Edge]= mutable.Set()
   protected val mirrors: mutable.Map[String,Set[String]] = mutable.Map()
 
@@ -35,9 +37,9 @@ class ArxNet()  {
     edges += e
     this
   }
-  /** Add edge */
-  def +=(from:Set[String],to:Set[String],prim:String): ArxNet =
-    this += Edge(from,to,prim)
+//  /** Add edge */
+//  def +=(from:Set[String],to:Set[String],prim:String): ArxNet =
+//    this += Edge(from,to,prim)
 
   /** Remove edge */
   def -=(e:Edge): ArxNet = {
