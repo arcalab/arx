@@ -148,6 +148,9 @@ object Encode{
       val (sbf,sbIns,sbOuts,sbNetOrig) =
         if (sbCtx.contains(name)) sbCtx(name) else sbCtx("id") //otherwise, assume 1->1 function
       val sbNet = sbNetOrig.clone() // cloning is CRUCIAL! (same MutNet for each primitivie type)
+      // if it is unknown name, then use "name" instead of "id" in the net.
+      if (!sbCtx.contains(name))
+        sbNet.replacePrim("id",name)
       // substitute data params by args if any //todo: for now only supported for primitive functions
       val sb = instantiate(sbf,data)
       // get a stream builder for each argument that is a term

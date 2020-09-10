@@ -73,14 +73,22 @@ class ArxNet()  {
     this
   }
 
-  def replace(x:String,by:String): ArxNet = {
-    edges.map(e=>Edge(
-      e.from.map(y=> if (y==x) by else y),
-      e.to.map(y=> if (y==x) by else y),
-      e.prim
-    ))
-    mirrors.map(kv => (if (kv._1==x) by else kv._1) ->
-                      kv._2.map(y=> if (y==x) by else y))
+//  def replace(x:String,by:String): ArxNet = {
+//    edges.map(e=>Edge(
+//      e.from.map(y=> if (y==x) by else y),
+//      e.to.map(y=> if (y==x) by else y),
+//      e.prim
+//    ))
+///// broken: need "e2 = edges.map(...); edges.clear(); edges++=e2"
+//    mirrors.map(kv => (if (kv._1==x) by else kv._1) ->
+//                      kv._2.map(y=> if (y==x) by else y))
+//    this
+//  }
+
+  def replacePrim(p:String,by:String): ArxNet = {
+    val e2 = edges.map(e=>Edge(e.from,e.to, by)) //if (e.prim == p) by else e.prim))
+    edges.clear()
+    edges ++= e2
     this
   }
 }
