@@ -29,7 +29,8 @@ case class SBDef(name:String,
                  mem:List[TypedVar],
                  params:List[TypedVar],
                  init:List[Command],
-                 gcs:Set[GuardedCommand]) extends Statement
+                 gcs:Set[GuardedCommand],
+                outs:List[String]) extends Statement
 case class Assignment(variables:List[String],
                       expr:StreamExpr) extends Statement
 case class RAssignment(variables:List[String],

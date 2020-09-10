@@ -10,11 +10,12 @@ import dsl.backend.{In, PortType}
 
 case class Context(adts : Map[String,TypeEntry],
                    functions: Map[String,FunEntry],
-                   ports: Map[String,List[PortEntry]]) {
+                   ports: Map[String,List[PortEntry]],
+                   vars:Map[String,VarEntry]) {
 
   val constructors: Map[String,ConstEntry] = Context.mkConstructors(adts)
 
-  val context: Map[String,ContextEntry] = adts++functions++constructors
+  val context: Map[String,ContextEntry] = adts++functions++constructors++vars
 
   //def apply(name:String):Option[ContextEntry] = context.get(name)
 
@@ -24,13 +25,16 @@ case class Context(adts : Map[String,TypeEntry],
     case p@PortEntry(_,_) =>
         checkNotIn(name,functions++adts)
         var oldPortEntries:List[PortEntry] = ports.getOrElse(name,List())
-        new Context(adts, functions, ports + (name -> (p::oldPortEntries)))
+        new Context(adts, functions, ports + (name -> (p::oldPortEntries)),vars)
     case f@FunEntry(_,_,_)=>
         checkNotIn(name,context)
-        new Context(adts,functions+(name->f),ports)
+        new Context(adts,functions+(name->f),ports,vars)
+    case v@VarEntry(_) =>
+        checkNotIn(name,context)
+        new Context(adts,functions,ports,vars+(name->v))
     case t@TypeEntry(_,_) =>
         checkNotIn(name,context)
-        new Context(adts+(name->t),functions,ports)
+        new Context(adts+(name->t),functions,ports,vars)
     case _ => throw new RuntimeException("Constructors are added automatically when discovering ADT declarations")
   }
 
@@ -50,7 +54,7 @@ case class Context(adts : Map[String,TypeEntry],
 
 object Context {
 
-  def apply():Context = Context(Map(),Map(),Map())
+  def apply():Context = Context(Map(),Map(),Map(),Map())
 
   def mkConstructors(adts:Map[String,TypeEntry]):Map[String,ConstEntry] = {
     val constructors = adts.flatMap(t => t._2.constructors)

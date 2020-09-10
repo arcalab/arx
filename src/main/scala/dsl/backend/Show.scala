@@ -138,11 +138,12 @@ object Show {
         (if (typ.isDefined) " : " + apply(typ.get) else "") +
         " = {\n" + apply(block) +
         fwd(ind) + "}"
-    case SBDef(name, mem, params, init, gcs) =>
+    case SBDef(name, mem, params, init, gcs,outs) =>
       "sb " + name + "<" + mem.map(apply).mkString(",") + ">" +
         "(" + params.map(apply).mkString(",") + ")" +
         " = {\n" + init.map(s => apply(s)(ind + 1) + "\n").mkString +
         gcs.map(gc=>apply(gc)).mkString("\n") +
+        outs.mkString(" ") +
         fwd(ind)+"}"
     case expr: StreamExpr => expr match {
       case FunctionApp(sfun, args) => apply(sfun)+"("+args.map(s=>apply(s)(0)).mkString(",")+")"

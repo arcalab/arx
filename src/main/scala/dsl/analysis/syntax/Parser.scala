@@ -193,14 +193,15 @@ object Parser extends RegexParsers {
     */
   def sbDef:Parser[Statement] = {
     sym = sym.addLevel()
-    val res = "sb"~lowId~opt(memories)~opt(formalParams)~"="~"{"~opt(initSB)~rep1(gc)~"}" ^^ {
-      case _~id~mems~fp~_~_~init~gcs~_ =>
+    var name = ""
+    val res = "sb"~lowId~opt(memories)~opt(formalParams)~"="~"{"~opt(initSB)~rep1(gc)~opt(rep(lowId))~"}" ^^ {
+      case _~id~mems~fp~_~_~init~gcs~outs~_ =>
         sym = sym.add(id, FUN)
-        sym = sym.rmLevel()
-        sym = sym.add(id, FUN)
-        SBDef(id,mems.getOrElse(List()),fp.getOrElse(List()),init.getOrElse(List()),gcs.toSet)
+        name = id
+        SBDef(id,mems.getOrElse(List()),fp.getOrElse(List()),init.getOrElse(List()),gcs.toSet,outs.getOrElse(List()))
     }
     sym = sym.rmLevel()
+    if (name.nonEmpty) sym = sym.add(name, FUN)
     res
   }
 

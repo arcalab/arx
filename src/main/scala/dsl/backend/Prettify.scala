@@ -28,7 +28,8 @@ object Prettify {
       FunEntry(TFun(apply(f._2.tExp.tIn),apply(f._2.tExp.tOut)),apply(f._2.funCtx)))
     val nPorts =
       ctx.ports.map(p => p._1 -> p._2.map(apply))
-    Context(ctx.adts,nFuns,nPorts)
+    val nVars = ctx.vars.map(m=> m._1 -> VarEntry(apply(m._2.tExp)))
+    Context(ctx.adts,nFuns,nPorts,nVars)
   }
 
   def apply(p:TProgram):TProgram = TProgram(p.imports,p.userTypes,apply(p.tBlock))
@@ -37,6 +38,7 @@ object Prettify {
 
   def apply(s:TStatement):TStatement = s match {
     case TFunDef(f,t,tb) => TFunDef(f,apply(t),apply(tb))
+    case TSBDef(sb,t) => TSBDef(sb,apply(t))
     case TSFunDef(f,t,tb) => TSFunDef(f,apply(t),apply(tb))
     case TAssignment(a,tlhs,trhs) => TAssignment(a,tlhs.map(apply),apply(trhs))
     case TRAssignment(a,tlhs,trhs) => TRAssignment(a,tlhs.map(apply),apply(trhs))

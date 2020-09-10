@@ -98,6 +98,12 @@ object Encode{
       val nSbCtx = sbBCtx.add(fd.name,fEntry)
       // return the new context and an empty stream builder and outputs
       (StreamBuilder.empty,List(),nSbCtx)
+    case TSBDef(sbDef, t) =>
+      val mems = sbDef.mem.map(_.name)
+      val ins= sbDef.gcs.flatMap(gc => gc.inputs) -- mems
+      val outs = sbDef.gcs.flatMap(gc => gc.outputs) -- mems
+      val sb = StreamBuilder(sbDef.init.toSet,sbDef.gcs,ins,outs,mems.toSet)
+      (StreamBuilder.empty,List(),sbCtx.add(sbDef.name,(sb,sbDef.params.map(_.name),sbDef.outs)))
     //todo: case for SFunDef
     case _ =>throw new RuntimeException(s"Statement $st of type ${st.getClass} not supported.")
   }
