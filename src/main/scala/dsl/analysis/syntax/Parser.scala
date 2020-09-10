@@ -135,7 +135,7 @@ object Parser extends RegexParsers {
 
   /* Function definition */
   def funDef: Parser[Statement] =
-    "def" ~> log(restFunDef)("restFunDef")
+    "def" ~> restFunDef //log(restFunDef)("restFunDef")
 
 
   def restFunDef:Parser[Statement] = {
@@ -279,7 +279,7 @@ object Parser extends RegexParsers {
     * @return a guarded command
     */
   def gc:Parser[GuardedCommand] =
-    guard~"->"~repsep(cmd,",") ^^ {case g~_~cs => GuardedCommand(g,cs.toSet)}
+    guard~"->"~repsep(cmd,",") ^^ {case g~_~cs => (g -> cs.toSet)}
 
   /**
     * Stream builder guard parser

@@ -1,5 +1,7 @@
 package dsl.analysis.semantics
 
+import dsl.backend.ArxNet
+
 /**
   * A stream builder consists of an initial configuration (of commands),
   * and a list of guarded commands
@@ -54,7 +56,9 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
 //      val nguards = gc1.guard & gc2.guard
       val ncmds   = gc1.cmd ++ gc2.cmd
 
-      GuardedCommand(nguards,ncmds)
+      val nhl = gc1.highlights ++ gc2.highlights
+
+      GuardedCommand(nguards,ncmds, nhl)
     }
 
     // new set of input, output, and memory variables
@@ -82,26 +86,27 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
     StreamBuilder(ninit,ngcs,nins,nouts,nmem)
   }
   /** Leaves only commands that assign `outs` or memory variables. */
-  def filterOutAndClean(outs:Set[String]): StreamBuilder = {
+  def filterOutAndClean(outs:Set[String],net: ArxNet = new ArxNet): StreamBuilder = {
     val mix = inputs.intersect(outputs) -- memory
 //    println(s"mix to delete: ${mix.mkString(",")}")
-    val sb = filterOut(this,outs)
+    val sb = filterOut(this,outs,net)
     sb.cleanMix(mix)
   }
 
   /** optimize commands, by including only `outs` and memory variables,
     * and their minimum dependencies  */
-  private def filterOut(sb:StreamBuilder, outs:Set[String]): StreamBuilder = {
-    val newGcs = sb.gcs.map(filterOut(_, outs ++ sb.memory))
+  private def filterOut(sb:StreamBuilder, outs:Set[String], net:ArxNet): StreamBuilder = {
+    val newGcs = sb.gcs.map(filterOut(_, outs ++ sb.memory,net))
     StreamBuilder(sb.init, newGcs, sb.inputs, sb.outputs intersect outs, sb.memory)
   }
 
-  private def filterOut(gc: GuardedCommand, outs:Set[String]): GuardedCommand = {
+  private def filterOut(gc: GuardedCommand, outs:Set[String],net:ArxNet): GuardedCommand = {
+    //  ... changing here... neet to use net
     val (okCmds,oldCmds) = gc.cmd.partition(outs contains _.variable)
     val oldMap = oldCmds.map(x => x.variable -> x.term).toMap
     val closedGuards = gc.guard.guards.map(g=>closeGuard(g,oldMap))
     val closedCmds = okCmds.map(x => Command(x.variable,closeTerm(x.term,oldMap)))
-    GuardedCommand(Guard(closedGuards),closedCmds)
+    new GuardedCommand(Guard(closedGuards),closedCmds, gc.highlights)
   }
   private def closeGuard(item: GuardItem,cmds: Map[String,Term]): GuardItem = item match {
     case IsQ(q, term) => IsQ(q,closeTerm(term,cmds))
@@ -164,6 +169,6 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
 }
 
 object StreamBuilder {
-  type StreamBuilderEntry = (StreamBuilder,List[String],List[String])
+  type StreamBuilderEntry = (StreamBuilder,List[String],List[String],ArxNet)
   def empty:StreamBuilder = StreamBuilder(Set(),Set())
 }

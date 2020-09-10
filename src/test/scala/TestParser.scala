@@ -2,6 +2,7 @@ import dsl.analysis.syntax._
 import org.scalatest.FlatSpec
 import dsl._
 import common.ParsingException
+import dsl.DSL.toVar
 
 import scala.util.Success
 
@@ -12,6 +13,7 @@ import scala.util.Success
 
 class TestParser extends FlatSpec {
 
+  /*
   var t1 = TypeDecl(
     // type name with params
     ConTypeName("List",List(AbsTypeName("a"))),
@@ -25,8 +27,8 @@ class TestParser extends FlatSpec {
     // variants of the type
     List( AdtVal("True"),AdtVal("False")))
 
-  var asg1 = Assignment(Identifier("x"),AdtTerm("Nil"))
-  var asg2 = Assignment(Identifier("y"),AdtConsExpr("Cons",List(AdtTerm("True"),AdtTerm("Nil"))))
+  var asg1 =  "x" := Nil//Assignment(List("x"),AdtTerm("Nil"))
+  var asg2 = "y" := //Assignment(Identifier("y"),AdtConsExpr("Cons",List(AdtTerm("True"),AdtTerm("Nil"))))
   var asg3 = Assignment(Identifier("z"),AdtConsExpr("Cons",List(AdtTerm("True"),
     AdtConsExpr("Cons",List(AdtTerm("False"),AdtTerm("Nil"))))))
   var asg4 = Assignment(Identifier("x"),Identifier("Nild"))
@@ -74,5 +76,5 @@ class TestParser extends FlatSpec {
     s"The program $code" should "throw a ParsingException" in {
     assertThrows[ParsingException] {Parser.parseProgram(code)}
   }
-
+  */
 }

@@ -1,5 +1,5 @@
 import dsl.DSL
-import dsl.analysis.semantics.{BaseType, TypeExpr}
+//import dsl.analysis.semantics.{BaseType, TypeExpr}
 import dsl.analysis.syntax._
 import dsl.common.{ParsingException, UndefinedVarException}
 import org.scalatest.FlatSpec
@@ -11,6 +11,7 @@ import org.scalatest.FlatSpec
 
 class TestTypeInference extends FlatSpec{
 
+  /*
   val bool = BaseType("Bool",List())
   val nat = BaseType("Nat",List())
   val boolList = BaseType("List",List(bool))
@@ -131,4 +132,6 @@ class TestTypeInference extends FlatSpec{
         DSL.typeCheck(DSL.parse(code))
       }
     }
+
+   */
 }

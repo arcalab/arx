@@ -58,7 +58,7 @@ object SBContext {
 
   /**
     * Creates a context based on a given map of names to stream builder entries
-    * @param ctx
+    * @param map
     * @return
     */
   def apply(map:Map[String,StreamBuilderEntry]):SBContext = {

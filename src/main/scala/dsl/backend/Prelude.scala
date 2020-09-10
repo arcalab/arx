@@ -2,7 +2,9 @@ package dsl.backend
 
 import dsl.DSL
 import dsl.DSL._
-import dsl.analysis.semantics.{Q, Var}
+import dsl.analysis.semantics.StreamBuilder.StreamBuilderEntry
+import dsl.analysis.semantics.{Q, StreamBuilder, Var}
+import dsl.backend.ArxNet.Edge
 import dsl.common.UndefinedNameException
 
 
@@ -114,20 +116,25 @@ object Prelude {
 //  private lazy val writer = PrimFun("writer",0,1)
 //  private lazy val reader = PrimFun("reader",1,0)
 
-  private lazy val fifo = PrimFun("fifo",fifosb)
-  private lazy val fifofull = PrimFun("fifofull",fifoFullsb,List("p1"))
+  private lazy val fifo = mkPrimFun("fifo",fifosb)
+  private lazy val fifofull = mkPrimFun("fifofull",fifoFullsb,List("p1"))
   //private lazy val fifofull0 = PrimFun("fifofull0",fifoFull0sb,List("p1"))
-  private lazy val lossy = PrimFun("lossy",lossysb)
-  private lazy val sync = PrimFun("sync",syncsb)
-  private lazy val id = PrimFun("id",idsb)
-  private lazy val dupl = PrimFun("dupl",duplsb)
-  private lazy val xor = PrimFun("xor",xorsb)
-  private lazy val merger = PrimFun("merger",mergersb)
-  private lazy val drain = PrimFun("drain",drainsb)
-  private lazy val writer = PrimFun("writer",writersb)
-  private lazy val reader = PrimFun("reader",readersb)
-  private lazy val nowriter = PrimFun("nowriter", nowritersb)
-  private lazy val noreader = PrimFun("noreader", noreadersb)
+  private lazy val lossy = mkPrimFun("lossy",lossysb)
+  private lazy val sync = mkPrimFun("sync",syncsb)
+  private lazy val id = mkPrimFun("id",idsb)
+  private lazy val dupl = mkPrimFun("dupl",duplsb)
+  private lazy val xor = mkPrimFun("xor",xorsb)
+  private lazy val merger = mkPrimFun("merger",mergersb)
+  private lazy val drain = mkPrimFun("drain",drainsb)
+  private lazy val writer = mkPrimFun("writer",writersb)
+  private lazy val reader = mkPrimFun("reader",readersb)
+  private lazy val nowriter = mkPrimFun("nowriter", nowritersb)
+  private lazy val noreader = mkPrimFun("noreader", noreadersb)
+
+  def mkPrimFun(name:String,sb:(StreamBuilder,List[String],List[String]),params:List[String]=List()): PrimFun = {
+    val net = new ArxNet += Edge(sb._2.toSet,sb._3.toSet,name)
+    PrimFun(name,(sb._1,sb._2,sb._3,net),params)
+  }
 
   private lazy val functions :Map[String,PrimFun] =
     List(fifo,fifofull,lossy,sync,id,dupl,xor,merger,drain,writer,reader,nowriter,noreader)

@@ -58,7 +58,7 @@ object SBParser extends RegexParsers {
 
 
   def gc:Parser[GuardedCommand] =
-    guard~"->"~repsep(cmd,",") ^^ {case g~_~cs => GuardedCommand(g,cs.toSet)}
+    guard~"->"~repsep(cmd,",") ^^ {case g~_~cs => (g -> cs.toSet)}
 
   def guard:Parser[Guard] =
     repsep(guardItem,",") ^^ {

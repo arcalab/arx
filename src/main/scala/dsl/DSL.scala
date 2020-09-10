@@ -6,7 +6,7 @@ import dsl.analysis.semantics._
 import dsl.analysis.semantics.Command
 import dsl.analysis.types._
 import dsl.analysis.types.TVar
-import dsl.backend.{Prelude, Prettify}
+import dsl.backend.{ArxNet, Prelude, Prettify, Show}
 import dsl.common.ParsingException
 
 
@@ -74,8 +74,11 @@ object DSL {
   //def encode(prog:TProgram, ctx:Context):SemanticResult =  Encode(prog,ctx)
 
   def encode(prog:TProgram, ctx:Context):SBContext = {
-    val (sb,sbOuts,sbCtx)  =  Encode(prog,ctx)
-    sbCtx.add("Program",(sb,List(),sbOuts)) // todo find program list of inputs when typechecking
+    val net = new ArxNet
+    val (sb,sbOuts,sbCtx)  =  Encode(prog,ctx,net)
+//    println("[DSL] Encoded net: "+net)
+//    println("[DSL] Encoded sb: "+Show(sb))
+    sbCtx.add("Program",(sb,List(),sbOuts,net)) // todo find program list of inputs when typechecking
   }
 
 
