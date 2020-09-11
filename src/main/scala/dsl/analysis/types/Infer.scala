@@ -5,7 +5,6 @@ import dsl.analysis.semantics.{Ask, Command, Get, GetQ, Guard, GuardItem, Guarde
 import dsl.analysis.syntax.Program.{Block, MaybeTypeName}
 import dsl.analysis.syntax._
 import dsl.common.{TypeException, UndefinedNameException}
-import dsl.analysis.syntax.SymbolType._
 import dsl.analysis.types.TProgram.TBlock
 import dsl.backend._
 

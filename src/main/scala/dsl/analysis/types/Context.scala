@@ -1,6 +1,5 @@
 package dsl.analysis.types
 
-import dsl.analysis.syntax.SymbolType._
 import dsl.backend.{In, PortType}
 
 

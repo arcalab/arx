@@ -1,7 +1,7 @@
 package dsl
 
 import scala.language.implicitConversions
-import dsl.analysis.syntax.{FunDef, Parser, Program, SBParser}
+import dsl.analysis.syntax.{FunDef, Parser, Program}
 import dsl.analysis.semantics._
 import dsl.analysis.semantics.Command
 import dsl.analysis.types._
@@ -30,10 +30,10 @@ object DSL {
     case f:Parser.NoSuccess => throw new ParsingException("Parser failed: "+f)
   }
 
-  def parseSB(code:String):StreamBuilder = SBParser.parseSB(code) match {
-    case SBParser.Success(result,_) => result
-    case f:SBParser.NoSuccess => throw new ParsingException("Parser failed: "+f)
-  }
+//  def parseSB(code:String):StreamBuilder = SBParser.parseSB(code) match {
+//    case SBParser.Success(result,_) => result
+//    case f:SBParser.NoSuccess => throw new ParsingException("Parser failed: "+f)
+//  }
 
   val prelude: Prelude.type = Prelude
 

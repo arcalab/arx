@@ -2,7 +2,7 @@ package dsl.analysis.syntax
 
 import dsl.analysis.semantics._
 import dsl.analysis.syntax.Program.Block
-import dsl.analysis.syntax.SymbolType._
+//import dsl.analysis.syntax.SymbolType._
 import dsl.analysis.types.{Pull, Push}
 import dsl.backend.{Import, Prelude}
 
@@ -16,15 +16,15 @@ import scala.util.parsing.input.{Position, Positional}
 
 object Parser extends RegexParsers {
 
-  private var sym: SymbolsTable = new SymbolsTable
+  //private var sym: SymbolsTable = new SymbolsTable
   //todo: fix error with fun def not creating new level in symbols table
   def parseProgram(code:String):ParseResult[Program] = {
-    sym = new SymbolsTable
+    //sym = new SymbolsTable
     parseAll(program,code)
   }
 
   def parseFunction(code:String):ParseResult[Statement] = {
-    sym = new SymbolsTable
+    //sym = new SymbolsTable
     parseAll(funDef,code)
   }
 
@@ -109,7 +109,7 @@ object Parser extends RegexParsers {
 
   def dt:Parser[TypeDecl] =
     "data" ~ upId ~ opt(tparams) ~ "=" ~ constructors ^^ {
-      case _~n~tps~_~vs => sym=sym.add(n,TYPE);TypeDecl(ConTypeName(n,tps.getOrElse(List())),vs)}
+      case _~n~tps~_~vs => /*sym=sym.add(n,TYPE);*/TypeDecl(ConTypeName(n,tps.getOrElse(List())),vs)}
 
   // constructors
   def constructors: Parser[List[Constructor]] =
@@ -118,7 +118,7 @@ object Parser extends RegexParsers {
   // constructor
   def constructor:Parser[Constructor] =
     upId ~ opt("(" ~> tnames <~ ")")^^ {
-      case n~tps => sym=sym.add(n,CONST); Constructor(n,tps.getOrElse(List()))}
+      case n~tps => /*sym=sym.add(n,CONST);*/ Constructor(n,tps.getOrElse(List()))}
 
   // a non empty sequence of type names
   def tnames:Parser[List[TypeName]] =
@@ -139,17 +139,17 @@ object Parser extends RegexParsers {
 
 
   def restFunDef:Parser[Statement] = {
-    sym = sym.addLevel()
+//    sym = sym.addLevel()
     //println("entering fun def")
     lowId /* ~ opt("<" ~> dataFormalParams <~ ">")*/ ~ funParamsAndBody ^? ({
       case f ~ rest  if !keywords.contains(f) =>
-        sym = sym.add(f, FUN) // quick hack to see if function name is not used/delared inside the function todo: fix it
-        sym = sym.rmLevel()
-        sym = sym.add(f, FUN) // actually added it to the current scope
+//        sym = sym.add(f, FUN) // quick hack to see if function name is not used/delared inside the function todo: fix it
+//        sym = sym.rmLevel()
+//        sym = sym.add(f, FUN) // actually added it to the current scope
         rest match {
           case Right((typ,sf)) => SFunDef(f, typ, sf)
           case Left((ps,typ, bl)) => FunDef(f,ps, typ, bl)}},
-      {case f~_ => sym=sym.rmLevel(); s"Cannot use the reserve word $f as a function name"})
+      {case f~_ => /*sym=sym.rmLevel();*/ s"Cannot use the reserve word $f as a function name"})
   }
 
   def funParamsAndBody:Parser[Either[(List[TypedVar],Option[TypeName],Block),(Option[TypeName],StreamFun)]] =
@@ -160,12 +160,12 @@ object Parser extends RegexParsers {
 
   // todo: dropped for now until we solve it in the paper
   def dataFormalParams: Parser[List[Port]] =
-    id ~ rep(","~> id) ^^ { case id~ids => (id::ids).map(i => {sym=sym.add(i,DATA); Port(i)})}
+    id ~ rep(","~> id) ^^ { case id~ids => (id::ids).map(i => {/*sym=sym.add(i,DATA); */Port(i)})}
 
   // comma separated list of identifiers
   def funFormalParams: Parser[List[TypedVar]] =
     repsep(typedVar,",") ^^ { tvs =>
-      tvs.foreach(tv => sym = sym.add(tv.name,INPUT)) //todo: Possibly no need of using INPUT, just use VAR
+      /*tvs.foreach(tv => sym = sym.add(tv.name,INPUT))*/ //todo: Possibly no need of using INPUT, just use VAR
       tvs
     }
 
@@ -180,7 +180,7 @@ object Parser extends RegexParsers {
   def assignment:Parser[Statement] =
     rep1sep(lowId,",")~"<-|<~".r~strExpr ^^ {
       case ids~typ~expr =>
-        ids.foreach(id => sym = sym.add(id,VAR))
+//        ids.foreach(id => sym = sym.add(id,VAR))
         if (typ.matches("<-")) Assignment(ids,expr)
         else RAssignment(ids,expr)
     }
@@ -192,16 +192,16 @@ object Parser extends RegexParsers {
     * @return a stream builder definition statement
     */
   def sbDef:Parser[Statement] = {
-    sym = sym.addLevel()
+//    sym = sym.addLevel()
     var name = ""
     val res = "sb"~lowId~opt(memories)~opt(formalParams)~"="~"{"~opt(initSB)~rep1(gc)~opt(rep(lowId))~"}" ^^ {
       case _~id~mems~fp~_~_~init~gcs~outs~_ =>
-        sym = sym.add(id, FUN)
+//        sym = sym.add(id, FUN)
         name = id
         SBDef(id,mems.getOrElse(List()),fp.getOrElse(List()),init.getOrElse(List()),gcs.toSet,outs.getOrElse(List()))
     }
-    sym = sym.rmLevel()
-    if (name.nonEmpty) sym = sym.add(name, FUN)
+//    sym = sym.rmLevel()
+//    if (name.nonEmpty) sym = sym.add(name, FUN)
     res
   }
 
@@ -225,7 +225,7 @@ object Parser extends RegexParsers {
     */
   def typedParams:Parser[List[TypedVar]] =
     repsep(typedVar,",") ^^ { tvs =>
-      tvs.foreach(tv => sym = sym.add(tv.name,INPUT))
+//      tvs.foreach(tv => sym = sym.add(tv.name,INPUT))
       tvs
     }
 
@@ -255,7 +255,7 @@ object Parser extends RegexParsers {
     * @return a variable
     */
   def variable:Parser[Term] =
-    lowId ^^ { v => sym = sym.add(v, INPUT); Var(v) }
+    lowId ^^ { v => /*sym = sym.add(v, INPUT); */Var(v) }
 
   /**
     * Stream builder destructor parser
@@ -329,6 +329,6 @@ object Parser extends RegexParsers {
     * @return a non-empty set of variables
     */
   def guardParam:Parser[Set[String]] =
-    "("~>rep1sep(lowId,",")<~")" ^^ { v => v.foreach(p => sym = sym.add(p, INPUT)); v.toSet }
+    "("~>rep1sep(lowId,",")<~")" ^^ { v => /*v.foreach(p => sym = sym.add(p, INPUT));*/ v.toSet }
 
 }
