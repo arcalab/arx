@@ -51,11 +51,11 @@ object TypeCheck {
   }
 
   def lhsAssigAreVars(vars:List[String],ctx:Context):Unit = {
-    var err: Option[ContextEntry] = None
-    vars.exists(v =>
-      if (ctx.context.contains(v) && !ctx.ports.contains(v)) {err = Some(ctx.context(v)); true} else false)
-    if (err.isDefined)
-      throw new TypeException(s"Only variables can be used on the LHS of an assignment but ${err.getClass} found")
+//    var err: Option[ContextEntry] = None
+//    vars.exists(v =>
+      //if (ctx.context.contains(v) && !ctx.ports.contains(v)) {err = Some(ctx.context(v)); true} else false)
+      //    if (err.isDefined)
+//      throw new TypeException(s"Only variables can be used on the LHS of an assignment but ${err.getClass} found")
     if (vars.toSet.size != vars.size)
       throw new TypeException(s"Cannot repeat variables on the LHS of an assignment but ${vars.mkString(",")} found")
   }
@@ -69,7 +69,7 @@ object TypeCheck {
     existsType(te,ctx) && matchType(te,tDef)
 
   private def existsType(te:TExp,ctx:Context):Boolean = te match {
-    case TBase(name,ps) if ctx.adts.contains(name) && ps.forall(p=>existsType(p,ctx)) => true
+    case TBase(name,ps) if ctx.hasType(name) && ps.forall(p=>existsType(p,ctx)) => true
     case TBase(name,ps) => throw new UndefinedNameException(s"Unknown type name ${name}")
     case TTensor(t1,t2) => existsType(t1,ctx) && existsType(t2,ctx)
     case TFun(ins,outs) => existsType(ins,ctx) && existsType(outs,ctx)
@@ -90,12 +90,9 @@ object TypeCheck {
       throw new TypeException(s"Port ${err.get} is not closed in:\n ${Show(s)}")
   }
   private def isClosedPort(occurrences:List[PortEntry]):Boolean = {
-    val in = occurrences.find(p => p.pType == In)
-    val out = occurrences.find(p=> p.pType == Out)
+    val in = occurrences.find(p => p.io == In)
+    val out = occurrences.find(p=> p.io == Out)
     in.isDefined && out.isDefined
   }
-
-
-
 
 }

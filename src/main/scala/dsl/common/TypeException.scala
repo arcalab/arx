@@ -5,4 +5,5 @@ package dsl.common
   */
 
 
-class TypeException(err:String) extends RuntimeException(err){}
+class TypeException(err:String) extends RuntimeException(err) {}//(implicit pos:Position)
+  //extends RuntimeException(pos.line+": "+ err) {}

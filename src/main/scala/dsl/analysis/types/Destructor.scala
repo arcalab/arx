@@ -12,16 +12,16 @@ import dsl.common.TypeException
 object Destructor {
 
   def apply(ctx:Context,tExp:TExp):TExp = tExp match {
-    case TBase(name, tParams) if ctx.adts.contains(name)=>
+    case TBase(name, tParams) if ctx.hasType(name)=>
       // get the type context entry
-      val basetype:TypeEntry = ctx.adts(name)
+      val basetype:TypeEntry = ctx.getType(name)
       // get constructors of the type
-      val constructors:List[ConstEntry] = basetype.constructors
+      val constructors:List[ConstEntry] = basetype.constructors.map(ctx.getConst)
       // get the type vars in the types definition (in order)
       val typeVars:List[TVar] = basetype.tExp.tParams.flatMap(p=> p.vars)
       val substitute = Substitution(typeVars.zip(tParams).toMap)
       // replace all type vars in the constructors definition by the known ones
-      val substConstr:List[List[TExp]] = constructors.map(c=> c.params.map(substitute(_)))
+      val substConstr:List[List[TExp]] = constructors.map(c=> c.paramsType.map(substitute(_)))
       val res = substConstr.map(c=>destruct(ctx,c)).foldRight[TExp](TUnit)(TTensor)
       Simplify(res)
     case _ => throw new TypeException(s"Only ground types can be destruct but ${tExp} found")
@@ -36,9 +36,9 @@ object Destructor {
 
   private def destruct(ctx:Context,paramTypes:List[TExp]):TExp =  paramTypes match {
     case Nil =>
-      if (!ctx.adts.contains("Unit"))
+      if (!ctx.hasType("Unit"))
         throw new TypeException(s"Stream fun build requires Unit type. Try 'import Types.Unit'")
-      else ctx.adts("Unit").tExp //TBase("Unit",List())
+      else ctx.getType("Unit").tExp //TBase("Unit",List())
     case _ => Simplify(paramTypes.foldRight[TExp](TUnit)(TTensor))
     //case p::ps => TTensor(apply(ctx,p),destruct(ctx,ps))
   }

@@ -148,10 +148,10 @@ object Encode{
   private def encode(se:TStreamExpr, sbCtx:SBContext, typeCtx:Context,net:ArxNet):SemanticResult = se match {
     case gt:TGroundTerm => encode(gt,sbCtx,net)
     case TFunApp(TMatch(TBase(name, _), _),_,targs) =>
-      val constructors:List[ConstEntry] = typeCtx.adts(name).constructors
+      val constructors:List[ConstEntry] = typeCtx.getType(name).constructors.map(typeCtx.getConst)
       mkMatch(constructors,targs.head,sbCtx,net)
     case TFunApp(TBuild(_, TBase(name,_)), _, targs) =>
-      val constructors:List[ConstEntry] = typeCtx.adts(name).constructors
+      val constructors:List[ConstEntry] = typeCtx.getType(name).constructors.map(typeCtx.getConst)
       mkBuild(constructors,targs,sbCtx,net)
     case TFunApp(TFunName(name,_,data),_, args) =>
       // get the stream builder entry associated to name
@@ -238,7 +238,7 @@ object Encode{
     case Nil => (List(),DSL.sb)
     case q::more =>
       // get the arguments that correspond to the first constructor q
-      val numArgs = q.params.size
+      val numArgs = q.paramsType.size
       val qArgs = args.take(if (numArgs==0) 1 else numArgs)
       // make a stream builder for each argument that is a term
       //val sbArgs:List[SemanticResult] = qArgs.map(a=> encode(a,sbCtx))
@@ -288,12 +288,12 @@ object Encode{
       // generate the outputs for this constructor
       var commands:List[Command] = List()
       var outputs:List[String] = List()
-      for (p<-q.params.zipWithIndex) {
+      for (p<-q.paramsType.zipWithIndex) {
         val out = freshVar()
         outputs  :+= out
         commands :+= (out := GetQ(q.name,p._2,Var(in)))//(out :=Const(s"get${q.name}${p._2.toString}",Port(in)::Nil))
       }
-      if (q.params.isEmpty) {
+      if (q.paramsType.isEmpty) {
         val out = freshVar()
         outputs  :+= out
         commands :+= (out := GetQ(q.name,0,Var(in)))//(out := Const(s"get${q.name}0",Port(in)::Nil))

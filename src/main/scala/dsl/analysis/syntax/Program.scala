@@ -61,4 +61,4 @@ case class ConTypeName(name:String,param:List[TypeName]=List()) extends TypeName
 
 case class TypeDecl(name:TypeName, constructors:List[Constructor]) extends Positional
 
-case class Constructor(name:String, param:List[TypeName]=List()) {}
+case class Constructor(name:String, param:List[TypeName]=List()) extends Positional {}

@@ -4,9 +4,12 @@ import dsl.DSL
 import dsl.analysis.semantics.{Ask, Command, Get, GetQ, Guard, GuardItem, GuardedCommand, IsQ, Q, Term, Und, Var}
 import dsl.analysis.syntax.Program.{Block, MaybeTypeName}
 import dsl.analysis.syntax._
-import dsl.common.{TypeException, UndefinedNameException}
+import dsl.analysis.types.Context.PortCtx
+import dsl.common._
 import dsl.analysis.types.TProgram.TBlock
 import dsl.backend._
+
+import scala.util.parsing.input.Position
 
 /**
   * Created by guillecledou on 2019-08-01
@@ -32,110 +35,228 @@ object Infer {
     *         a set of type constraints to be solved
     */
   def apply(prog:Program):TypeResult = {
-    // create a new context
     var ctx = Context()
-    // add primitive functions
-    //ctx = Context(ctx.adts,importPrimFuns(),ctx.ports)
     // load imports and primitive funs
-    ctx = loadImportsAndPrims(prog.imports,ctx)//Context()
+//    ctx = loadImportsAndPrims(prog.imports,ctx)//Context()
     // add the user defined types
-    prog.types.foreach(t => ctx = addUserTypes(t,ctx))
+//    prog.types.foreach(t => ctx = addUserType(t,ctx))
     // infer the type of the program block
+    ctx = loadPrelude(ctx)
+    ctx = loadImports(prog.imports,ctx)
+    ctx = loadTypeDefinitions(prog.types,ctx)
     val(pctx,pt,ptcons,tb) = infer(prog.block,ctx)
     // match input/output context
-    val inOutTCons = portsMatch(pctx.ports)
+    val inOutTCons = matchPorts(pctx.ports)
     // add inputs as program input type
-    val openInsType = pctx.ports.filter(p=> !p._2.exists(p => p.pType == Out))
+    val openInsType = pctx.ports.filter(p=> !p._2.exists(p => p.io == Out))
       .map(p=> p._2.head.tExp)
+    //val openInsType = inputPorts(pctx.ports).map(p=>p._2.texp)
     val programType = Simplify(TFun(Simplify(openInsType.foldRight[TExp](TUnit)(TTensor)),pt))
     // add the program to the context
-    val npctx = pctx.add("Program",FunEntry(programType.asInstanceOf[TFun],ctx))
+    val npctx = pctx.add("Program",FunEntry(programType.asInstanceOf[TFun], ctx))
     (npctx,programType,ptcons++inOutTCons,TProgram(prog.imports,prog.types,tb))
   }
 
-  private def loadImportsAndPrims(imp:List[Import],ctx:Context):Context = {
-    val mc:List[ModuleContent] = imp.flatMap(i=>Prelude.getImport(i))
+  /**
+    * Given a context of ports it filters out ports that are mixed or output.
+    * @param ports a context of ports
+    * @return a context of ports that act only as inputs
+    */
+//  private def inputPorts(ports:PortCtx):PortCtx = {
+//    ports.filter(p => !p._2.usages.contains(Out))
+//  }
 
-    val primTypes = Prelude.importPrimTypes() ++ mc.collect({case p:PrimType => p})
-    val primFuns = mc.collect({case p:PrimFun => p})
-    val complexFun = mc.collect({case p:ComplFun => p})
+  private def matchPorts(ports:Map[String,List[PortEntry]]):Set[TCons] =
+    ports.flatMap(p=>matchPort(p._2)).toSet
 
-    val tctx = loadContent(primTypes,ctx)
-    val pfctx = Context(tctx.adts,importPrimFuns(tctx),tctx.ports,tctx.vars)
-    val fctx = loadContent(primFuns,pfctx)
-    val cfctx = loadContent(complexFun,fctx)
-    cfctx
-  }
-
-  private def loadContent(mc:List[ModuleContent],ctx:Context):Context = mc match {
-    case Nil => ctx
-    case PrimType(n,td)::ls =>
-      val nctx = addUserTypes(td,ctx)
-      loadContent(ls,nctx)
-    case PrimFun(n,sb,params)::ls =>
-      val nctx = ctx.add(n,mkPrimFunEntry(PrimFun(n,sb,params),ctx)._2)
-      loadContent(ls,nctx)
-    case ComplFun(n,fd)::ls =>
-      val (nfctx,ft,cons,tfd) = infer(fd,ctx)
-      loadContent(ls,nfctx)
-  }
-
-  private def importPrimFuns(ctx:Context):Map[String,FunEntry] =
-    DSL.prelude.importPrimFunctions().map(mkPrimFunEntry(_,ctx)).toMap
-
-  private def mkPrimFunEntry(fun:PrimFun,ctx:Context):(String,FunEntry) = fun.name match {
-    case "drain" =>
-      val funT = TFun(TTensor(TVar(freshVar()),TVar(freshVar())),TUnit)
-      (fun.name,FunEntry(funT,Context()))
-    case "nowriter" =>
-      (fun.name , FunEntry(TFun(TUnit, TVar(freshVar())) , Context()))
-    case "noreader" =>
-      (fun.name , FunEntry(TFun(TVar(freshVar()),TUnit) , Context()))
-
-    case _ =>
-      val tVar = TVar(freshVar())
-      // todo: to check, for now is ok to use same tvar because only fifofull supports instantiation:
-      val data = fun.params.map(_=>tVar)
-      val insT = (1 to fun.sb._1.inputs.size).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
-      val outsT =(1 to fun.sb._1.outputs.size).map(_=>tVar).foldRight[TExp](TUnit)(TTensor(_,_))
-      val funT = TFun(Simplify(insT),Simplify(outsT))
-      (fun.name,FunEntry(funT,Context(),data))
+  private def matchPort(pEntries:List[PortEntry]):Set[TCons] = pEntries match {
+    case Nil => Set()
+    case p::Nil => Set()
+    case p1::p2::ps => matchPort(p2::ps)+TCons(p1.tExp,p2.tExp)
   }
 
   /**
-    * Add user defines to the context
-    * @param typeDecl type declaration
-    * @param ctx current context
-    * @return
+    * Load primitive types and functions (connectors)
+    * @param ctx a context
+    * @return a new context containing ctx + primitive types and functions
     */
-  private def  addUserTypes(typeDecl:TypeDecl, ctx:Context):Context = {
-    def mkUserType(typDecl:TypeDecl):(TBase,List[ConstEntry]) = {
-      val tn = typeName2TExp(typDecl.name)
-      val const = typDecl.constructors.map(c => ConstEntry(c.name,c.param.map(p=>typeName2TExp(p)),tn))
-      (tn.asInstanceOf[TBase],const)
-    }
-    // create a type expression for the user defined type
-    val nt = mkUserType(typeDecl)
-    // check that each type param in the types name is abstract
-    if (nt._1.tParams.exists(p => !p.isInstanceOf[TVar]))
-      throw new RuntimeException(s"Cannot use a concrete type as a parameter to a type definition - in xx") // Show(t)
-    // add the type name to the new context
-    var nctx = ctx.add(typeDecl.name.name, TypeEntry(nt._1, nt._2))
-    // checking that each type param exists if it is concrete type
-    for (c <- nt._2) {
-      c.params.foreach { case TBase(n, ps) if !nctx.adts.contains(n) =>
-        throw new UndefinedNameException(s"Name $n doesn't correspond to an existing type")
-      case _ => ()
-      }
-    }
+  private def loadPrelude(ctx:Context):Context = {
+    val primitiveTypes = Prelude.importPrimTypes()
+    val primitiveFunctions = Prelude.importPrimFunctions()
+
+    var nctx = loadContent(primitiveTypes,ctx)
+    nctx = loadContent(primitiveFunctions,nctx)
     nctx
   }
 
-  private def typeName2TExp(tn:TypeName):TExp = tn match {
-    case ConTypeName(n,ps) => TBase(n,ps.map(p=>typeName2TExp(p)))
-    case AbsTypeName(n) => TVar(n)
+  /**
+    * Load content imported by the user
+    * @param imports a list of import declarations
+    * @param ctx a context
+    * @return a new context containing ctx + types and functions imported in imports
+    */
+  private def loadImports(imports:List[Import],ctx:Context):Context = {
+    var importedContent = imports.flatMap(i => Prelude.getImport(i))
+    loadContent(importedContent,ctx)
   }
 
+  /**
+    * Load types definied by the user
+    * todo: check if fold is correct
+    * @param types a list of type declarations
+    * @param ctx a context
+    * @return a new context containing ctx + new types declared by the user
+    */
+  private def loadTypeDefinitions(types:List[TypeDecl],ctx:Context):Context =
+    types.foldRight(ctx) { (t,lc) => loadTypeDefinition(t,lc)}
+
+  /**
+    * Load a type defined by the user to the context
+    * @param tdef a type declaration
+    * @param ctx current context
+    * @return a new context containing ctx + the new type declared
+    */
+  private def loadTypeDefinition(tdef:TypeDecl,ctx:Context):Context = {
+    val typ = mkType(tdef.name).asInstanceOf[TBase]
+    val constTypes:Map[String,ConstEntry] = tdef.constructors.map(c =>
+      c.name -> ConstEntry(c.name,c.param.map(mkType),typ).setPos(c.pos)).toMap
+    var nctx = ctx.add(tdef.name.name,TypeEntry(constTypes.keys.toList,typ).setPos(tdef.pos))
+    if (! wellDefinedType(typ))
+      throw new InvalidType(s"Type parameters must be abstract in ${tdef.pos} ")
+    val illConstructor = constTypes.values.find(!wellDefinedConstructor(_,nctx))
+    if (illConstructor.isDefined)
+      throw new InvalidType(s"Type name ${illConstructor.get.name} not found in ${illConstructor.get.pos}")
+    constTypes.foreach(c=>{nctx = nctx.add(c._1,c._2)})
+    nctx
+  }
+
+  /**
+    * Checks if a type is well defined:
+    * - it can be represented as a base type
+    * - all is type params, if any, are abstract
+    * @param texp type expression to check
+    * @return whether it is well defined
+    */
+  private def wellDefinedType(texp: TExp):Boolean = texp match {
+    case TBase(_,params) => params.forall({case p:TVar => true; case _=>false})
+    case _ => false
+  }
+
+  /**
+    * Checks if a constructor definition is well defined:
+    * - all its concrete type params, if any, are defined in the context
+    * @param const constructor entry
+    * @param ctx the current context
+    * @return whether it is well defined
+    */
+  private def wellDefinedConstructor(const:ConstEntry,ctx:Context):Boolean =
+    const.paramsType.forall({case p:TBase => ctx.hasType(p.name); case _=> true})
+
+
+//  DEPRECATED
+//  private def  addUserType(typeDecl:TypeDecl, ctx:Context):Context = {
+//    def mkUserType(typDecl:TypeDecl):(TBase,List[ConstEntry]) = {
+//      val tn = typeName2TExp(typDecl.name)
+//      val const = typDecl.constructors.map(c => ConstEntry(c.name,c.param.map(p=>typeName2TExp(p)),tn))
+//      (tn.asInstanceOf[TBase],const)
+//    }
+//    // create a type expression for the user defined type
+//    val nt = mkUserType(typeDecl)
+//    // check that each type param in the types name is abstract
+//    if (nt._1.tParams.exists(p => !p.isInstanceOf[TVar]))
+//      throw new RuntimeException(s"Cannot use a concrete type as a parameter to a type definition - in xx") // Show(t)
+//    // add the type name to the new context
+//    var nctx = ctx.add(typeDecl.name.name, TypeEntry(nt._1, nt._2))
+//    // checking that each type param exists if it is concrete type
+//    for (c <- nt._2) {
+//      c.params.foreach { case TBase(n, ps) if !nctx.adts.contains(n) =>
+//        throw new UndefinedNameException(s"Name $n doesn't correspond to an existing type")
+//      case _ => ()
+//      }
+//    }
+//    nctx
+//  }
+
+  /**
+    * Creates an appropriate type expression from a TypeName (abstract or concrete)
+    * @param tn a type name
+    * @return the type expression for the type name
+    */
+  private def mkType(tn:TypeName):TExp = tn match {
+    case ConTypeName(name,params) => TBase(name,params.map(p=>mkType(p)))
+    case AbsTypeName(name) => TVar(name)
+  }
+
+// DEPRECATED
+//  private def loadImportsAndPrims(imp:List[Import],ctx:Context):Context = {
+//    val mc:List[ModuleContent] = imp.flatMap(i=>Prelude.getImport(i))
+//
+//    val primTypes = Prelude.importPrimTypes() ++ mc.collect({case p:PrimType => p})
+//    val primFuns = mc.collect({case p:PrimFun => p})
+//    val complexFun = mc.collect({case p:ComplFun => p})
+//
+//    val tctx = loadContent(primTypes,ctx)
+//    val pfctx = Context(tctx.adts,importPrimFuns(tctx),tctx.ports,tctx.vars)
+//    val fctx = loadContent(primFuns,pfctx)
+//    val cfctx = loadContent(complexFun,fctx)
+//    cfctx
+//  }
+
+  /**
+    * Loads a list of module contents [[ModuleContent]] into a context
+    * @param mc list of module contents
+    * @param ctx context
+    * @return a new context containing ctx + the specified content
+    */
+  private def loadContent(mc:List[ModuleContent],ctx:Context):Context = mc match {
+    case Nil => ctx
+    case PrimType(n,td)::ls =>
+      val nctx = loadTypeDefinition(td,ctx)
+      loadContent(ls,nctx)
+    case PrimFun(n,sb,params)::ls =>
+      val nctx = ctx.add(n,mkPFun(PrimFun(n,sb,params)))
+      loadContent(ls,nctx)
+    case ComplFun(_,fd)::ls =>
+      val (nfctx,_,_,_) = infer(fd,ctx)
+      loadContent(ls,nfctx)
+  }
+
+//  private def importPrimFuns(ctx:Context):Map[String,FunEntry] =
+//    DSL.prelude.importPrimFunctions().map(mkPrimFunEntry(_,ctx)).toMap
+
+  /**
+    * Creates a function entry for a primitive function
+    * @param fun primitive function
+    * @return
+    */
+  private def mkPFun(fun:PrimFun):FunEntry = fun.name match {
+    case "drain" =>
+      FunEntry(TFun(TTensor(TVar(freshVar()),TVar(freshVar())),TUnit), Context())
+    case "nowriter" =>
+      FunEntry(TFun(TUnit, TVar(freshVar())), Context())
+    case "noreader" =>
+      FunEntry(TFun(TVar(freshVar()),TUnit), Context())
+    case _ =>
+      val tVar = TVar(freshVar())
+      // only fifofull has data params and has same type IO
+      val dataType = fun.params.map(_=>tVar)
+      val inSize = fun.sb._1.inputs.size
+      val outSize = fun.sb._1.outputs.size
+      val inType = List.fill(inSize)(tVar).foldRight[TExp](TUnit)(TTensor)
+      val outType = List.fill(outSize)(tVar).foldRight[TExp](TUnit)(TTensor)
+      FunEntry(TFun(Simplify(inType),Simplify(outType)), Context(), dataType)
+  }
+
+
+  /**
+    * Infer the type of a block
+    * @param block the block
+    * @param ctx a context
+    * @return an updated context,
+    *         the type of the block,
+    *         a set of unresolved type constraints, and
+    *         a typed block
+    */
   private def infer(block:Block,ctx:Context):BTypeResult = block match  {
     case Nil => (ctx,TUnit,Set(),List())
     case b::bs =>
@@ -146,7 +267,7 @@ object Infer {
 
   private def infer(st:Statement,ctx:Context):STypeResult = st match {
     case f@FunctionApp(Match,_) =>
-      throw new TypeException(s"Cannot infer the type of 'match' in ${Show(f)}. " +
+      throw new TypeException(s"Cannot infer the type of 'match' in ${f.pos}. " +
         s"Try assigning its output to a sequence of variables")
     case se:StreamExpr => infer(se,ctx)
     case a@Assignment(variables, expr) =>
@@ -155,23 +276,24 @@ object Infer {
     case a@RAssignment(variables, expr) =>
       val (ectx,tcons,lhsTypes,etse) = inferAsg(variables,expr,ctx)
       (ectx,TUnit,tcons,TRAssignment(a,lhsTypes,etse))
-    case fd@FunDef(name, params, typ, block) if !ctx.context.contains(name) =>
+    case fd@FunDef(name, params, typ, block) =>
       val insNames = params.map(i=> i.name).toSet
       if (insNames.size != params.size)
         new TypeException(s"Cannot repeat input variables on a function definition ${insNames.mkString(",")} found")
       //create a new context for the function that knows only function names and type names - no variable names
-      var fctx = Context(ctx.adts,ctx.functions,Map(),Map())
+//      var fctx = Context(ctx.adts,ctx.functions,Map(),Map())
+      var fctx = Context.newScope(ctx)
       // create a type for each input port (specified or new type variable)
-      val insPorts:List[(String,TExp)] = params.map(p=> (p.name, getSecifiedType(p.typ,ctx)))
+      val insPorts:List[(String,TExp)] = params.map(p=> (p.name, getSpecifiedType(p.typ,ctx)))
       // create a type for the function (specified or new type variable)
-      val specifiedFType = getSecifiedType(typ,ctx)
+      val specifiedFType = getSpecifiedType(typ,ctx)
       // create a fresh type variable for each specified ports whose specified type is a type variable
       // plus, if the function has a specified type, use it it as well
       val substParams = Substitution((insPorts.flatMap(p=> p._2.vars)++specifiedFType.vars)
         .map(v => v->TVar(freshVar())).toMap)
       val freshInsPorts = insPorts.map(p=>(p._1,substParams(p._2)))
       // add to the context the data params (NOT FOR NOW) and input params
-      val insTypes:List[TExp] = freshInsPorts.map(p => {fctx = fctx.add(p._1,PortEntry(p._2,In)); p._2})
+      val insTypes:List[TExp] = freshInsPorts.map(p => {fctx = fctx.add(p._1,PortEntry(In,p._2)); p._2})
       // get the type of the block
       val (bctx,bt,btcons,btb) = infer(block,fctx)
       // check the type of the block is not a function (must be any interface type)
@@ -183,24 +305,24 @@ object Infer {
       // check the ports context is closed
       TypeCheck.isClosed(fd,bctx.ports.filterNot(p=> insNames.contains(p._1)))
       // match input/output context
-      val inOutTCons = portsMatch(bctx.ports)
+      val inOutTCons = matchPorts(bctx.ports)
       // unify constraints from body ++ ports constrains ++ constraint that tfun must match specified fun type
       val substitution = TypeCheck.solve(btcons++inOutTCons++Set(TCons(tfun.tOut,specifiedFType)),ctx)
       val subsTFun = TFun(Simplify(substitution(tfun.tIn)),Simplify(substitution(tfun.tOut)))
       // create a function entry
-      val funEntry = FunEntry(subsTFun,substitution(fctx)) //todo: update if we eventually have recursion
+      val funEntry = FunEntry(subsTFun, substitution(fctx)) //todo: update if we eventually have recursion
       (ctx.add(name,funEntry),TUnit,Set(),TFunDef(fd,funEntry.tExp,substitution(btb,bctx)))//Set())//btcons++inOutTCons)
-    case FunDef(name, params, typ, block)  => // already defined
-      throw new RuntimeException(s"Name $name already defined in the context")
-    case sb@SBDef(name, mem, params, init, gcs,outs)  if !ctx.context.contains(name) =>
+//    case FunDef(name, params, typ, block)  => // already defined
+//      throw new RuntimeException(s"Name $name already defined in the context")
+    case sb@SBDef(name, mem, params, init, gcs,outs)  if !ctx.hasFun(name) =>
       val insNames = params.map(i=> i.name).toSet
       if (insNames.size != params.size)
         new TypeException(s"Cannot repeat input variables on a function definition ${insNames.mkString(",")} found")
       //create a new context for the function that knows only function names and type names - no variable names
-      var fctx = Context(ctx.adts,ctx.functions,Map(),Map())
+      var fctx = Context.newScope(ctx) //ctx.adts,ctx.functions,Map(),Map())
       // create a type for each input port (specified or new type variable)
-      val insPorts:List[(String,TExp)] = params.map(p=> (p.name, getSecifiedType(p.typ,ctx)))
-      val memsType = mem.map(m=>(m.name,getSecifiedType(m.typ,ctx)))
+      val insPorts:List[(String,TExp)] = params.map(p=> (p.name, getSpecifiedType(p.typ,ctx)))
+      val memsType = mem.map(m=>(m.name,getSpecifiedType(m.typ,ctx)))
       // create a type for the function (specified or new type variable)
       val specifiedFType = TVar(freshVar())
       // create a fresh type variable for each specified ports whose specified type is a type variable
@@ -213,13 +335,13 @@ object Infer {
       val freshMems = memsType.map(m=>(m._1,substParams(m._2)))
       freshMems.foreach(m=>{fctx=fctx.add(m._1,VarEntry(m._2))})
       // add to the context the data params (NOT FOR NOW) and input params
-      val insTypes:List[TExp] = freshInsPorts.map(p => {fctx = fctx.add(p._1,PortEntry(p._2,In)); p._2})
+      val insTypes:List[TExp] = freshInsPorts.map(p => {fctx = fctx.add(p._1,PortEntry(In,p._2)); p._2})
       // get the type of the body
       val (gcctx,gccons) = inferGCs(gcs.toList,mem.map(_.name),fctx)
       val touts = outs.map(o=> o->TVar(freshVar()))
       var nctx = gcctx
       for ((o,to) <- touts){
-        nctx = nctx.add(o,PortEntry(to,In))
+        nctx = nctx.add(o,PortEntry(In,to))
       }
       val (ictx,icons) = inferCmds(init.toSet,mem.map(_.name),nctx)
       nctx = ictx
@@ -236,12 +358,12 @@ object Infer {
       // check the ports context is closed
       TypeCheck.isClosed(sb,nctx.ports.filterNot(p=> insNames.contains(p._1)))
       // match input/output context
-      val inOutTCons = portsMatch(nctx.ports)
+      val inOutTCons = matchPorts(nctx.ports)
       // unify constraints from body ++ ports constrains ++ constraint that tfun must match specified fun type
       val substitution = TypeCheck.solve(gccons++icons++inOutTCons++Set(TCons(tfun.tOut,specifiedFType)),ctx)
       val subsTFun = TFun(Simplify(substitution(tfun.tIn)),Simplify(substitution(tfun.tOut)))
       // create a function entry
-      val funEntry = FunEntry(subsTFun,substitution(fctx)) //todo: update if we eventually have recursion
+      val funEntry = FunEntry(subsTFun, substitution(fctx)) //todo: update if we eventually have recursion
       (ctx.add(name,funEntry),TUnit,Set(),TSBDef(sb,funEntry.tExp))//Set())//btcons++inOutTCons)
     case SBDef(name, _, _, _, _, _) =>
       throw new RuntimeException(s"Name $name already defined in the context")
@@ -279,11 +401,11 @@ object Infer {
       throw new TypeException("Variables inside an IsQ guard must be gotten")
 
     var tvar = TVar(freshVar())
-    inputs.foreach(i => {nctx = nctx.add(i,PortEntry(tvar,In))})
+    inputs.foreach(i => {nctx = nctx.add(i,PortEntry(In,tvar))})
 
     for (m <- mem) {
-      if (nctx.vars.contains(m))
-        tcons += TCons(nctx.vars(m).tExp,tvar)
+      if (nctx.hasVar(m))
+        tcons += TCons(nctx.getVar(m).tExp,tvar)
       else
         nctx = nctx.add(m,VarEntry(tvar))
     }
@@ -300,7 +422,7 @@ object Infer {
     if (ctx.constructors.contains(g.q)) {
       val (tctx, tt, ttcons) = inferTerm(g.arg, mem, ctx)
       val qentry = ctx.constructors(g.q)
-      val subst = Substitution((qentry.params.flatMap(_.vars) ++ qentry.tExp.vars)
+      val subst = Substitution((qentry.paramsType.flatMap(_.vars) ++ qentry.tExp.vars)
         .map(v => v -> TVar(freshVar())).toMap)
       val tq = subst(qentry.tExp)
       (tctx, tq, ttcons + TCons(tt, tq))
@@ -321,22 +443,22 @@ object Infer {
     var tvar:TExp = TUnit
     var nctx = tctx
     if (mem.contains(cmd.variable)) {
-      if (ctx.vars.contains(cmd.variable))
-        tvar = ctx.vars(cmd.variable).tExp
+      if (ctx.hasVar(cmd.variable))
+        tvar = ctx.getVar(cmd.variable).tExp
       else {
         tvar = TVar(freshVar())
         nctx = nctx.add(cmd.variable,VarEntry(tvar))
       }
     } else {
       tvar = TVar(freshVar())
-      nctx = nctx.add(cmd.variable,PortEntry(tvar,Out))
+      nctx = nctx.add(cmd.variable,PortEntry(Out,tvar))
     }
     (nctx,Set(TCons(tvar,tt)))
   }
 
   private def inferTerm(term:Term,mem:List[String], ctx:Context):(Context,TExp,Set[TCons]) = term match {
-    case Var(name) if mem.contains(name) && ctx.vars.contains(name) =>
-      (ctx,ctx.vars(name).tExp,Set())
+    case Var(name) if mem.contains(name) && ctx.hasVar(name) =>
+      (ctx,ctx.getVar(name).tExp,Set())
     case Var(name) if mem.contains(name) =>
       val t = TVar(freshVar())
       (ctx.add(name,VarEntry(t)),t,Set())
@@ -345,26 +467,26 @@ object Infer {
       (vctx,vt,vtcons)
     case Q(name,args) if ctx.constructors.contains(name) =>
       val qentry:ConstEntry = ctx.constructors(name)
-      TypeCheck.numParams(args.size,qentry.params.size)
+      TypeCheck.numParams(args.size,qentry.paramsType.size)
       var nctx = ctx
       var targs:List[(Context,TExp,Set[TCons])] = List()
       for (a <- args) {
         val targ = inferTerm(a,mem,nctx)
         targs:+=targ
         nctx = targ._1}
-      val subst = Substitution((qentry.params.flatMap(_.vars)++qentry.tExp.vars)
+      val subst = Substitution((qentry.paramsType.flatMap(_.vars)++qentry.tExp.vars)
         .map(v => v->TVar(freshVar())).toMap)
       val tq = subst(qentry.tExp)
-      val fpType = qentry.params.map(subst(_))
+      val fpType = qentry.paramsType.map(subst(_))
       val tcons = targs.map(t => t._2).zip(fpType).map(p => TCons(p._1,p._2))
       (nctx,tq,targs.flatMap(t=>t._3).toSet++tcons)
     case Q(name,_) => throw new UndefinedNameException(s"Undefined Constructor name $name")
     case GetQ(name,idx,term) if ctx.constructors.contains(name) =>
       val qentry:ConstEntry = ctx.constructors(name)
-      val subst = Substitution((qentry.params.flatMap(_.vars)++qentry.tExp.vars)
+      val subst = Substitution((qentry.paramsType.flatMap(_.vars)++qentry.tExp.vars)
         .map(v => v->TVar(freshVar())).toMap)
       val tq = subst(qentry.tExp)
-      val fpType = qentry.params.map(subst(_))
+      val fpType = qentry.paramsType.map(subst(_))
       val (tctx,tt,ttcons) = inferTerm(term,mem,ctx)
       val psize = if (fpType.size==0) 1 else fpType.size
       println(psize + "Sixe")
@@ -382,7 +504,7 @@ object Infer {
     // creat a fresh variable for each lhs variable
     val lhsTypes = variables.map(v=> TVar(freshVar()))
     // add each variable as an Output variable
-    variables.zip(lhsTypes).foreach(v => nctx = nctx.add(v._1,PortEntry(v._2,Out)))
+    variables.zip(lhsTypes).foreach(v => nctx = nctx.add(v._1,PortEntry(Out,v._2)))
     // get the type of the expression
     val (ectx,et,etcons,ete) = infer(expr,nctx)
     // check num params match (if not destructor)
@@ -396,35 +518,51 @@ object Infer {
     (ectx,etcons+tcons,lhsTypes,ete)
   }
 
-  private def getSecifiedType(tn:MaybeTypeName,ctx:Context):TExp = tn match {
-    case Some(t) if ctx.adts.contains(t.name) =>
-      val specified = typeName2TExp(t)
-      TypeCheck.wellDefinedType(specified,ctx.adts(t.name).tExp,ctx)
-      specified
-    case Some(t) => throw new UndefinedNameException(s"Unknown type ${Show(t)}")
+  private def getSpecifiedType(tn:MaybeTypeName, ctx:Context):TExp = tn match {
+    case Some(t) =>
+      val specified = mkType(t)
+       if (existsType(specified,ctx))
+        if (matched(specified,ctx.getType(t.name).tExp))
+          specified
+        else
+          throw new InvalidType(s"Unknown type ${Show(t)}")
+      else
+        throw new UndefinedNameException(s"Unknown type name ${t.name}")
     case _ => TVar(freshVar())
   }
 
-  private def portsMatch(ports:Map[String,List[PortEntry]]):Set[TCons] =
-    ports.flatMap(p=>portMatch(p._2)).toSet
+  private def matched(te:TExp, tdef:TExp):Boolean =
+    try {
+      Unify(Set(TCons(te,tdef)))
+      true
+    } catch {
+      case e:TypeException => false
+    }
 
-  private def portMatch(pEntries:List[PortEntry]):Set[TCons] = pEntries match {
-    case Nil => Set()
-    case p::Nil => Set()
-    case p1::p2::ps => portMatch(p2::ps)+TCons(p1.tExp,p2.tExp)
+  private def existsType(te:TExp,ctx:Context):Boolean = te match {
+    case TBase(name,ps) if ctx.hasType(name) && ps.forall(p=>existsType(p,ctx)) => true
+    case TBase(name,_) => throw new UndefinedNameException(s"Unknown type name ${name}")
+    case TTensor(t1,t2) => existsType(t1,ctx) && existsType(t2,ctx)
+    case TFun(ins,outs) => existsType(ins,ctx) && existsType(outs,ctx)
+    case _ => true
   }
+
+  private def requires(prop:Boolean,msg:String): Unit =
+    if (!prop) throw new TypeException(msg)
 
   private def infer(gt:GroundTerm,ctx:Context):GTTypeResult = gt match {
     case Port(x) =>
       // create a new type variable
       val pt = TVar(freshVar())
       // add it to the context as a new Input port
-      (ctx.add(x,PortEntry(pt,In)),pt,Set(),TPort(x,pt))
-    case const@Const(q,args) if ctx.constructors.contains(q)  => // if the constructor exists
+      (ctx.add(x,PortEntry(In,pt).setPos(gt.pos)),pt,Set(),TPort(x,pt))
+    case const@Const(q,args) if ctx.hasConstructor(q)  =>
       // get constructor entry
-      val qentry:ConstEntry = ctx.constructors(q)
+      val qentry:ConstEntry = ctx.getConst(q)
       //check the number of expected parameters match
-      TypeCheck.numParams(args.size,qentry.params.size)
+      //TypeCheck.numParams(args.size,qentry.paramsType.size)
+      requires(args.size == qentry.paramsType.size,
+        s"[${const.pos}]: Number of formal and actual parameters don't match in ${const.pos}")
       // create new context from known context
       var nctx = ctx
       // get the type of each actual param
@@ -435,11 +573,11 @@ object Infer {
         nctx = aType._1
       }
       // get a fresh type for the constructor
-      val subst = Substitution((qentry.params.flatMap(_.vars)++qentry.tExp.vars)
+      val subst = Substitution((qentry.paramsType.flatMap(_.vars)++qentry.tExp.vars)
         .map(v => v->TVar(freshVar())).toMap)
       val qFType = subst(qentry.tExp)
       // fresh formal params
-      val fpType = qentry.params.map(subst(_))
+      val fpType = qentry.paramsType.map(subst(_))
       // get type constraints from actual to formal params
       val tcons = apType.map(t => t._2).zip(fpType).map(p => TCons(p._1,p._2))
       // return the result, add type constraints obtained when inferring actual params type
@@ -480,10 +618,10 @@ object Infer {
       val fEntry = ctx.functions(f)
       // get fresh type for the function, including its data params
       val subst = Substitution(fEntry.tExp.vars.map(v => v->TVar(freshVar())).toMap ++
-        fEntry.dps.flatMap(te=>te.vars).map(v=>v->TVar(freshVar())))
+        fEntry.dataParamsType.flatMap(te=>te.vars).map(v=>v->TVar(freshVar())))
       // substitute types accordingly
       val fFType = subst(fEntry.tExp)
-      val dFtype = fEntry.dps.map(p => subst(p))
+      val dFtype = fEntry.dataParamsType.map(p => subst(p))
       // infer the types of data params
       var nctx = ctx
       var dtype:List[GTTypeResult] = List()
@@ -508,7 +646,7 @@ object Infer {
       // create dummy function type
       val ftype = TFun(tVar,tVar)
       // add dummy function to the context?
-      val funEntry = FunEntry(ftype,Context(ctx.adts,ctx.functions,Map(),Map()))
+      val funEntry = FunEntry(ftype, Context.newScope(ctx))//Context(ctx.adts,ctx.functions,Map(),Map()))
       (ctx.add(f,funEntry),ftype,Set(),TFunName(f,ftype))
     case SeqFun(f1,f2) =>
       val (f1ctx,f1t,f1tcons,sft1) = infer(f1,ctx)

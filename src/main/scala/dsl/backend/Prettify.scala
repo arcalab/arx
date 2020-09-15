@@ -25,11 +25,11 @@ object Prettify {
     */
   def apply(ctx:Context):Context = {
     val nFuns = ctx.functions.map(f=> f._1 ->
-      FunEntry(TFun(apply(f._2.tExp.tIn),apply(f._2.tExp.tOut)),apply(f._2.funCtx)))
+      FunEntry(TFun(apply(f._2.tExp.tIn),apply(f._2.tExp.tOut)), apply(f._2.ctx)))
     val nPorts =
       ctx.ports.map(p => p._1 -> p._2.map(apply))
-    val nVars = ctx.vars.map(m=> m._1 -> VarEntry(apply(m._2.tExp)))
-    Context(ctx.adts,nFuns,nPorts,nVars)
+    val nVars = ctx.variables.map(m=> m._1 -> VarEntry(apply(m._2.tExp)))
+    Context(ctx.types,ctx.constructors,nFuns,nPorts,nVars)
   }
 
   def apply(p:TProgram):TProgram = TProgram(p.imports,p.userTypes,apply(p.tBlock))
@@ -122,5 +122,5 @@ object Prettify {
     * @param pe port entry
     * @return prettified port entry
     */
-  private def apply(pe:PortEntry):PortEntry = PortEntry(apply(pe.tExp),pe.pType)
+  private def apply(pe:PortEntry):PortEntry = PortEntry(pe.io,apply(pe.tExp))
 }

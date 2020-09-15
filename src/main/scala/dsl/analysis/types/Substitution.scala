@@ -25,10 +25,10 @@ case class Substitution(sub:Map[TVar,TExp]) {
 
   def apply(ctx:Context):Context = {
     val nfuns = ctx.functions.map(f=>
-      f._1 -> FunEntry(TFun(Simplify(apply(f._2.tExp.tIn,ctx)),Simplify(apply(f._2.tExp.tOut,ctx))),apply(f._2.funCtx)))
-    val nports = ctx.ports.map(p=>p._1 -> p._2.map(pe=>PortEntry(apply(pe.tExp,ctx),pe.pType)))
-    val nvars = ctx.vars.map(m=>m._1->VarEntry(Simplify(apply(m._2.tExp,ctx))))
-    Context(ctx.adts,nfuns,nports,nvars)
+      f._1 -> FunEntry(TFun(Simplify(apply(f._2.tExp.tIn,ctx)),Simplify(apply(f._2.tExp.tOut,ctx))), apply(f._2.ctx)))
+    val nports = ctx.ports.map(p=>p._1 -> p._2.map(pe=>PortEntry(pe.io,apply(pe.tExp,ctx))))
+    val nvars = ctx.variables.map(m=>m._1->VarEntry(Simplify(apply(m._2.tExp,ctx))))
+    Context(ctx.types,ctx.constructors,nfuns,nports,nvars)
   }
 
   def apply(tp:TProgram, ctx:Context):(TProgram,Context) = {
