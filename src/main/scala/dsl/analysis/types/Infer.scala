@@ -460,7 +460,7 @@ object Infer {
       (vctx,vt,vtcons)
     case Q(name,args) if ctx.constructors.contains(name) =>
       val qentry:ConstEntry = ctx.constructors(name)
-      TypeCheck.numParams(args.size,qentry.paramsType.size)
+      TypeCheck.numParams(args.size,qentry.paramsType.size,"")
       var nctx = ctx
       var targs:List[(Context,TExp,Set[TCons])] = List()
       for (a <- args) {
@@ -504,7 +504,7 @@ object Infer {
     val (ectx,et,etcons,ete) = infer(expr,nctx)
     // check num params match (if not destructor)
     if (!et.isInstanceOf[TDestr]) {
-      TypeCheck.numParams(numOutputs(et), variables.size)
+      TypeCheck.numParams(numOutputs(et), variables.size, variables.mkString(",")+" <- "+Show(expr))
     }
     // create a tensor type for the lhs variables
     val lhsTTensor = Simplify(lhsTypes.foldRight[TExp](TUnit)(TTensor))
@@ -592,7 +592,7 @@ object Infer {
       val sfType:TFun = TypeCheck.isFunType(sft)
       //check the number of expected parameters match (if expected type is not destructor - build)
       if (!sfType.tIn.isInstanceOf[TDestr]) {
-        TypeCheck.numParams(args.size, numInputParams(sfType))
+        TypeCheck.numParams(args.size, numInputParams(sfType), Show(se))
       }
       // get the type of each actual param
       var nctx = sfctx
@@ -654,7 +654,7 @@ object Infer {
       val tf2:TFun = TypeCheck.isFunType(f2t)
       // check number outputs from f1 match number of inputs from f2 (only if not destructor)
       if (!tf1.tOut.isInstanceOf[TDestr] && !tf2.tIn.isInstanceOf[TDestr]) {
-        TypeCheck.numParams(numOutputs(tf1.tOut),numInputParams(tf2))
+        TypeCheck.numParams(numOutputs(tf1.tOut),numInputParams(tf2), Show(sf))
       }
       // create a type constraint from f1 out to f2 in
       val tcons = Set(TCons(tf1.tOut,tf2.tIn))

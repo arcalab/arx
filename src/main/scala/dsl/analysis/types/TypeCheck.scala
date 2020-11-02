@@ -37,8 +37,8 @@ object TypeCheck {
     Substitution(subst)
   }
 
-  def numParams(actual:Int,formal:Int):Unit =
-    if (actual!=formal) throw new TypeException(s"Expected ${formal} inputs, but ${actual} found")
+  def numParams(actual:Int,formal:Int, name:String):Unit =
+    if (actual!=formal) throw new TypeException(s"Expected ${formal} inputs, but ${actual} found when typing $name")
 
   def isFunType(expr: TExp):TFun = expr match {
     case t@TFun(ins,outs) => t

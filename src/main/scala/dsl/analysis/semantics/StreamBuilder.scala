@@ -101,7 +101,6 @@ case class StreamBuilder(init:Set[Command], gcs:Set[GuardedCommand]
   }
 
   private def filterOut(gc: GuardedCommand, outs:Set[String],net:ArxNet): GuardedCommand = {
-    //  ... changing here... neet to use net
     val (okCmds,oldCmds) = gc.cmd.partition(outs contains _.variable)
     val oldMap = oldCmds.map(x => x.variable -> x.term).toMap
     val closedGuards = gc.guard.guards.map(g=>closeGuard(g,oldMap))
