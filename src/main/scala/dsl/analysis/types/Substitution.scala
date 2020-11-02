@@ -21,6 +21,9 @@ case class Substitution(sub:Map[TVar,TExp]) {
     case TDestr(t1) => TDestr(apply(t1))
   }
 
+  def apply(types:List[TExp]):List[TExp] =
+    types.map(apply)
+
   def apply(te:TExp,ctx:Context): TExp = Destructor.expand(apply(te),ctx)
 
   def apply(ctx:Context):Context = {

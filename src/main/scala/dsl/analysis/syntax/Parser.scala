@@ -181,8 +181,8 @@ object Parser extends RegexParsers {
     rep1sep(lowId,",")~"<-|<~".r~strExpr ^^ {
       case ids~typ~expr =>
 //        ids.foreach(id => sym = sym.add(id,VAR))
-        if (typ.matches("<-")) Assignment(ids,expr)
-        else RAssignment(ids,expr)
+        if (typ.matches("<-")) Assignment(ids.map(Port), expr)
+        else RAssignment(ids.map(Port),expr)
     }
 
   /* Stream builder definition */

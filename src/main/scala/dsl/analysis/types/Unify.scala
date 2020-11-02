@@ -43,7 +43,7 @@ object Unify {
       case (f1@TFun(i1, o1), f2@TFun(i2, o2)) =>
 //        println(s"[UNIFY - fun] - Unified:\n-${Show(f1)}\n-${Show(f2)} ")
         Unify(cons.tail ++ List(TCons(i1, i2), TCons(o1, o2)))
-      case (l@TTensor(t1, t2), r@TTensor(t3, t4)) /*if t1.size == t3.size && t2.size == t4.size */ =>
+      case (l@TTensor(t1, t2), r@TTensor(t3, t4)) /*if t1.size == t3.size && t2.size == t4.size*/  =>
 //        println(s"[UNIFY - tensor] - Unified:\n-${Show(l)}\n-${Show(r)} ")
         Unify(cons.tail ++ List(TCons(t1, t3), TCons(t2, t4)))
       case (l@TBase(n1, ps1), r@TBase(n2, ps2)) if (ps1.size == ps2.size) && (n1 == n2) =>

@@ -66,7 +66,7 @@ object Encode{
       // get the stream builder entry of the expression
       val (sbE,sbEOuts,sbECtx) = encode(rhs,sbCtx,typeCtx,net)
       // create a map from sbEOuts to variables
-      val remap = sbEOuts.zip(asg.variables).toMap
+      val remap = sbEOuts.zip(asg.variables.map(_.x)).toMap
       // remap outputs in the sbE to variables
       val sbFresh = fresh(sbE,remap)
       //// add newVar->oldVar to net-mirrors
@@ -76,7 +76,7 @@ object Encode{
       // return fresh stream builder
       (sbFresh,List(),sbECtx)
     // x <~ y
-    case TRAssignment(RAssignment(List(x),Port(y)), _, _)  =>
+    case TRAssignment(RAssignment(List(Port(x)),Port(y)), _, _)  =>
       val m = freshVarMem()
       val sbra = sb withCommands(
         ask(m) -> (x := Var(m)),
@@ -90,10 +90,10 @@ object Encode{
       // get fresh variables for the lhs variables
       val freshLhs:List[String] = rasg.variables.map(_=>freshVar())
       // create a regular assignment from the rhs expression to the fresh variables
-      val asg = TAssignment(Assignment(freshLhs,rasg.expr),tlhs,trhs)
+      val asg = TAssignment(Assignment(freshLhs.map(Port), rasg.expr),tlhs,trhs)
       // create a new 1-to-1 rasg from fresh variables to original ones
       val nrasgs:List[TRAssignment] = rasg.variables.zip(freshLhs).zip(tlhs)
-        .map({case ((x,y),t) => TRAssignment(RAssignment(List(x),Port(y)),List(t),TPort(y,t))})
+        .map({case ((x,y),t) => TRAssignment(RAssignment(List(x), Port(y)),List(t),TPort(y,t))})
       // encode new block
       encode(asg::nrasgs,sbCtx,typeCtx,net)
     // def fd
