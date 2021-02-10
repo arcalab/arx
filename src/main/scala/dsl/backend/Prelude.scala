@@ -3,7 +3,7 @@ package dsl.backend
 import dsl.DSL
 import dsl.DSL._
 import dsl.analysis.semantics.StreamBuilder.StreamBuilderEntry
-import dsl.analysis.semantics.{Q, StreamBuilder, Var}
+import dsl.analysis.semantics.{Get, GuardedCommand, Q, StreamBuilder, Var}
 import dsl.backend.ArxNet.Edge
 import dsl.common.UndefinedNameException
 
@@ -70,7 +70,7 @@ object Prelude {
 
   private lazy val lossysb = (sb withCommands (
     get("in")->("out":=Var("in")),
-    get("in")->()
+    GuardedCommand(Get("in"),Set(),Set()) //("in")->()
   ) ins "in" outs "out",List("in"),List("out"))
 
   private lazy val duplsb = (sb withCommands (
@@ -88,7 +88,7 @@ object Prelude {
   ) ins "in" outs("out1","out2"),List("in"),List("out1","out2"))
 
   private lazy val drainsb = (sb withCommands (
-    (get("in1") & get("in2")) -> ()
+    GuardedCommand(get("in1") & get("in2"),Set(),Set())
   ) ins ("in1","in2"),List("in1","in2"),List())
 
   private lazy val writersb = (sb initially ("m" := Var("p1")) withCommands (
