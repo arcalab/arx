@@ -18,12 +18,12 @@ object Parser extends RegexParsers {
 
   //private var sym: SymbolsTable = new SymbolsTable
   //todo: fix error with fun def not creating new level in symbols table
-  def parseProgram(code:String):ParseResult[Program] = {
+  def parseProgram(code:String) = {
     //sym = new SymbolsTable
     parseAll(program,code)
   }
 
-  def parseFunction(code:String):ParseResult[Statement] = {
+  def parseFunction(code:String) = {
     //sym = new SymbolsTable
     parseAll(funDef,code)
   }
@@ -73,7 +73,7 @@ object Parser extends RegexParsers {
     "("~>repsep(ground,",")<~")"
 
   def ground: Parser[GroundTerm] =
-    lowId ^^ Port |
+    lowId ^^ Port.apply |
     groundQs
 
 
@@ -181,8 +181,8 @@ object Parser extends RegexParsers {
     rep1sep(lowId,",")~"<-|<~".r~strExpr ^^ {
       case ids~typ~expr =>
 //        ids.foreach(id => sym = sym.add(id,VAR))
-        if (typ.matches("<-")) Assignment(ids.map(Port), expr)
-        else RAssignment(ids.map(Port),expr)
+        if (typ.matches("<-")) Assignment(ids.map(Port(_)), expr)
+        else RAssignment(ids.map(Port(_)),expr)
     }
 
   /* Stream builder definition */
@@ -279,7 +279,7 @@ object Parser extends RegexParsers {
     * @return a guarded command
     */
   def gc:Parser[GuardedCommand] =
-    guard~"->"~repsep(cmd,",") ^^ {case g~_~cs => (g -> cs.toSet)}
+    guard~"->"~repsep(cmd,",") ^^ {case g~_~cs => (g --> cs.toSet)}
 
   /**
     * Stream builder guard parser

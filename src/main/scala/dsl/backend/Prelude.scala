@@ -54,37 +54,37 @@ object Prelude {
 
   /* Stream builders for primitive function  */
 
-  private lazy val fifosb = (sb withCommands (
-    (get("in") & und("m"))->("m":= Var("in")),
-    get("m") -> ("out":= Var("m"))
+  lazy val fifosb = (sb withCommands (
+    (get("in") & und("m"))-->("m":= Var("in")),
+    get("m") --> ("out":= Var("m"))
   ) ins "in" outs "out" mems "m", List("in"),List("out"))
 
   private lazy val fifoFullsb = (fifosb._1 initially ("m" := Var("p1")),fifosb._2,fifosb._3)
   //private lazy val fifoFull0sb = (fifosb._1 initially ("m" := Q("Zero",List())),fifosb._2,fifosb._3)
 
   private lazy val idsb = (sb withCommands (
-    get("in")->("out":=Var("in"))
+    get("in")-->("out":=Var("in"))
   ) ins "in" outs "out",List("in"),List("out"))
 
   private lazy val syncsb = idsb
 
   private lazy val lossysb = (sb withCommands (
-    get("in")->("out":=Var("in")),
+    get("in")-->("out":=Var("in")),
     GuardedCommand(Get("in"),Set(),Set()) //("in")->()
   ) ins "in" outs "out",List("in"),List("out"))
 
   private lazy val duplsb = (sb withCommands (
-    get("in") -> ("out1":=Var("in"),"out2":= Var("in"))
+    get("in") --> ("out1":=Var("in"),"out2":= Var("in"))
   ) ins "in" outs("out1","out2"),List("in"),List("out1","out2"))
 
   private lazy val mergersb = (sb withCommands (
-    get("in1") -> ("out":= Var("in1")),
-    get("in2") -> ("out":= Var("in2"))
+    get("in1") --> ("out":= Var("in1")),
+    get("in2") --> ("out":= Var("in2"))
   ) ins ("in1","in2") outs "out", List("in1","in2"),List("out"))
 
   private lazy val xorsb = (sb withCommands (
-    get("in") -> ("out1":=Var("in")),
-    get("in") -> ("out2":= Var("in"))
+    get("in") --> ("out1":=Var("in")),
+    get("in") --> ("out2":= Var("in"))
   ) ins "in" outs("out1","out2"),List("in"),List("out1","out2"))
 
   private lazy val drainsb = (sb withCommands (
@@ -92,11 +92,11 @@ object Prelude {
   ) ins ("in1","in2"),List("in1","in2"),List())
 
   private lazy val writersb = (sb initially ("m" := Var("p1")) withCommands (
-      get("m") -> ("out":= Var("m"))
+      get("m") --> ("out":= Var("m"))
   ) outs "out" mems "m", List(),List("out"))
 
   private lazy val readersb = (sb withCommands (
-      get("in") -> ("m":= Var("in"))
+      get("in") --> ("m":= Var("in"))
     ) ins "in" mems "m",List("in"),List())
 
   private lazy val nowritersb = (sb outs "out", List(), List("out"))

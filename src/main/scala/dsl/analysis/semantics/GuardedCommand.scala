@@ -19,10 +19,10 @@ case class GuardedCommand(guard:Guard, cmd:Set[Command], highlights:Set[String])
   def inputs:Set[String]  = guard.variables
 
   // By default the set of variables with flow
-//  def defaultHighights: Set[String] = vars -- guard.guards.flatMap {
-//    case Und(v) => Set[String](v)
-//    case _ => Set[String]()
-//  }
+  def defaultHighights: Set[String] = vars -- guard.guards.flatMap {
+    case Und(v) => Set[String](v)
+    case _ => Set[String]()
+  }
 
 }
 
@@ -53,12 +53,13 @@ case class GetQ(name:String,index:Int,term:Term)  extends Term
   */
 sealed trait GuardItem {
   //val term:String;
-   def vars:Set[String] = this match {
+  def vars:Set[String] = this match {
      case Ask(v)     => Set(v)
      case Get(v)     => Set(v)
-     case Und(v)     => Set(v)
+     case Und(v)     => Set() //Set(v) // todo: @Guille I think "und" is the oposite of a variable
+                                       // used by the guard, at least how we use it in StreamBuilder. Changed to {}.
      case IsQ(q,t)   => t.vars
-   }
+  }
 
   def &(other:GuardItem):Guard =
     Guard(Set(this,other))
@@ -91,17 +92,17 @@ case class Guard(guards:Set[GuardItem]) {
   def &(other:Guard):Guard =
     Guard(this.guards++other.guards)
 
-  def ->(cmd:Command):GuardedCommand =
+  def -->(cmd:Command):GuardedCommand =
     GuardedCommand(this,Set(cmd),defaultHhighlights(Set(cmd)))
-  def ->(cmd:Set[Command]):GuardedCommand =
-    GuardedCommand(this,cmd,defaultHhighlights(cmd))
-  def ->(cmd:Command*):GuardedCommand =
-    this -> cmd.toSet
+  def -->(cmd:Iterable[Command]):GuardedCommand =
+    GuardedCommand(this,cmd.toSet,defaultHhighlights(cmd.toSet))
+  def -->(cmd:Command*):GuardedCommand =
+    this --> cmd.toSet
 
-    private def defaultHhighlights(cmds:Set[Command]): Set[String] =
-      variables ++ cmds.map(c=>c.variable) -- guards.flatMap {
-        case Und(v) => Set[String](v)
-        case _ => Set[String]()
-      }
+  private def defaultHhighlights(cmds:Set[Command]): Set[String] =
+    variables ++ cmds.map(c=>c.variable) -- guards.flatMap {
+      case Und(v) => Set[String](v)
+      case _ => Set[String]()
+    }
 
 }

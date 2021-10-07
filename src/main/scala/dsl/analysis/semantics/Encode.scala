@@ -2,6 +2,7 @@ package dsl.analysis.semantics
 
 import dsl.DSL
 import dsl.DSL._
+import dsl.analysis.semantics.{Var => V}
 import dsl.analysis.semantics.StreamBuilder.StreamBuilderEntry
 import dsl.analysis.syntax._
 import dsl.analysis.types.TProgram.TBlock
@@ -79,8 +80,8 @@ object Encode{
     case TRAssignment(RAssignment(List(Port(x)),Port(y)), _, _)  =>
       val m = freshVarMem()
       val sbra = sb withCommands(
-        ask(m) -> (x := Var(m)),
-        get(y) -> (m := Var(y))
+        ask(m) --> (x := V(m)),
+        get(y) --> (m := V(y))
       ) ins y outs x mems m
       // add rid:y->x to net
       net += Edge(Set(y),Set(x),"rid")
@@ -90,7 +91,7 @@ object Encode{
       // get fresh variables for the lhs variables
       val freshLhs:List[String] = rasg.variables.map(_=>freshVar())
       // create a regular assignment from the rhs expression to the fresh variables
-      val asg = TAssignment(Assignment(freshLhs.map(Port), rasg.expr),tlhs,trhs)
+      val asg = TAssignment(Assignment(freshLhs.map(Port.apply), rasg.expr),tlhs,trhs)
       // create a new 1-to-1 rasg from fresh variables to original ones
       val nrasgs:List[TRAssignment] = rasg.variables.zip(freshLhs).zip(tlhs)
         .map({case ((x,y),t) => TRAssignment(RAssignment(List(x), Port(y)),List(t),TPort(y,t))})
@@ -125,16 +126,16 @@ object Encode{
   private def encode(gt:TGroundTerm, sbCtx: SBContext, net:ArxNet):SemanticResult = gt match {
     case TPort(x,_) =>
       var out = freshVar()
-      val gc = Get(x) -> (out := Var(x))
+      val gc = Get(x) --> (out := V(x))
       // update net
       //net += (x,out)
       net += Edge(Set(x),Set(out),"id")
       (StreamBuilder(Set(),Set(gc),Set(x),Set(out)),List(out),sbCtx)
     case q@TConst(const,_, _) =>
       val fvq = fv(q)
-      val gets = Guard(fvq.map(Get).toSet) //fvq.map(Get).foldRight[Guard](True)(_&_)
+      val gets = Guard(fvq.map(Get(_)).toSet) //fvq.map(Get).foldRight[Guard](True)(_&_)
       var out = freshVar()
-      val gc = gets -> (out := toTerm(const))
+      val gc = gets --> (out := toTerm(const))
       //println(s"[Enc] adding edge ${Show(const)}: $out")
       net += Edge(Set(),Set(out),Show(const))
       (StreamBuilder(Set(),Set(gc),fvq,Set(out)),List(out),sbCtx)
@@ -180,12 +181,17 @@ object Encode{
       val sbFreshHL = fixHighlights(sbFresh,sbNet)
       //println("Fresh map:\n" + remap.mkString(","))
       // zip fresh inputs with the output of the corresponding argument (we know they have only 1 output)
-      val argsNames = argsSb.map(r=> if (r.isLeft) r.left.get._2.head else r.right.get.p)
+//      val argsNames = argsSb.map(r=> if (r.isLeft) r.left.get._2.head else r.right.get.p)
+      val argsNames = argsSb.map(r=> r match {
+          case Left(l) => l._2.head
+          case Right(r) => r.p
+        })
       val remapInputs:List[(String,String)] = remap.filter(k => sbIns.contains(k._1)).values.toList.zip(argsNames)
       // rename inputs in fresh stream builder based on remapInputs
       val sbRmIns = fresh(sbFreshHL,remapInputs.toMap)
       // compose stream builders from arguments
-      val argsComp = argsSb.filter(_.isLeft).map(_.left.get._1).foldRight[StreamBuilder](DSL.sb)(_*_)
+//      val argsComp = argsSb.filter(_.isLeft).map(_.left.get._1).foldRight[StreamBuilder](DSL.sb)(_*_)
+      val argsComp = (for Left((x,_,_))<-argsSb yield x).foldRight[StreamBuilder](DSL.sb)(_ * _)
       // updating sbNet with remap, and add it to net
       //println("|-----------------------|")
       //println(s"[ENC] replacing for $name: $remap + $remapInputs")
@@ -215,7 +221,7 @@ object Encode{
   }
 
   private def instantiate(cmd:Command,map:Map[String,Term]):Command = cmd match {
-    case Command(v,Var(n)) => Command(v,map.getOrElse(n,Var(n)))
+    case Command(v,V(n)) => Command(v,map.getOrElse(n,V(n)))
     case _ => cmd
   }
 
@@ -226,7 +232,7 @@ object Encode{
     val out = freshVar()
     val (gcs,sbs) = mkGCBuild(qs,args,sbCtx,out,net)
     val in = gcs.flatMap(gc=>gc.inputs)
-    val buildSb = sb withCommands (gcs:_*) outs out ins (in:_*)
+    val buildSb = sb withCommands (gcs.toSeq) outs out ins (in.toSeq)
     net += Edge(in.toSet,Set(out),"BUILD")
     (buildSb*sbs,List(out),sbCtx)
   }
@@ -247,19 +253,21 @@ object Encode{
         case a => Left(encode(a, sbCtx,net))
       }
       // make gets for the output variable of each sb in the previous step
-      val getArgs = Guard(sbArgs.map(r => if (r.isLeft) r.left.get._2.head else r.right.get.p)
+      val getArgs = Guard(sbArgs.map(_.fold(l=>l._2.head , r=>r.p))
         .map(p => Get(p)).toSet)
       // remove these arguments from the list
       val restArgs = args.drop(if (numArgs==0) 1 else numArgs)
       // build the constructor
-      val argsNames = sbArgs.map(r=> if (r.isLeft) r.left.get._2.head else r.right.get.p)
+//      val argsNames = sbArgs.map(r=> if (r.isLeft) r.left.get._2.head else r.right.get.p)
+      val argsNames = sbArgs.map(r=> r.fold(l=>l._2.head , r=>r.p))
       val constructor = Const(q.name,if (numArgs==0) List() else argsNames.map(p=> Port(p)))
       // composed arguments stream builders into a single stream builder
-      val compArgs =  sbArgs.filter(_.isLeft).map(_.left.get._1).foldRight[StreamBuilder](DSL.sb)(_*_)
+      //val compArgs =  sbArgs.filter(_.isLeft).map(_.left.get._1).foldRight[StreamBuilder](DSL.sb)(_*_)
+      val compArgs =  (for Left(x,_,_)<-sbArgs yield x).foldRight[StreamBuilder](DSL.sb)(_*_)
       // get the rest of the guarded commands
       val gcMore = mkGCBuild(more,restArgs,sbCtx,out,net)
       // make the actual guarded command for this constructor
-      val gcq = getArgs -> (out := toTerm(constructor))
+      val gcq = getArgs --> (out := toTerm(constructor))
       (gcq::gcMore._1,compArgs*gcMore._2)
   }
 
@@ -271,7 +279,7 @@ object Encode{
       case a:TPort => (StreamBuilder.empty,List(a.p),sbCtx)
       case _ => encode(arg,sbCtx,net)}
     val (gcs,sbs,outs) = mkGCMatch(qs,sbCtx,in.head)
-    val buildSb = sb withCommands (gcs:_*) outs (outs:_*) ins in.head
+    val buildSb = sb withCommands (gcs) outs (outs) ins in.head
     // Add edge to the net
     net += Edge(Set(in.head),outs.toSet,"MATCH")
     (buildSb*sbs*sbIn,outs,sbCtx)
@@ -284,21 +292,21 @@ object Encode{
       // get the arguments that correspond to the first constructor q
       //val numArgs = q.params.size
       // make guard with get for the input variable and guard for isQ
-      val guard = Get(in) & IsQ(q.name, Var(in))
+      val guard = Get(in) & IsQ(q.name, V(in))
       // generate the outputs for this constructor
       var commands:List[Command] = List()
       var outputs:List[String] = List()
       for (p<-q.paramsType.zipWithIndex) {
         val out = freshVar()
-        outputs  :+= out
-        commands :+= (out := GetQ(q.name,p._2,Var(in)))//(out :=Const(s"get${q.name}${p._2.toString}",Port(in)::Nil))
+        outputs  ::= out
+        commands ::= (out := GetQ(q.name,p._2,V(in)))//(out :=Const(s"get${q.name}${p._2.toString}",Port(in)::Nil))
       }
       if (q.paramsType.isEmpty) {
         val out = freshVar()
-        outputs  :+= out
-        commands :+= (out := GetQ(q.name,0,Var(in)))//(out := Const(s"get${q.name}0",Port(in)::Nil))
+        outputs  ::= out
+        commands ::= (out := GetQ(q.name,0,V(in)))//(out := Const(s"get${q.name}0",Port(in)::Nil))
       }
-      val gcq = guard -> (commands:_*)
+      val gcq: GuardedCommand = guard --> commands
       // get the rest of the guarded commands
       val (gcMore,sbMore,outsMore) = mkGCMatch(more,sbCtx,in)
       (gcq::gcMore,sbMore,outputs++outsMore)
@@ -392,17 +400,17 @@ object Encode{
     Command(rename(c.variable,remap),rename(c.term,remap))
 
   private def rename(t:Term,remap:Map[String,String]):Term = t match {
-    case Var(x) => Var(remap.getOrElse(x,x))
+    case V(x) => V(remap.getOrElse(x,x))
     case Q(name,args) => Q(name,args.map(a=>rename(a,remap)))
     case GetQ(name,index,arg) => GetQ(name,index,rename(arg,remap))
   }
 
   private def toTerm(gt:GroundTerm):Term = gt match {
-    case Port(x) => Var(x)
+    case Port(x) => V(x)
     case Const(name,args) => Q(name,args.map(a=>toTerm(a)))
   }
   private def toTerm(gt:TGroundTerm):Term = gt match {
-    case TPort(x,_) => Var(x)
+    case TPort(x,_) => V(x)
     case TConst(q,_,targs) => Q(q.q,targs.map(toTerm))
   }
 }

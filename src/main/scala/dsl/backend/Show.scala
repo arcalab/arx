@@ -43,7 +43,7 @@ object Show {
   }
 
   def apply(gc:GuardedCommand):String = {
-    s"""${apply(gc.guard)} → [${if (gc.cmd.isEmpty) "∅" else gc.cmd.map(apply).mkString(", ")}] - {${gc.highlights.mkString(",")}}""".stripMargin
+    s"""${apply(gc.guard)} → [${if (gc.cmd.isEmpty) "∅" else gc.cmd.map(apply).mkString(", ")}]""".stripMargin // - {${gc.highlights.mkString(",")}}""".stripMargin
   }
 
   def apply(cmd:Command):String =
@@ -141,7 +141,7 @@ object Show {
     case SBDef(name, mem, params, init, gcs,outs) =>
       "sb " + name + "<" + mem.map(apply).mkString(",") + ">" +
         "(" + params.map(apply).mkString(",") + ")" +
-        " = {\n" + init.map(s => apply(s)(ind + 1) + "\n").mkString +
+        " = {\n" + init.map(s => apply(s)(ind + 1).toString + "\n").mkString +
         gcs.map(gc=>apply(gc)).mkString("\n") +
         outs.mkString(" ") +
         fwd(ind)+"}"
