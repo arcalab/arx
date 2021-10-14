@@ -1,5 +1,5 @@
 import dsl.analysis.syntax._
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 import dsl._
 import common.ParsingException
 import dsl.DSL.toVar
@@ -11,7 +11,7 @@ import scala.util.Success
   */
 
 
-class TestParser extends FlatSpec {
+class TestParser extends AnyFlatSpec {
 
   /*
   var t1 = TypeDecl(

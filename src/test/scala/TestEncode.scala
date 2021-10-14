@@ -3,14 +3,14 @@ import dsl.analysis.semantics.Encode
 import dsl.analysis.syntax._
 import dsl.backend.{ArxNet, Show}
 import dsl.common.ParsingException
-import org.scalatest.FlatSpec
+import org.scalatest.flatspec.AnyFlatSpec
 
 /**
   * Created by guillecledou on 2019-06-03
   */
 
 
-class TestEncode extends FlatSpec {
+class TestEncode extends AnyFlatSpec {
 
 
 //  OK(s"""def alt(a) = {
@@ -37,7 +37,7 @@ class TestEncode extends FlatSpec {
 //     """.stripMargin)
 
   def OK(code:String) =
-    s"The program $code" should "be encoded" in {
+//    s"The program $code" should "be encoded" in {
 //      assert(Parser.parse(code).isInstanceOf[Parser.Success[AST]])
       val prog = DSL.parse(code)
       val (tprog,tctx) = DSL.typeCheck(prog)
@@ -49,12 +49,12 @@ class TestEncode extends FlatSpec {
       println("[TEST] Encoded net: "+net)
       println("[TEST] Encoded sb: "+Show(sb))
       sbCtx.add("Program",(sb,List(),sbOuts,net))
-    }
+//    }
 
 
-  def notOK(code:String) =
-    s"The program $code" should "throw a ParsingException" in {
-    assertThrows[ParsingException] {Parser.parseProgram(code)}
-  }
+//  def notOK(code:String) =
+//    s"The program $code" should "throw a ParsingException" in {
+//    assertThrows[ParsingException] {Parser.parseProgram(code)}
+//  }
 
 }

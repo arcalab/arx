@@ -1,10 +1,9 @@
 package dsl.analysis.semantics
 
-import dsl.analysis.semantics.revised.ConvertAutSB
 import dsl.backend.{ArxNet, Show}
+import dsl.revised.core.ConvertAutSB._
 
 import javax.print.attribute.standard.MediaSize.Other
-import ConvertAutSB.{aut2StreamBuilder,sb2Automaton}
 
 
 /**

@@ -1,7 +1,7 @@
-package dsl.analysis.semantics.revised
+package dsl.revised.core
 
-import dsl.analysis.semantics.revised.Rule.Assignment
-import dsl.analysis.semantics.revised.Term.Var
+import Rule.Assignment
+import Term.Var
 
 case class Rule(get:Set[String], ask:Set[String], und:Set[String], pred:Set[Term],
                 assg:Set[Assignment], upd:Set[Assignment], highlights:Set[String]):
@@ -21,22 +21,26 @@ case class Rule(get:Set[String], ask:Set[String], und:Set[String], pred:Set[Term
   /** ports and registers in terms that are used, including predicates */
   def usedVars: Set[String] = Term.vars(used)
 
+  implicit val who:String = "Rule"
+  import dsl.revised.Error.debug
+
   /** A rule is well defined if get/ask/und are disjoint, used variables are aligned with get/ask/und,
     * and there are no multiple assignments to the same variable */
-  def wellDefined: Boolean =
+  def wellDefined(alwaysAv:Set[String]): Boolean =
     get.intersect(ask).isEmpty &&
       ask.intersect(und).isEmpty &&
       und.intersect(get).isEmpty &&
-      usedVars.subsetOf(vars) &&
+      usedVars.subsetOf(vars++alwaysAv) && // extra variables can be used
       usedVars.intersect(und).isEmpty &&
       outputs.intersect(und).isEmpty &&
+      alwaysAv.intersect(und).isEmpty && // extra variables cannot be undefined
       outputs.size == assg.size &&
       updated.size == upd.size
       // maybe forbid to assign in the current round a register (only for the next)
 
   /** A port can go alone if it does not use an input variable of another automaton */
   def canGoAlone(otherAut:Automaton) =
-    println(s"[ vars $vars # ${otherAut.inputs} ]")
+    debug(s"[ vars $vars # ${otherAut.inputs} ]")
     (vars intersect otherAut.inputs).isEmpty
 
   /** Two rules from the same automata have no conflicts if they use disjoint ports+registers */
@@ -45,12 +49,12 @@ case class Rule(get:Set[String], ask:Set[String], und:Set[String], pred:Set[Term
       allInputs(a).intersect(other.allInputs(a)).nonEmpty ||
       outputs.intersect(other.outputs).nonEmpty ||
       updated.intersect(other.updated).nonEmpty
-    if !res then println(s"no conflict for $this VS $other")
+    if !res then debug(s"no conflict for $this VS $other")
     res
 
   // checks which inputs are missing to be composed with an `other` rule.
   def missingInputs(other:Rule, thisAut:Automaton, otherAut:Automaton): Set[String] =
-    println(s"''' other inputs: ${other.inputs.mkString(",")}, autIn: ${(thisAut.inputs++otherAut.inputs).mkString(",")}, myVars: ${vars.mkString(",")}.")
+    debug(s"''' other inputs: ${other.inputs.mkString(",")}, autIn: ${(thisAut.inputs++otherAut.inputs).mkString(",")}, myVars: ${vars.mkString(",")}.")
     (other.outputs.intersect(thisAut.inputs++(otherAut.inputs--otherAut.outputs)) -- inputs) ++
     (other.inputs .intersect(thisAut.inputs /* ++otherAut.inputs */) -- vars)
 
@@ -74,7 +78,7 @@ case class Rule(get:Set[String], ask:Set[String], und:Set[String], pred:Set[Term
     Rule((get++other.get)--toHide, (ask++other.ask)--toHide, und++other.und, pred++other.pred,
       assg++other.assg, upd++other.upd, highlights++other.highlights)
 
-  def leaveOnlyOuts(vars:Set[String]): Rule =
+  def leaveOnlyOuts(vars:Set[String]): (Rule,Map[String,Term]) =
     val (okAssg,oldAssg) = assg.partition(vars contains _.v)
     val toReplace = oldAssg.map(x => x.v -> x.t).toMap
     val newPred = pred.map(Term.keepReplacing(_,toReplace))
@@ -82,7 +86,7 @@ case class Rule(get:Set[String], ask:Set[String], und:Set[String], pred:Set[Term
                       .map(a => Var(a.v) := Term.keepReplacing(a.t,toReplace))
     val newUpd =  upd .map(a => Var(a.v) := Term.keepReplacing(a.t,toReplace))
     val newUnd = und.filterNot(toReplace.contains) // in well-defined rules und does not appear in terms.
-    Rule(get,ask,newUnd,newPred,newAssg,newUpd,highlights)
+    (Rule(get,ask,newUnd,newPred,newAssg,newUpd,highlights),toReplace)
 
   // constructor helpers
   def &(r:Rule): Rule =

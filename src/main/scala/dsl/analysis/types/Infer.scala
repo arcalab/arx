@@ -46,7 +46,7 @@ object Infer {
     //pctx.ports.filter(p=> !p._2.exists(p => p.io == Out))
     //.map(p=> p._2.head.tExp)
     //val openInsType = inputPorts(pctx.ports).map(p=>p._2.texp)
-    val programType = Simplify(TFun(Simplify(openInsType.foldRight[TExp](TUnit)(TTensor)),pt))
+    val programType = Simplify(TFun(Simplify(openInsType.foldRight[TExp](TUnit)(TTensor.apply)),pt))
     // add the program to the context
     val npctx = pctx.add("Program",FunEntry(programType.asInstanceOf[TFun], ctx))
     (npctx,programType,ptcons++inOutTCons,TProgram(prog.imports,prog.types,tb))
@@ -232,8 +232,8 @@ object Infer {
       val dataType = fun.params.map(_=>tVar)
       val inSize = fun.sb._1.inputs.size
       val outSize = fun.sb._1.outputs.size
-      val inType = List.fill(inSize)(tVar).foldRight[TExp](TUnit)(TTensor)
-      val outType = List.fill(outSize)(tVar).foldRight[TExp](TUnit)(TTensor)
+      val inType = List.fill(inSize)(tVar).foldRight[TExp](TUnit)(TTensor.apply)
+      val outType = List.fill(outSize)(tVar).foldRight[TExp](TUnit)(TTensor.apply)
       FunEntry(TFun(Simplify(inType),Simplify(outType)), Context(), dataType)
   }
 
@@ -256,10 +256,10 @@ object Infer {
   }
 
   private def infer(st:Statement,ctx:Context):STypeResult = st match {
-    case f@FunctionApp(Match,_) =>
+    case f@FunctionApp(Match, _) =>
       throw new TypeException(s"Cannot infer the type of 'match' in ${f.pos}. " +
         s"Try assigning its output to a sequence of variables")
-    case se:StreamExpr => infer(se,ctx)
+    case se: StreamExpr => infer(se,ctx)
     case a@Assignment(variables, expr) =>
       val (ectx,tcons,lhsTypes,etse) = inferAsg(variables.map(_.x),expr,ctx)
       (ectx,TUnit,tcons,TAssignment(a,lhsTypes,etse))
@@ -290,7 +290,7 @@ object Infer {
       // check the type of the block is not a function (must be any interface type)
       val btInterfaceType = TypeCheck.isInterfaceType(Simplify(bt))
       // create the function type
-      var tfun = TFun(Simplify(insTypes.foldRight[TExp](TUnit)(TTensor)),btInterfaceType)
+      var tfun = TFun(Simplify(insTypes.foldRight[TExp](TUnit)(TTensor.apply)),btInterfaceType)
       //// create a function entry
       //val funEntry = FunEntry(tfun,fctx) //todo: update if we eventually have recursion
       // check the ports context is closed
@@ -305,7 +305,7 @@ object Infer {
       (ctx.add(name,funEntry),TUnit,Set(),TFunDef(fd,funEntry.tExp,substitution(btb,bctx)))//Set())//btcons++inOutTCons)
 //    case FunDef(name, params, typ, block)  => // already defined
 //      throw new RuntimeException(s"Name $name already defined in the context")
-    case sb@SBDef(name, mem, params, init, gcs,outs)  if !ctx.hasFun(name) =>
+    case sb@SBDef(name, mem, params, init, gcs, outs) if !ctx.hasFun(name) =>
       val insNames = params.map(i=> i.name).toSet
       if (insNames.size != params.size)
         new TypeException(s"Cannot repeat input variables on a function definition ${insNames.mkString(",")} found")
@@ -342,9 +342,9 @@ object Infer {
         throw new TypeException("Only memory variables can be use in initial commands")
       if (init.flatMap(_.term.vars).nonEmpty)
         throw new TypeException("Only ground terms can be use on the rhs of an initial command")
-      val tout = Simplify(touts.map(_._2).foldRight[TExp](TUnit)(TTensor))
+      val tout = Simplify(touts.map(_._2).foldRight[TExp](TUnit)(TTensor.apply))
       // create the function type
-      var tfun = TFun(Simplify(insTypes.foldRight[TExp](TUnit)(TTensor)),tout)
+      var tfun = TFun(Simplify(insTypes.foldRight[TExp](TUnit)(TTensor.apply)),tout)
       //// create a function entry
       //val funEntry = FunEntry(tfun,fctx) //todo: update if we eventually have recursion
       // check the ports context is closed
@@ -359,6 +359,8 @@ object Infer {
       (ctx.add(name,funEntry),TUnit,Set(),TSBDef(sb,funEntry.tExp))//Set())//btcons++inOutTCons)
     case SBDef(name, _, _, _, _, _) =>
       throw new RuntimeException(s"Name $name already defined in the context")
+    case SFunDef(_,_,_) =>
+      sys.error(s"Case not supported yet: $st")
 ////    TODO: case SFunDef(name, typ, sfun) =>
 ////      _
   }
@@ -484,7 +486,7 @@ object Infer {
       val fpType = qentry.paramsType.map(subst(_))
       val (tctx,tt,ttcons) = inferTerm(term,mem,ctx)
       val psize = if (fpType.size==0) 1 else fpType.size
-      println(psize + "Sixe")
+      println(s"${psize}Sise")
       if (idx<1 || idx > psize)
         throw new IndexOutOfBoundsException(s"Constructor $name has ${psize} parameters")
       (tctx,if (fpType.size==0) TBase("Unit",List()) else fpType.apply(idx),Set(TCons(tq,tt)))
@@ -507,7 +509,7 @@ object Infer {
       TypeCheck.numParams(numOutputs(et), variables.size, variables.mkString(",")+" <- "+Show(expr))
     }
     // create a tensor type for the lhs variables
-    val lhsTTensor = Simplify(lhsTypes.foldRight[TExp](TUnit)(TTensor))
+    val lhsTTensor = Simplify(lhsTypes.foldRight[TExp](TUnit)(TTensor.apply))
     // create a type constraint
     val tcons = TCons(lhsTTensor,et)
     (ectx,etcons+tcons,lhsTypes,ete)
@@ -603,7 +605,7 @@ object Infer {
         nctx = aType._1
       }
       // tensor for actual params type
-      val actualPsType = Simplify(apType.map(r => r._2).foldRight[TExp](TUnit)(TTensor))
+      val actualPsType = Simplify(apType.map(r => r._2).foldRight[TExp](TUnit)(TTensor.apply))
       // get type constraints from actual to formal params
       val tcons  = Set(TCons(actualPsType,sfType.tIn))
       // return the result
@@ -630,10 +632,10 @@ object Infer {
         nctx = aType._1
       }
       // tensor for data args type
-      val dataArgsType = Simplify(dtype.map(r => r._2).foldRight[TExp](TUnit)(TTensor))
+      val dataArgsType = Simplify(dtype.map(r => r._2).foldRight[TExp](TUnit)(TTensor.apply))
       //println(s"[FUN NAME]\nData Arguments Types:\n ${Show(dataArgsType)}")
       // tensor for data params type
-      val dataPsType = Simplify(dFtype.foldRight[TExp](TUnit)(TTensor))
+      val dataPsType = Simplify(dFtype.foldRight[TExp](TUnit)(TTensor.apply))
       //println(s"[FUN NAME]\nData Params Types:\n ${dFtype.mkString(",")}\n ${Show(dataPsType)}")
       // get type constraints from actual to formal params
       val dcons:Set[TCons] = if (d.isEmpty) Set() else Set(TCons(dataPsType,dataArgsType))

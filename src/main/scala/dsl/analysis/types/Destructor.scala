@@ -22,7 +22,7 @@ object Destructor {
       val substitute = Substitution(typeVars.zip(tParams).toMap)
       // replace all type vars in the constructors definition by the known ones
       val substConstr:List[List[TExp]] = constructors.map(c=> c.paramsType.map(substitute(_)))
-      val res = substConstr.map(c=>destruct(ctx,c)).foldRight[TExp](TUnit)(TTensor)
+      val res = substConstr.map(c=>destruct(ctx,c)).foldRight[TExp](TUnit)(TTensor.apply)
       Simplify(res)
     case _ => throw new TypeException(s"Only ground types can be destruct but ${tExp} found")
   }
@@ -39,7 +39,7 @@ object Destructor {
       if (!ctx.hasType("Unit"))
         throw new TypeException(s"Stream fun build requires Unit type. Try 'import Types.Unit'")
       else ctx.getType("Unit").tExp //TBase("Unit",List())
-    case _ => Simplify(paramTypes.foldRight[TExp](TUnit)(TTensor))
+    case _ => Simplify(paramTypes.foldRight[TExp](TUnit)(TTensor.apply))
     //case p::ps => TTensor(apply(ctx,p),destruct(ctx,ps))
   }
 
