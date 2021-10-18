@@ -10,6 +10,10 @@ object Term:
 
   case class Var(v:String) extends Term: // variable
     def :=(t:Term) = Assignment(v,t)
+    def ~~(t:Term) = Rule.assg(v,t)
+    def ~~(a:String) = Rule.assg(v,Var(a))
+    def /~(t:Term) = Rule.upd(v,t)
+    def /~(a:String) = Rule.upd(v,Var(a))
   case class Fun(name:String,terms:List[Term]) extends Term
   case class IntVal(i:Int) extends Term
 

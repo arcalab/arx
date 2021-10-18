@@ -83,8 +83,8 @@ case class Rule(get:Set[String], ask:Set[String], und:Set[String], pred:Set[Term
     val toReplace = oldAssg.map(x => x.v -> x.t).toMap
     val newPred = pred.map(Term.keepReplacing(_,toReplace))
     val newAssg = assg.filterNot(toReplace contains _.v)
-                      .map(a => Var(a.v) := Term.keepReplacing(a.t,toReplace))
-    val newUpd =  upd .map(a => Var(a.v) := Term.keepReplacing(a.t,toReplace))
+                      .map(a => Assignment(a.v , Term.keepReplacing(a.t,toReplace)))
+    val newUpd =  upd .map(a => Assignment(a.v , Term.keepReplacing(a.t,toReplace)))
     val newUnd = und.filterNot(toReplace.contains) // in well-defined rules und does not appear in terms.
     (Rule(get,ask,newUnd,newPred,newAssg,newUpd,highlights),toReplace)
 

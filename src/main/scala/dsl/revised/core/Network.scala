@@ -102,37 +102,40 @@ object Network:
   // experimenting
   ////////////////
 
-  val myData = Map(
-    "Planet" -> (Nil, List(
-      Constructor("Mercury",Nil),
-      Constructor("Venus",Nil),
-      Constructor("Earth",Nil),
-      Constructor("Mars",Nil))),
-    "List" -> (List("a"), List(
-      Constructor("Cons",List(VarType("a"),BaseType("List",List(VarType("a"))))),
-      Constructor("Nil",Nil)))
-  )
-  val myConn = Map(
-    "fifo" -> CAut(Automaton.fifo("a","b","m"),Nil,List("a"),List("b")),
-    "lossy" -> CAut(Automaton.lossy("a","b"),Nil,List("a"),List("b")),
-    "fifoTrue" -> CAut(Automaton.fifofull("a","b","n",Fun("True",Nil)),Nil,List("a"),List("b")),
-    "fifof" -> CAut(Automaton.fifofull("a","b","n",Var("v")),List("v"),List("a"),List("b")),
-    "sendV" -> CAut(Automaton(
-      init=Set(), inv=Set(
-        Fun("!=",List(Var("a"),Fun("Earth",Nil))),
-        Fun("!", List(Fun("is§Venus",List(Var("a"))))) ),
-      rs = Set(Rule.assg("a",Fun("Mars",Nil))),
-      inputs = Set(), outputs = Set("a"), registers = Set(), clocks=Set("t")
-    ),Nil,Nil,List("a"))
-  )
-  val myLinks = List(
-    Link("sendV",Nil,List(),List("x")),
-    Link("fifo",Nil,List("x"),List("y")),
-    Link("fifo",Nil,List("y"),List("z")),
-    Link("fifof",List(IntVal(51)),List("f"),List("g")),
-    Link("fifoTrue",Nil,List("v"),List("w"))
-  )
+  object Examples:
+    import Automaton.Examples._
 
-  val myNet = Network(myData,dsl.revised.Prelude.interpretations,myConn,myLinks)
+    val myData = Map(
+      "Planet" -> (Nil, List(
+        Constructor("Mercury",Nil),
+        Constructor("Venus",Nil),
+        Constructor("Earth",Nil),
+        Constructor("Mars",Nil))),
+      "List" -> (List("a"), List(
+        Constructor("Cons",List(VarType("a"),BaseType("List",List(VarType("a"))))),
+        Constructor("Nil",Nil)))
+    )
+    val myConn = Map(
+      "fifo" -> CAut(fifo("a","b","m"),Nil,List("a"),List("b")),
+      "lossy" -> CAut(lossy("a","b"),Nil,List("a"),List("b")),
+      "fifoTrue" -> CAut(fifofull("a","b","n",Fun("True",Nil)),Nil,List("a"),List("b")),
+      "fifof" -> CAut(fifofull("a","b","n","v"),List("v"),List("a"),List("b")),
+      "sendV" -> CAut(Automaton(
+        inv=Set(
+          Fun("!=",List("a",Fun("Earth",Nil))),
+          Fun("!", List(Fun("is§Venus",List("a")))) ),
+        rs = Set("a" ~~ Fun("Mars",Nil)),
+        outputs = Set("a"), clocks=Set("t")
+      ),Nil,Nil,List("a"))
+    )
+    val myLinks = List(
+      Link("sendV",Nil,List(),List("x")),
+      Link("fifo",Nil,List("x"),List("y")),
+      Link("fifo",Nil,List("y"),List("z")),
+      Link("fifof",List(IntVal(51)),List("f"),List("g")),
+      Link("fifoTrue",Nil,List("v"),List("w"))
+    )
+
+    val myNet = Network(myData,dsl.revised.Prelude.interpretations,myConn,myLinks)
 
 
