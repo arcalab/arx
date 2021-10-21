@@ -118,6 +118,12 @@ case class Automaton(init:Set[Assignment]=Set(),
 
   override def toString: String = Show(this)
 
+  // helper to build automata
+  def &(other: Automaton) =
+    Automaton(init++other.init, inv++other.inv, rs++other.rs,
+      inputs++other.inputs, outputs++other.outputs, registers++other.registers,
+      clocks++other.clocks, args++other.args)
+
 
 object Automaton:
   implicit val who:String = "Aut"
@@ -144,8 +150,17 @@ object Automaton:
           debug(s" - failed")
           (None,None,None)
 
-  val empty = Automaton(Set(),Set(),Set(),Set(),Set(),Set(),Set())
-  
+  // Helpers to build automata
+  val empty = Automaton()
+  def init(is:Set[Assignment]) = Automaton(init=is)
+  def inv(is:Set[Term]) = Automaton(inv=is)
+  def rules(rs:Set[Rule]) = Automaton(rs = rs)
+  def inputs(x:Set[String]) = Automaton(inputs = x)
+  def outputs(x:Set[String]) = Automaton(outputs = x)
+  def registers(x:Set[String]) = Automaton(registers = x)
+  def clocks(x:Set[String]) = Automaton(clocks = x)
+  def args(x:Set[String]) = Automaton(args = x)
+
   //// EXAMPLES
   object Examples:
     import Rule._
@@ -154,67 +169,70 @@ object Automaton:
 
     implicit def str2var(s:String): Var = Var(s)
 
+    // note: the inputs, outputs, and regisers are automatically calculated from the Encode(program)
+
     def fifo(a:String,b:String,m:String) = Automaton(
+      inputs = Set(a), outputs = Set(b), registers = Set(m),
       init=Set(), inv=Set(), rs = Set(
         get(a) & und(m) --> m /~ a,
         get(m) --> b ~~ m
-      ),
-      inputs = Set(a), outputs = Set(b), registers = Set(m)
+      )
     )
     def fifofull(a:String,b:String,m:String,t:Term = Term.Fun("()",Nil)) = Automaton(
+      inputs = Set(a), outputs = Set(b), registers = Set(m),
       init=Set(m := t), rs = Set(
         get(a) & und(m) --> m /~ a,
         get(m) --> b ~~ m
-      ),
-      inputs = Set(a), outputs = Set(b), registers = Set(m)
+      )
     )
     def lossy(a:String,b:String) = Automaton(
+      inputs = Set(a), outputs = Set(b),
       rs = Set(
         get(a) --> assg(b,Var(a)),
         get(a)
-      ),
-      inputs = Set(a), outputs = Set(b)
+      )
     )
     def drain(a:String,b:String) = Automaton(
+      inputs = Set(a,b),
       rs = Set(
         get(a,b)
-      ),
-      inputs = Set(a,b)
+      )
     )
     def xor(a:String,b:String,c:String) = Automaton(
+      inputs = Set(a), outputs = Set(b,c), registers = Set(),
       rs = Set(
         get(a) --> b ~~ a, // ? und(b)?
         get(a) --> c ~~ a
-      ),
-      inputs = Set(a), outputs = Set(b,c), registers = Set()
+      )
     )
     def dupl(a:String,b:String,c:String) = Automaton(
+      inputs = Set(a), outputs = Set(b,c), registers = Set(),
       init=Set(), inv=Set(), rs = Set(
         get(a) --> b ~~ a & c ~~ a
-      ),
-      inputs = Set(a), outputs = Set(b,c), registers = Set()
+      )
     )
     def merger(a:String,b:String,c:String) = Automaton(
+      inputs = Set(a,b), outputs = Set(c), registers = Set(),
       init=Set(), inv=Set(), rs = Set(
         get(a) --> c ~~ a,
         get(b) --> c ~~ b
-      ),
-      inputs = Set(a,b), outputs = Set(c), registers = Set()
+      )
     )
     def sync(a:String,b:String) = Automaton(
+      inputs = Set(a), outputs = Set(b), registers = Set(),
       init=Set(), inv=Set(), rs = Set(
         get(a) --> b ~~ a
-      ),
-      inputs = Set(a), outputs = Set(b), registers = Set()
+      )
     )
     def timer(a:String,b:String,m:String,t:String,n:Term) = Automaton(
+      inputs = Set(a), outputs = Set(b), registers = Set(m),
       init=Set(),
       inv=Set(Fun("->",List(Fun("at",List(Var(m))),  Fun("<=",List(Var(t),n)) ))),
       rs = Set(
         get(a) & und(m) --> m /~ a & t /~ IntVal(0),
         get(m) & pred(Fun(">=",List(Var(t),n))) --> b ~~ m
       ),
-      inputs = Set(a), outputs = Set(b), registers = Set(m), clocks = Set(t)
+      clocks = Set(t)
     )
     def timer(a:String,b:String,m:String,t:String,n:Int):Automaton =
       timer(a,b,m,t,IntVal(n))

@@ -8,7 +8,8 @@ import dsl.revised.typing.Type.{BaseType, VarType}
 import dsl.revised.core.{Automaton, Connector, Rule, Term}
 
 case class Network(data:Map[String,(List[String],List[Constructor])],
-                   functions: Map[String,Interpretation], connectors: Map[String,Connector],
+                   functions: Map[String,Interpretation],
+                   connectors: Map[String,Connector],
                    links: List[Link]):
   override def toString: String = Show(this)
 

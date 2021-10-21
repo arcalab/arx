@@ -1,8 +1,8 @@
 package dsl.revised.syntax
 
 import dsl.revised.core.{Automaton, Connector, Network, Rule}
-import Program._
-import dsl.revised.Error
+import Program.*
+import dsl.revised.{Error, Prelude}
 import dsl.revised.core.Connector.{CAut, CNet}
 import dsl.revised.core.Network.{Constructor, Link}
 import dsl.revised.core.Term.vars
@@ -10,7 +10,7 @@ import dsl.revised.core.Term.vars
 object Encode:
   /** Encode a syntactic program into a core network, removing syntactic sugar and simplifications. */
   def apply(p:Program, imported:Set[String]=Set()): Network =
-    apply(collectDecl(p.main,p.modules,Set()),Network.empty)
+    apply(collectDecl(p.main,p.modules+("reo"->Prelude.reoModule),Set()),Network.empty)
 
   /** Traverse imports to collect all needed declarations. */
   def collectDecl(module: Module, scope:Map[String,Module], done:Set[String]): List[Decl] = module match
@@ -51,7 +51,7 @@ object Encode:
       Error.invalid(s"Automaton ${decl} is already declared.")
 
     val args = decl.args.toSet
-    val newAut = expandAut(decl.aut,args)
+    val newAut = expandAut(decl.aut,args,decl.inputs,decl.outputs)
     if !newAut.wellDefined then
       Error.invalid(s"Automata not well defined: $newAut")
 
@@ -87,9 +87,12 @@ object Encode:
         (newNet,newSeed)
 
   /** Introduce extra "asks" for unused inputs */
-  def expandAut(a: Automaton,args:Set[String]): Automaton =
-    Automaton(a.init,a.inv,a.rs.map(expandRule(_,/* a.clocks++ */args++a.clocks)),
-              a.inputs,a.outputs,a.registers,a.clocks,a.args++args)
+  def expandAut(a: Automaton,args:Set[String],inputs:List[String],outputs:List[String]): Automaton =
+    val newRs = a.rs.map(expandRule(_,/* a.clocks++ */args++a.clocks))
+    val newRegs = a.registers ++ a.init.map(_.v) ++ newRs.flatMap(r => r.upd.map(_.v))
+    val newIns  = (a.inputs  ++ newRs.flatMap(r => r.get++r.ask) ++ inputs.toSet) -- newRegs
+    val newOuts = a.outputs ++ newRs.flatMap(r => r.assg.map(_.v)) ++ outputs.toSet
+    Automaton(a.init,a.inv,newRs,newIns,newOuts,newRegs,a.clocks,a.args++args)
 
   def expandRule(r:Rule,ok:Set[String]): Rule =
     val readVars = r.pred.flatMap(vars)++r.assg.flatMap(x=>vars(x.t))++r.upd.flatMap(x=>vars(x.t))

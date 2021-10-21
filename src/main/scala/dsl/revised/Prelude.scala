@@ -1,8 +1,9 @@
 package dsl.revised
 
+import dsl.revised.core.{Automaton, Term}
 import dsl.revised.core.Network.Constructor
 import dsl.revised.core.Term.{IntVal, Interpretation, falseT, trueT}
-import dsl.revised.syntax.Program.DataDecl
+import dsl.revised.syntax.Program.{AutDecl, DataDecl}
 import dsl.revised.typing.MutTypeCtxt
 import dsl.revised.typing.Type.{BaseType, VarType}
 
@@ -31,18 +32,17 @@ object Prelude:
   val boolType = BaseType("Bool")
   val unitType = BaseType("Unit")
 
-  private val a = VarType("a")
-  private val b = VarType("b")
+  private val at = VarType("a")
 
   val invFunction = Map(
-    "at" -> (List(a),boolType)
+    "at" -> (List(at),boolType)
   )
 
   val functions = Map(
-    "==" -> (List(a,a),boolType), "!=" -> (List(a,a),boolType),
-    ">=" -> (List(a,a),boolType), "<=" -> (List(a,a),boolType),
-    ">"  -> (List(a,a),boolType), "<"  -> (List(a,a),boolType),
-    "->" -> (List(a,a),boolType),
+    "==" -> (List(at,at),boolType), "!=" -> (List(at,at),boolType),
+    ">=" -> (List(at,at),boolType), "<=" -> (List(at,at),boolType),
+    ">"  -> (List(at,at),boolType), "<"  -> (List(at,at),boolType),
+    "->" -> (List(at,at),boolType),
     "!" -> (List(boolType),boolType),
     "+" -> (List(intType,intType),intType),
     "-" -> (List(intType,intType),intType),
@@ -60,10 +60,46 @@ object Prelude:
     DataDecl("Unit",Nil, List(Constructor("()",Nil))),
     DataDecl("Bool",Nil, List(Constructor("True",Nil),Constructor("False",Nil))),
     DataDecl("List",List("a"), List(
-      Constructor("Cons",List(a,BaseType("List",List(a)))),
+      Constructor("Cons",List(at,BaseType("List",List(at)))),
       Constructor("Nil",Nil)))
   )
 
-
   /** Default typing context with default function types */
   def newTypeContext = new MutTypeCtxt(functions = functions)
+
+
+  //////////////////////////////
+  // Reo primitive connectors //
+  //////////////////////////////
+
+  private val a="a";private val b="b";private val c="c";private val m="m";private val t="t"
+  import core.Rule._
+  import core.Term.{Var,Fun}
+  import scala.language.implicitConversions
+  implicit def str2var(s:String): Var = Var(s)
+
+  val reoModule = syntax.Program.Module(Nil, List(
+    AutDecl("fifo",Nil,List(a),List(b),Automaton(
+      rs = Set( get(a) & und(m) --> m/~a,  get(m) --> b~~m ))),
+    AutDecl("fifofull",List(c),List(a),List(b),Automaton(
+      init=Set(m := c),rs = Set( get(a) & und(m) --> m/~a,  get(m) --> b~~m ))),
+    AutDecl("lossy",Nil,List(a),List(b),Automaton(
+      rs = Set( get(a) --> b~~a,  get(a) ))),
+    AutDecl("drain",Nil,List(a,b),Nil,Automaton(
+      rs = Set( get(a,b) ))),
+    AutDecl("xor",Nil,List(a),List(b,c),Automaton(
+      rs = Set( get(a) --> b~~a,  get(a) --> c~~a ))),
+    AutDecl("dupl",Nil,List(a),List(b,c),Automaton(
+      rs = Set( get(a) --> b~~a & c~~a ))),
+    AutDecl("merger",Nil,List(a,b),List(c),Automaton(
+      rs = Set( get(a) --> c~~a,  get(b) --> c~~b ))),
+    AutDecl("timer",List(c),List(a),List(b),Automaton(
+      clocks = Set(t),
+      inv = Set(Fun("->",List(Fun("at",List(m)),  Fun("<=",List(t,c)) ))),
+      rs = Set(
+        get(a) & und(m) --> m/~a & t/~IntVal(0),
+        get(m) & pred(Fun(">=",List(t,c))) --> b~~m
+      )))
+  ))
+
+

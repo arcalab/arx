@@ -29,7 +29,7 @@ object Show:
 
   def apply(a: Automaton): String =
      s"${if a.init.nonEmpty then s"init: ${a.init.map(apply).mkString(",")};\n" else ""
-        }${if a.clocks.nonEmpty then s"clocks: ${a.clocks.mkString(",")};\n" else ""
+        }${if a.clocks.nonEmpty then s"clock: ${a.clocks.mkString(",")};\n" else ""
         }${if a.inv.nonEmpty then s"inv: ${a.inv.map(apply).mkString(" && ")};\n" else ""
         }${if a.inputs.nonEmpty then s"input: ${a.inputs.mkString(",")};\n" else ""
         }${if a.outputs.nonEmpty then s"output: ${a.outputs.mkString(",")};\n" else ""

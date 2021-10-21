@@ -23,6 +23,7 @@ object Term:
   def getQ(q:String,i:Int,ts:List[Term]): Term = Fun(s"get§$q",IntVal(i)::ts)
   val trueT: Term = Fun("True",Nil)
   val falseT: Term = Fun("False",Nil)
+  val unitT: Term = Fun("()",Nil)
 
   /** Collect all ports and registers in a term */
   def vars(t:Term): Set[String] = t match {

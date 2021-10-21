@@ -101,9 +101,15 @@ object Rule:
   case class Assignment(v:String, t:Term)
 
   // constructor helpers
-  def get(s:String*) = Rule(s.toSet,Set(),Set(),Set(),Set(),Set(),Set())
-  def ask(s:String*) = Rule(Set(),s.toSet,Set(),Set(),Set(),Set(),Set())
-  def und(s:String*) = Rule(Set(),Set(),s.toSet,Set(),Set(),Set(),Set())
-  def pred(ts:Term*) = Rule(Set(),Set(),Set(),ts.toSet,Set(),Set(),Set())
+  def get(s:String*):Rule = get(s.toSet)
+  def ask(s:String*):Rule = ask(s.toSet)
+  def und(s:String*):Rule = und(s.toSet)
+  def pred(ts:Term*):Rule = pred(ts.toSet)
+
+  def empty: Rule = Rule(Set(),Set(),Set(),Set(),Set(),Set(),Set())
+  def get(s:Set[String]) = Rule(s.toSet,Set(),Set(),Set(),Set(),Set(),Set())
+  def ask(s:Set[String]) = Rule(Set(),s.toSet,Set(),Set(),Set(),Set(),Set())
+  def und(s:Set[String]) = Rule(Set(),Set(),s.toSet,Set(),Set(),Set(),Set())
+  def pred(ts:Set[Term]) = Rule(Set(),Set(),Set(),ts.toSet,Set(),Set(),Set())
   def assg(v:String,t:Term) = Rule(Set(),Set(),Set(),Set(),Set(Assignment(v,t)),Set(),Set())
   def upd(v:String,t:Term) = Rule(Set(),Set(),Set(),Set(),Set(),Set(Assignment(v,t)),Set())
