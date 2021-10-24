@@ -40,6 +40,7 @@ object Infer:
         r.assg.foreach(inferType)
         r.upd.foreach(inferType)
       })
+      // no need to add ins, outs, regs to known ports, since no type restrictions are added.
       clocks.foreach(c => ctx.addPort(c,intType))
       val overr = ctx.addInvFuns
       inv.foreach(inferBoolType)
@@ -107,25 +108,31 @@ object Infer:
       def inferLater(): (List[String],List[String],List[String],MutTypeCtxt) =
         Error.debug(s"=== inferring type for $name")(using "Infer")
         inferType(conn)(using ctx2)
+        println(s"[infering later] $name - $conn - $ctx2")
         (conn.args,conn.ins,conn.outs,ctx2)
       ctx.addConn(name,inferLater)
     // Links (invocations)
     for Link(n,args,ins,outs) <- net.links do
-      val (argTs,inTs,outTs,ctx2) = ctx.getConn(n)()
-      if args.size != argTs.size then
-        Error.typing(s"connector $n applied with wrong number of arguments - ${args.mkString(",")}")
-      if ins.size != inTs.size then
-        Error.typing(s"connector $n applied with wrong number of inputs - ${ins.mkString(",")}")
-      if outs.size != outTs.size then
-        Error.typing(s"connector $n returns wrong number of outputs - ${outs.mkString(",")}")
-      // add input and output types based on connector type
-      val lr: (List[Type],List[Type]) = ctx2.typeConstr.unzip
-      val argTs1 = args.map(inferType)
-      implicit val subst: Map[String,Type] = ctx.freshSubst(argTs1:::inTs:::outTs:::lr._1:::lr._2)
-//      val (inTs2,outTs2,tc2) = ctx.freshen(inTs,outTs,ctx2.typeConstr)
-      for (i,t) <- ins.zip(replace(inTs)) do ctx.addPort(i,t)
-      for (o,t) <- outs.zip(replace(outTs)) do ctx.addPort(o,t)
-      ctx.typeConstr = ctx.typeConstr ::: (replace(lr._1) zip replace(lr._2)) ::: (argTs1 zip replace(argTs))
+      if n=="" then // Link without a name is a Sync/ID connection - type it accordingly
+        val insT =  for (i<-ins)  yield ctx.newPort(i)
+        val outsT = for (o<-outs) yield ctx.newPort(o)
+        ctx.typeConstr = ctx.typeConstr :::(insT zip outsT)
+      else
+        val (argTs,inTs,outTs,ctx2) = ctx.getConn(n)()
+        if args.size != argTs.size then
+          Error.typing(s"connector $n applied with wrong number of arguments - '${args.mkString(",")}' with expected type '${argTs.mkString(",")}'")
+        if ins.size != inTs.size then
+          Error.typing(s"connector $n applied with wrong number of inputs - '${ins.mkString(",")}' with expected type '${argTs.mkString(",")}'")
+        if outs.size != outTs.size then
+          Error.typing(s"connector $n returns wrong number of outputs - '${outs.mkString(",")}' with expected type '${argTs.mkString(",")}'")
+        // add input and output types based on connector type
+        val lr: (List[Type],List[Type]) = ctx2.typeConstr.unzip
+        val argTs1 = args.map(inferType)
+        implicit val subst: Map[String,Type] = ctx.freshSubst(argTs1:::inTs:::outTs:::lr._1:::lr._2)
+  //      val (inTs2,outTs2,tc2) = ctx.freshen(inTs,outTs,ctx2.typeConstr)
+        for (i,t) <- ins.zip(replace(inTs)) do ctx.addPort(i,t)
+        for (o,t) <- outs.zip(replace(outTs)) do ctx.addPort(o,t)
+        ctx.typeConstr = ctx.typeConstr ::: (replace(lr._1) zip replace(lr._2)) ::: (argTs1 zip replace(argTs))
 
   /////////////////
   // Unification //

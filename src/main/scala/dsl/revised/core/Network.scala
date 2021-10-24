@@ -11,6 +11,7 @@ case class Network(data:Map[String,(List[String],List[Constructor])],
                    functions: Map[String,Interpretation],
                    connectors: Map[String,Connector],
                    links: List[Link]):
+  def toAut: Automaton = Network.netToAutomaton(this)
   override def toString: String = Show(this)
 
 //inputs: Set[String], outputs: Set[String],
@@ -24,21 +25,21 @@ object Network:
 
 
   private class MutSubst(var s:Int=0,var subst:Map[String,Term]=Map()):
-    private def fresh:String =
+    private def fresh(base:String = "x"):String =
       s+=1
-      s"x§${s-1}"
+      s"$base§${s-1}"
     def setSubst(subst2:Iterable[(String,Term)]) =
       subst = subst2.toMap
     def getVar(v:String) =
       subst.get(v) match
         case Some(Term.Var(v2)) => v2
-        case _ => val v2 = fresh; subst += v -> Term.Var(v2); v2
+        case _ => val v2 = fresh(v); subst += v -> Term.Var(v2); v2
     def getTerm(v:String) =
       subst.get(v) match
         case Some(t) => t
-        case _ => val v2 = Term.Var(fresh); subst += v -> v2; v2
+        case _ => val v2 = Term.Var(fresh(v)); subst += v -> v2; v2
 
-  def toAutomaton(net: Network): Automaton =
+  def netToAutomaton(net: Network): Automaton =
     implicit val who:String = "Netw"
     import dsl.revised.Error.debug
     debug(s"Translating net with conn ${net.connectors.keys} - ${net}")
@@ -48,7 +49,7 @@ object Network:
         debug(s"NOT FOUND $name in ${net.connectors.keys.mkString(",")}")
       net.connectors(name) match {
         case Connector.CNet(net2,args,ins,outs) =>
-          instantiate(CAut(toAutomaton(net2),args,ins,outs),terms,inputs,outputs)
+          instantiate(CAut(netToAutomaton(net2),args,ins,outs),terms,inputs,outputs)
         case c:Connector.CAut =>
           instantiate(c,terms,inputs,outputs)
       }

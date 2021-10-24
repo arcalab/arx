@@ -1,16 +1,18 @@
 package dsl.revised.syntax
 
 import cats.parse.{LocationMap, Parser as P, Parser0 as P0}
-import cats.parse.Numbers.*
-import cats.syntax.all.*
-import P.*
+import cats.parse.Numbers._
+import cats.syntax.all._
+import P._
 import cats.data.NonEmptyList
 import cats.parse.Rfc5234.{alpha, sp}
-import dsl.revised.core.Network.Link
+import dsl.revised.core.Network.{Constructor, Link}
 import dsl.revised.core.Rule.Assignment
 import dsl.revised.core.{Automaton, Rule, Term}
 import dsl.revised.core.Term.{Fun, IntVal, Var}
-import dsl.revised.syntax.Program.{AutDecl, ConnCall, InputCall, LinkDecl, PortCall}
+import dsl.revised.syntax.Program.{AutDecl, ConnCall, DataDecl, Decl, InputCall, LinkDecl, PortCall}
+import dsl.revised.typing.Type
+import dsl.revised.typing.Type.{BaseType, VarType}
 
 object Parser :
 
@@ -18,6 +20,7 @@ object Parser :
   val sps: P0[Unit] = whitespace.rep0.void
   private[this] val comma = char(',')
   private[this] val scomma = char(';')
+  private[this] val commasp = char(',').surroundedBy(sps)
 
   def varName: P[String] =
     (charIn('a' to 'z') ~ alpha.rep0).string
@@ -25,6 +28,17 @@ object Parser :
     (charIn('A' to 'Z') ~ alpha.rep0).string
   def symbols: P[String] =
     (oneOf("+-><!%/*=".toList.map(char)).rep).string
+
+  //// Module body ///
+  def parseProgram(str:String):Program =
+    program.parseAll(str) match {
+      case Left(e) => dsl.revised.Error.parsing(e.toString)
+      case Right(p) => p
+    }
+  def program: P0[Program] =
+    declarations.map(x => Program(dsl.revised.syntax.Program.Module(List("reo"),x),Map()))
+  def declarations: P0[List[Decl]] =
+    (data orElse autDecl orElse link).repSep0(sps).surroundedBy(sps)
 
   /// Terms ///
   def term: P[Term] = P.recursive[Term] { newTerm =>
@@ -93,7 +107,7 @@ object Parser :
       .map(p => AutDecl(p._1._1._1,p._1._1._2,p._1._2,p._2._2,p._2._1))
 
   def args: P0[List[String]] =
-    (char('<') *> varName.surroundedBy(sps).repSep0(comma) <* char('>')).?
+    (char('[') *> varName.surroundedBy(sps).repSep0(comma) <* char(']')).?
       .map(_.getOrElse(Nil))
 
   def parameters: P0[List[String]] =
@@ -126,13 +140,48 @@ object Parser :
       .map(x => (Automaton.clocks(x._1._2.toList.toSet) , Nil))
 
 
+  //// Data ///
+  def data: P[DataDecl] =
+    (string("data")~funName.surroundedBy(sps)~
+      parameters~char('=').surroundedBy(sps)~
+      dataConstr.repSep(char('|').surroundedBy(sps))
+      <* (sps~scomma))
+      .map(x => DataDecl(x._1._1._1._2, x._1._1._2, x._2.toList))
+
+  def dataConstr: P[Constructor] =
+    (funName~(sps*>typeParams.?))
+      .map(x => Constructor(x._1,x._2.getOrElse(Nil)))
+
+  def typeParams: P[List[Type]] = P.recursive(recTypeParams => {
+    def typeDecl: P[Type] =
+      varName.map(VarType(_)) orElse
+      (funName~sps~recTypeParams.?)
+        .map(x => BaseType(x._1._1,x._2.map(_.toList).getOrElse(Nil)))
+
+    (char('(') *> typeDecl.surroundedBy(sps).repSep(comma) <* char(')'))
+      .map((x:NonEmptyList[Type]) => x.toList)
+  })
 
   //// Links ////
   def link: P[LinkDecl] =
-    linkArr.backtrack orElse linkAlone
+    (linkArr.backtrack orElse linkAlone) <* (sps~scomma)
   def linkArr: P[LinkDecl] =
-    (inputCall ~ string("-->").surroundedBy(sps) ~ varName.repSep(comma.surroundedBy(sps)))
-      .map(x => LinkDecl(x._1._1,x._2.toList))
+    (inputCall ~ arrowCall.surroundedBy(sps) ~ varName.repSep(comma.surroundedBy(sps)))
+      .map(x => x._1._2(x._1._1,x._2.toList))
+  def arrowCall: P[(InputCall,List[String])=>LinkDecl] =
+    // note: order is important (first one to match wins)
+    string("-->").map(_ => (i:InputCall,o:List[String])=>LinkDecl(i,o)) orElse
+    mkLink("fifo",string("--[]-->").map(_=>Nil)).backtrack orElse
+    mkLink("fifofull",string("--[")*>term.surroundedBy(sps).map(List(_))<*string("]-->")).backtrack orElse
+    mkLink("var",string("--{}-->").map(_=>Nil)).backtrack orElse
+    mkLink("varfull",string("--{")*>term.surroundedBy(sps).map(List(_))<*string("}-->")).backtrack orElse
+    mkLink("xor",string("--X-->").map(_=>Nil)).backtrack orElse
+    string("---").map(_ => ((i:InputCall,o:List[String]) =>
+        LinkDecl(ConnCall("drain",Nil,i::o.map(PortCall.apply)),Nil)))
+  def mkLink(name:String,pattern:P[List[Term]]): P[(InputCall,List[String])=>LinkDecl] =
+    pattern.map(terms => ((in,outs) => LinkDecl(ConnCall(name,terms,List(in)),outs)))
+
+
   def linkAlone: P[LinkDecl] =
     inputCall.map(LinkDecl(_,Nil))
 
@@ -150,11 +199,6 @@ object Parser :
     def connCall: P[ConnCall] =
       (varName ~ argTerms.surroundedBy(sps) ~ inputCalls)
         .map(x => ConnCall(x._1._1,x._1._2,x._2._2))
-//    def connCall: P[ConnCall] =
-//      (varName ~ (argsAndCalls orElse inputCalls)) .map(x => ConnCall(x._1,x._2._1,x._2._2))
-//    def argsAndCalls: P[(List[Term],List[InputCall])] =
-//      (((char('[')~sps) *> term.repSep(comma.surroundedBy(sps)) <* (sps~char(']'))) ~ inputCalls)
-//        .map(x => (x._1.toList:::x._2._1 , x._2._2))
 
     connCall.backtrack orElse portCall
   )

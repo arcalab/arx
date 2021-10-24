@@ -39,7 +39,8 @@ class MutTypeCtxt(var functions: Map[String,(Types,Type)]=Map(),
       def inferConTypes() =
         val (args,ins,outs,other) = getCtx()
         def typ(s:String): Type =
-          other.ports.getOrElse(s,sys.error(s"Unkown port $s of $c"))
+          other.getPort(s) // if port is new, then is not restricted, and create a new var it its context
+//          other.ports.getOrElse(s,sys.error(s"Unkown port '$s' of '$c' (known: ${ports.keys.mkString(",")})"))
         (args.map(typ),ins.map(typ),outs.map(typ),other)
       connectors += c -> inferConTypes //(inTs.map(typ),outTs.map(typ),other)
       //seed = seed max other.seed
@@ -57,11 +58,21 @@ class MutTypeCtxt(var functions: Map[String,(Types,Type)]=Map(),
     typeConstr = for (t1,t2) <- typeConstr yield (repl(t1),repl(t2))
 
   def getFun(f:String) =
-    functions.getOrElse(f,sys.error(s"Unknown function $f"))
+    functions.getOrElse(f,sys.error(s"Unknown function '$f'"))
   def getConn(c:String): ()=>(Types,Types,Types,MutTypeCtxt) =
-    connectors.getOrElse(c,sys.error(s"Unknown connector $c"))
+//    if c=="" then syncConnector else
+    connectors.getOrElse(c,sys.error(s"Unknown connector '$c'"))
   def getPort(p:String) =
-    ports.getOrElse(p,sys.error(s"Unknown port $p"))
+    ports.getOrElse(p, newPort(p))
+    //ports.getOrElse(p,sys.error(s"Unknown port '$p' (known: ${ports.keys.mkString(",")})"))
+
+//  def syncConnector =
+//    def inferConTypes() =
+//      val (args,ins,outs,other) = getCtx()
+//      def typ(s:String): Type =
+//        other.ports.getOrElse(s,sys.error(s"Unkown port '$s' of '$c'"))
+//      (args.map(typ),ins.map(typ),outs.map(typ),other)
+//    inferConTypes //(inTs.map(typ),outTs.map(typ),other)
 
   def freshVar =
     seed +=1
@@ -72,6 +83,7 @@ class MutTypeCtxt(var functions: Map[String,(Types,Type)]=Map(),
   def copyFuns: MutTypeCtxt =
     new MutTypeCtxt(functions,Map(),Map(),Nil,seed=0)
 
+  /** Add function types of functions that can only occur in invariants (e.g., "at(...)") */
   def addInvFuns: Iterable[(String,(Types,Type))] =
     val overr = functions.keys.toSet intersect Prelude.invFunction.keys.toSet
     val ret = for f <- overr yield f -> functions(f)

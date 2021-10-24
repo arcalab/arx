@@ -10,7 +10,7 @@ import dsl.revised.core.Term.vars
 object Encode:
   /** Encode a syntactic program into a core network, removing syntactic sugar and simplifications. */
   def apply(p:Program, imported:Set[String]=Set()): Network =
-    apply(collectDecl(p.main,p.modules+("reo"->Prelude.reoModule),Set()),Network.empty)
+    apply(collectDecl(p.main+(""),p.modules+(""->Prelude.syncModule)+("reo"->Prelude.reoModule),Set()),Network.empty)
 
   /** Traverse imports to collect all needed declarations. */
   def collectDecl(module: Module, scope:Map[String,Module], done:Set[String]): List[Decl] = module match
@@ -68,7 +68,7 @@ object Encode:
   def apply(decl:LinkDecl,net:Network, seed:Int): (Network,Int) =
     decl.invoc match
       case PortCall(n) =>
-        val newLink = Link("id",Nil,List(n),decl.outputs)
+        val newLink = Link("",Nil,List(n),decl.outputs) // empty link name = Sync/ID
         (Network(net.data, net.functions, net.connectors, newLink::net.links),seed)
 
       case ConnCall(n,as,ins) =>

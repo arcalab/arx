@@ -78,11 +78,22 @@ object Prelude:
   import scala.language.implicitConversions
   implicit def str2var(s:String): Var = Var(s)
 
+  val syncModule = syntax.Program.Module(Nil,List(
+        AutDecl("",Nil,List(a),List(b),Automaton(
+          rs = Set( get(a) --> b~~a )))
+  ))
+
   val reoModule = syntax.Program.Module(Nil, List(
+//    AutDecl("",Nil,List(a),List(b),Automaton(
+//      rs = Set( get(a) --> b~~a ))),
     AutDecl("fifo",Nil,List(a),List(b),Automaton(
       rs = Set( get(a) & und(m) --> m/~a,  get(m) --> b~~m ))),
     AutDecl("fifofull",List(c),List(a),List(b),Automaton(
       init=Set(m := c),rs = Set( get(a) & und(m) --> m/~a,  get(m) --> b~~m ))),
+    AutDecl("var",Nil,List(a),List(b),Automaton(
+      rs = Set( get(a) --> m/~a,  b~~m ))),
+    AutDecl("varfull",List(c),List(a),List(b),Automaton(
+      rs = Set( get(a) --> m/~a,  b~~m ), init = Set(m := c))),
     AutDecl("lossy",Nil,List(a),List(b),Automaton(
       rs = Set( get(a) --> b~~a,  get(a) ))),
     AutDecl("drain",Nil,List(a,b),Nil,Automaton(
