@@ -40,12 +40,22 @@ object Network:
         case Some(t) => t
         case _ => val v2 = Term.Var(fresh(v)); subst += v -> v2; v2
 
+  /** Instantiate all automata in a network and compose them into a single automaton. */
   def netToAutomaton(net: Network): Automaton =
+    val aut = instantiateAuts(net)
+    if aut.isEmpty then Automaton.empty else
+      aut.tail.foldRight[Automaton](aut.head)((a1,a2) => a1 * a2).hiding
+  //    sys.error("not done yet")
+
+
+  /** Collect all automata used in a network after instantiating with the right names,
+    * ready to be composed. */
+  def instantiateAuts(net:Network): List[Automaton] =
     given Who = Who("Netw")
     import dsl.revised.Error.debug
     debug(s"Translating net with conn ${net.connectors.keys} - ${net}")
-    given MutSubst = new MutSubst()
-    var aut = for Link(name,terms,inputs,outputs) <- net.links yield
+    given subst: MutSubst = new MutSubst()
+    val auts = for Link(name,terms,inputs,outputs) <- net.links yield
       if !net.connectors.contains(name) then
         debug(s"NOT FOUND $name in ${net.connectors.keys.mkString(",")}")
       net.connectors(name) match {
@@ -54,9 +64,8 @@ object Network:
         case c:Connector.CAut =>
           instantiate(c,terms,inputs,outputs)
       }
-    if aut.isEmpty then Automaton.empty else
-      aut.tail.foldRight[Automaton](aut.head)((a1,a2) => a1 * a2).hiding
-//    sys.error("not done yet")
+    println(s"[Inst] got subst: ${subst.subst}")
+    auts
 
   private def instantiate(c:CAut, iArgs:List[Term], iIns:List[String],iOuts:List[String])(using gen:MutSubst): Automaton =
     // replace args, ins, outs by new terms and ports.

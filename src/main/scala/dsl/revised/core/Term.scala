@@ -3,8 +3,7 @@ package dsl.revised.core
 import dsl.revised.core.Rule.Assignment
 import dsl.revised.core.{Show, Term}
 
-/** A term is a Hilbert space, defined as a variable, an int (primitive type), or a function with a name a sequence of terms */
-//sealed trait Term
+/** A term is a variable, an int (primitive type), or a function with a name a sequence of terms */
 
 enum Term:
   case Var(v:String) // variable
@@ -16,7 +15,7 @@ object Term:
   
   extension (v:Var)
     def :=(t:Term) = Assignment(v.v,t)
-    def ~~(t:Term) = Rule.eqs(v.v,t)
+    def~~(t:Term) = Rule.eqs(v.v,t)
     def ~~(a:String) = Rule.eqs(v.v,Var(a))
     def /~(t:Term) = Rule.upd(v.v,t)
     def /~(a:String) = Rule.upd(v.v,Var(a))

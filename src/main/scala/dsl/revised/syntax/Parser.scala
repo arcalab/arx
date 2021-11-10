@@ -368,4 +368,17 @@ object Parser :
         |statM2 --{}--> lastStatM2;
         |""".stripMargin
 
+  val ex2:String =
+    """
+      |data Fruit  = Apple | Pear;
+      |
+      |def fifo2(a) {
+      |  //data F2 = Apple | Pineapple;
+      |  var(fifofull[Apple](a)) --> b;
+      |  return b;
+      |}
+      |
+      |fifo2(x) --> y;
+      |xx --[Apple]-->yy;
+      |timer[5](y) --> z;""".stripMargin
 

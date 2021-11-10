@@ -31,12 +31,15 @@ object Infer:
   /** Type the flattened automata of a network, using the typing information of the network. */
   def typeAut(net:Network): (Automaton,MutTypeCtxt) =
     implicit val ctx = new MutTypeCtxt(functions = Prelude.functions)
-    inferType(CNet(net,Nil,Nil,Nil))
-    //unify
-    val a = net.toAut
-    inferType(a)
-    unify
+    inferType(CNet(net,Nil,Nil,Nil)) // need to type the program with all data declarations and context before flatenning automata
+    val a = net.toAut // flatten automata
+    inferType(a) // collect type constraints
+    unify // solve type constraints
     (a,ctx)
+
+//  def typeAut(aut:Automaton): MutTypeCtxt =
+//    given MutTypeCtxt = new MutTypeCtxt(functions = Prelude.functions)
+
 
   /** Collects the typing context of a connector, without checking type constraints,
     *  and throws an exception if it fails. */

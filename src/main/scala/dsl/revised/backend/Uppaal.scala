@@ -8,6 +8,8 @@ import dsl.revised.core.Term.{Fun, Var}
 import dsl.revised.typing.{Infer, MutTypeCtxt, Type}
 import dsl.revised.Error.{UppaalEncodingError, uppEncoding}
 
+// Should only support data declarations at the top level! (no mechanism for hierarchical scope of overriden names)
+
 object Uppaal :
   def autToUppaal: String =
     """<?xml version="1.0" encoding="utf-8"?>
@@ -48,14 +50,34 @@ object Uppaal :
       (if sync.nonEmpty then s"\n  sync: $sync" else "") ++
       (if upd.nonEmpty then s"\n  upd: $upd" else "")
 
-  def netToUppaal(net:Network): String =
-    val (aut,typeCtx) = Infer.typeAut(net)
-    val (init,usedTypes) = getInit(aut,typeCtx)
+  def netToUppaals(net:Network): String =
+    val auts = Network.instantiateAuts(net) // todo: error if connectors include data or constants!
+    given ctx:MutTypeCtxt = new MutTypeCtxt(functions = Prelude.functions)
+    val x = Infer.inferType(net) // typecheck top-level variables, also used by the automata
+    for a<-auts do Infer.inferType(a) // collect type constraints, adding to the top-level variables
+    Infer.unify // unify types
+    println(s"temp auts: $ctx")
+    //for a<-auts do println(s"$a\n---")
+    val (autUps,usedTypes) = (for a<-auts yield autToUppaal(a,ctx)).toSet.unzip
+    val dataDecl = getData(usedTypes.flatten,net.data)
+//    println(s">>> data: ${datas.flatten.mkString(";\n")}")
+    println(s">>> data: $dataDecl")
+    for a<-autUps do println(s"$a\n--")
+    ""
+
+
+  def autToUppaal(aut:Automaton,typeCtx: MutTypeCtxt): (String,Set[String]) =
+    val (init,usedTypes1) = getInit(aut,typeCtx)
     val (rules,usedTypes2) = getRules(aut,typeCtx)
     val (inv,usedTypes3) = getInv(aut,typeCtx)
-    val dataDecl = getData(usedTypes++usedTypes2++usedTypes3,net.data)
-//    val invs = getInv(aut,typeCtx)
-    s">>> data: $dataDecl\n>>> init: $init\n>>> inv $inv\n>>> rules: ${rules.mkString("\n---\n")}"
+    val autUpp = s">>> init: $init\n>>> inv $inv\n>>> rules: ${rules.mkString("\n  +++")}"
+    (autUpp, usedTypes1++usedTypes2++usedTypes3)
+
+  def netToUppaal(net:Network): String =
+    val (aut,typeCtx) = Infer.typeAut(net) // flatten and typecheck automaton
+    val (auts,usedTypes) = autToUppaal(aut, typeCtx)
+    val dataDecl = getData(usedTypes,net.data)
+    s">>> data: $dataDecl\n$auts"
 
   def getData(usedTypes: Set[String], dataDecl: Map[String,(List[String],List[Network.Constructor])]): String =
     val x = for uTyp <- usedTypes yield
@@ -75,7 +97,7 @@ object Uppaal :
 
 
   private def getInv(a:Automaton,types:MutTypeCtxt): (String,Set[String]) =
-    val (x,y) = (for term <- a.inv yield getTerm(term,types)).unzip
+    val (x,y) = (for term <- a.inv yield getTerm(term,types)(using Set())).unzip
     (x.mkString(" && "),y.flatten)
 
   // generates the declaration and initialisation of variables, and also returns
@@ -93,10 +115,10 @@ object Uppaal :
     if !isConcreteTerm(a.t) then
       uppEncoding(s"Cannot assign a term with variables: ${a.v} := ${a.t}")
     val t = types.getConcreteType(a.v)
-    val (e,ts2) = getTerm(a.t,types)
+    val (e,ts2) = getTerm(a.t,types)(using Set())
     (s"bool ${fixVar(a.v)}_set = true; ${fixType(t)} ${fixVar(a.v)} = $e;", ts2 + t.toString)
 
-  private def getAssgm(a:Assignment,clocks:Set[String],types:MutTypeCtxt): (String,Set[String]) =
+  private def getAssgm(a:Assignment,clocks:Set[String],types:MutTypeCtxt)(using ins:Set[String]): (String,Set[String]) =
     val set = if clocks(a.v) then "" else s"${fixVar(a.v)}_set = true; "
     val (e,ts2) = getTerm(a.t,types)
     (s"$set${fixVar(a.v)} = ${getTerm(a.t,types)._1};" , ts2)
@@ -111,8 +133,8 @@ object Uppaal :
     val t = types.getConcreteType(v)
     s"${fixType(t)} ${fixVar(v)}; bool ${fixVar(v)}_set = false;"
 
-  private def getTerm(t:Term, types:MutTypeCtxt): (String,Set[String]) = t match
-    case Var(name) =>  (fixVar(name),Set(types.getConcreteType(name).toString))
+  private def getTerm(t:Term, types:MutTypeCtxt)(using ins:Set[String]): (String,Set[String]) = t match
+    case Var(name) =>  (fixVar(if ins(name) then s"${name}_in" else name),Set(types.getConcreteType(name).toString))
     case Fun("()",Nil) => ("0",Set(Prelude.unitType.name))
     case Fun("True",Nil) => ("true",Set(Prelude.boolType.name))
     case Fun("False",Nil) => ("false",Set(Prelude.boolType.name))
@@ -128,7 +150,7 @@ object Uppaal :
       (t.toString, e2 + t2)
     case Term.IntVal(i) => (i.toString, Set(Prelude.intType.name))
 
-  private def getTermMP(t:Term,ts:MutTypeCtxt) =
+  private def getTermMP(t:Term,ts:MutTypeCtxt)(using ins:Set[String]) =
     val (t2,ts2) = getTerm(t,ts)
     t match
       case Fun(_,_::_::Nil) => (s"($t2)",ts2)
@@ -140,17 +162,19 @@ object Uppaal :
     (x,usedTs.flatten)
 
   private def getRule(r:Rule, a:Automaton, ctxt:MutTypeCtxt): (Edge,Set[String]) =
+    println(s"getRule $r with ${a.inputs}")
     val allRead = r.get++r.ask
     val (regRead,portsRead) = allRead.partition(a.registers)
     //val regWritten = r.upd.map(_.v)
     val portsWritten = r.eqs.map(_.v)
-    val (predTerms,usedTypes1) = r.pred.map(getTerm(_,ctxt)).unzip
-    val (eqsTerms,usedTypes2) = r.eqs.map(x=>(x.v -> getTerm(x.t,ctxt))).map(x=>((x._1,x._2._1),x._2._2)).unzip
-    val (updAssg,usedTypes3) = r.upd.map(getAssgm(_,a.clocks,ctxt)).unzip
+    val (predTerms,usedTypes1) = r.pred.map(getTerm(_,ctxt)(using a.inputs)).unzip
+    val (eqsTerms,usedTypes2) = r.eqs.map(x=>(x.v -> getTerm(x.t,ctxt)(using a.inputs))).map(x=>((x._1,x._2._1),x._2._2)).unzip
+    val (updAssg,usedTypes3) = r.upd.map(getAssgm(_,a.clocks,ctxt)(using a.inputs)).unzip
     val guards = regRead.filter(!a.clocks(_)).map(x=>s"${fixVar(x)}_set") ++ predTerms.map("("+_+")")
-    /// FIX
-    val upd = updAssg ++ r.get.map(x=>s"${fixVar(x)}_set = false;")
-    val sync = portsRead.zipWithIndex.map((x,i)=>s"$x[in$i]?")++eqsTerms.map(x=>s"${x._1}[${x._2}]!")
+    /// todo: FIX - get of ports has no "set", value in channel "x" comes as "x[x_in]" and is used as "x_in"
+    val (getReg,getPort) = r.get.partition(a.registers)
+    val upd = updAssg ++ getReg.map(x=>s"${fixVar(x)}_set = false;")
+    val sync = portsRead.map(x=>s"$x[${x}_in]?")++eqsTerms.map(x=>s"${x._1}[${x._2}]!")
     val allUsedTypes = (usedTypes1++usedTypes2++usedTypes3).flatten
     ( Edge(guard=guards.mkString(" && "), sync=sync.mkString(", "), upd=upd.mkString(" "))
       , allUsedTypes)
