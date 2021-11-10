@@ -1,5 +1,6 @@
 package dsl.revised.core
 
+import dsl.revised.Error.Who
 import dsl.revised.core.Connector.CAut
 import dsl.revised.core.Network.{Constructor, Link}
 import dsl.revised.core.Term.{Fun, IntVal, Interpretation, Var}
@@ -12,7 +13,7 @@ case class Network(data:Map[String,(List[String],List[Constructor])],
                    connectors: Map[String,Connector],
                    links: List[Link]):
   def toAut: Automaton = Network.netToAutomaton(this)
-  override def toString: String = Show(this)
+  override def toString: String = Show(this) //Show.simple(this) //Show(this)
 
 //inputs: Set[String], outputs: Set[String],
 //                   outputs: List[String])
@@ -40,10 +41,10 @@ object Network:
         case _ => val v2 = Term.Var(fresh(v)); subst += v -> v2; v2
 
   def netToAutomaton(net: Network): Automaton =
-    implicit val who:String = "Netw"
+    given Who = Who("Netw")
     import dsl.revised.Error.debug
     debug(s"Translating net with conn ${net.connectors.keys} - ${net}")
-    implicit val gen = new MutSubst()
+    given MutSubst = new MutSubst()
     var aut = for Link(name,terms,inputs,outputs) <- net.links yield
       if !net.connectors.contains(name) then
         debug(s"NOT FOUND $name in ${net.connectors.keys.mkString(",")}")
@@ -72,12 +73,12 @@ object Network:
       a.init.map(instantiate),
       a.inv.map(instantiate),
       a.rs.map(r => Rule(r.get.map(getVar),r.ask.map(getVar),r.und.map(getVar),
-        r.pred.map(instantiate),r.assg.map(instantiate),r.upd.map(instantiate),r.highlights)),
+        r.pred.map(instantiate),r.eqs.map(instantiate),r.upd.map(instantiate),r.highlights,r.lbls)),
       a.inputs.map(getVar),
       a.outputs.map(getVar),
       a.registers.map(getVar),
-      a.clocks,
-      a.args
+      a.clocks.map(getVar), // seems to be needed...
+      a.args.map(getVar) // seemes to be needed...
     )
 
   private def instantiate(as:Rule.Assignment)(using gen:MutSubst): Rule.Assignment =
@@ -106,6 +107,7 @@ object Network:
 
   object Examples:
     import Automaton.Examples._
+    import Term.~~
 
     val myData = Map(
       "Planet" -> (Nil, List(

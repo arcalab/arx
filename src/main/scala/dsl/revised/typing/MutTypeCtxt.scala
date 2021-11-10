@@ -8,6 +8,7 @@ import Connector.{CAut, CNet}
 import Network.{Constructor, Link}
 import Term._
 import dsl.revised.Prelude
+import dsl.revised.Error
 
 // experimenting with mutable class
 class MutTypeCtxt(var functions: Map[String,(Types,Type)]=Map(),
@@ -33,16 +34,20 @@ class MutTypeCtxt(var functions: Map[String,(Types,Type)]=Map(),
     typeConstr = typeConstr ++ ts
     this
   def addConn(c:String, getCtx:()=>(List[String],List[String],List[String],MutTypeCtxt)) =
+//    println(s"[Ctx] Adding connector $c")
     if connectors contains c then
       dsl.revised.Error.typing(s"connector $c defined twice (known: ${connectors.keys})")
     else
       def inferConTypes() =
         val (args,ins,outs,other) = getCtx()
+//        println(s"[Ctx] $c's ctx $other")
+//        println(s"[Ctx] before: $this")
         def typ(s:String): Type =
           other.getPort(s) // if port is new, then is not restricted, and create a new var it its context
-//          other.ports.getOrElse(s,sys.error(s"Unkown port '$s' of '$c' (known: ${ports.keys.mkString(",")})"))
+//          other.ports.getOrElse(s,Error.typing(s"Unkown port '$s' of '$c' (known: ${ports.keys.mkString(",")})"))
         (args.map(typ),ins.map(typ),outs.map(typ),other)
       connectors += c -> inferConTypes //(inTs.map(typ),outTs.map(typ),other)
+//      println(s"[Ctx] after: $this")
       //seed = seed max other.seed
       this
 
@@ -58,19 +63,19 @@ class MutTypeCtxt(var functions: Map[String,(Types,Type)]=Map(),
     typeConstr = for (t1,t2) <- typeConstr yield (repl(t1),repl(t2))
 
   def getFun(f:String) =
-    functions.getOrElse(f,sys.error(s"Unknown function '$f'"))
+    functions.getOrElse(f,Error.typing(s"Unknown function '$f'"))
   def getConn(c:String): ()=>(Types,Types,Types,MutTypeCtxt) =
 //    if c=="" then syncConnector else
-    connectors.getOrElse(c,sys.error(s"Unknown connector '$c'"))
+    connectors.getOrElse(c,Error.typing(s"Unknown connector '$c'"))
   def getPort(p:String) =
     ports.getOrElse(p, newPort(p))
-    //ports.getOrElse(p,sys.error(s"Unknown port '$p' (known: ${ports.keys.mkString(",")})"))
+    //ports.getOrElse(p,Error.typing(s"Unknown port '$p' (known: ${ports.keys.mkString(",")})"))
 
 //  def syncConnector =
 //    def inferConTypes() =
 //      val (args,ins,outs,other) = getCtx()
 //      def typ(s:String): Type =
-//        other.ports.getOrElse(s,sys.error(s"Unkown port '$s' of '$c'"))
+//        other.ports.getOrElse(s,Error.typing(s"Unkown port '$s' of '$c'"))
 //      (args.map(typ),ins.map(typ),outs.map(typ),other)
 //    inferConTypes //(inTs.map(typ),outTs.map(typ),other)
 
@@ -92,6 +97,13 @@ class MutTypeCtxt(var functions: Map[String,(Types,Type)]=Map(),
 
   def addFuns(more: Iterable[(String,(Types,Type))]) =
     functions = functions ++ more
+    
+  /** Find the concrete type of a variable, returning Unit if none is found */
+  def getConcreteType(variable:String) =
+    ports.get(variable) match 
+      case Some(b@BaseType(name, args)) => b
+      case _ => Prelude.unitType 
+    
 
   override def toString: String =
     //s"fun: ${functions.map(x=>s"${x._1}:${x._2._1.mkString(",")}->${x._2._2}").mkString("; ")}\n"+

@@ -2,7 +2,7 @@ package dsl.revised.core
 
 import dsl.revised.core.{Automaton, Rule, Show, Term}
 import Rule.Assignment
-import dsl.revised.Error.debug
+import dsl.revised.Error.{Who, debug}
 import dsl.revised.core.Term.vars
 
 case class Automaton(init:Set[Assignment]=Set(),
@@ -14,7 +14,7 @@ case class Automaton(init:Set[Assignment]=Set(),
                      clocks:Set[String]=Set(),
                      args:Set[String]=Set()):
 
-  implicit val who:String = "Aut"
+  given Who = Who("Aut")
 
   val alwaysAv = clocks++args
 
@@ -30,7 +30,22 @@ case class Automaton(init:Set[Assignment]=Set(),
         r.usedVars.subsetOf(inputs++registers++args++clocks) && //used variables must be declared (maybe this should be part of well-defined rule)
         r.get.forall(g => !(alwaysAv contains g)) && // cannot consume a clock nor an argument
         r.wellDefined(alwaysAv)
-      )
+      ) &&
+      inputs.intersect(outputs).isEmpty
+    
+  def whyBadlyDefined: String =
+   if (inputs++outputs).intersect(registers).nonEmpty then s"Register(s) ${(inputs++outputs).intersect(registers).mkString(",")} cannot be input/output ports"
+   else
+     for i <- init do if !(registers contains i.v) then return s"Initialised register ${i.v} is unknown"
+     for i <- inv do if !vars(i).subsetOf(inputs++registers++args++clocks) then return s"Variable ${vars(i).mkString(",")} used in invariant ${i} is unknown"
+     for r <- rs do
+       if !r.inputs.subsetOf(inputs++registers) then return s"Input(s) ${(r.inputs -- (inputs++registers)).mkString(",")} not declared in rule $r"
+       if !r.outputs.subsetOf(outputs++clocks) then return s"Output(s) ${(r.inputs -- (outputs++clocks)).mkString(",")} not declared in rule $r"
+       if !r.updated.subsetOf(registers++clocks) then return s"Registers(s) ${(r.updated -- (registers++clocks)).mkString(",")} not declared in rule $r"
+       if !r.usedVars.subsetOf(inputs++registers++args++clocks)  then return s"Variable(s) ${(r.usedVars -- (inputs++registers++args++clocks)).mkString(",")} not declared in rule $r"
+       for g <- r.get if alwaysAv contains g do return s"Port $g cannot be consumed (it is a clock or an argument) in rule $r"
+     if inputs.intersect(outputs).nonEmpty then s"Ports(s) '${inputs.intersect(outputs).mkString(",")}' cannot be both input and output"
+     else ""
 
   /** Composition of two automata, combining all rules */
   def *(other:Automaton):Automaton =
@@ -55,7 +70,7 @@ case class Automaton(init:Set[Assignment]=Set(),
 
     // go through all the rules and combine the ones that yield well-formed rules
     for r1<-rs; r2<-other.rs
-        if !r1.canGoAlone(other) || !r2.canGoAlone(otherAut = this) &&
+        if (!r1.canGoAlone(other) || !r2.canGoAlone(otherAut = this)) &&
            r1.vars.intersect(r2.vars).nonEmpty do // try to combine only rules that share variables
       Automaton.tryToCompose(r1,this,r2,other) match {
         case (Some(m1),_,_) => miss1 ::= m1
@@ -188,7 +203,7 @@ object Automaton:
     def lossy(a:String,b:String) = Automaton(
       inputs = Set(a), outputs = Set(b),
       rs = Set(
-        get(a) --> assg(b,Var(a)),
+        get(a) --> eqs(b,Var(a)),
         get(a)
       )
     )

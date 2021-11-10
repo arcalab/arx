@@ -4,19 +4,23 @@ import dsl.revised.core.Rule.Assignment
 import dsl.revised.core.{Show, Term}
 
 /** A term is a Hilbert space, defined as a variable, an int (primitive type), or a function with a name a sequence of terms */
-sealed trait Term
+//sealed trait Term
+
+enum Term:
+  case Var(v:String) // variable
+  case Fun(name:String,terms:List[Term])
+  case IntVal(i:Int)
+
 
 object Term:
-
-  case class Var(v:String) extends Term: // variable
-    def :=(t:Term) = Assignment(v,t)
-    def ~~(t:Term) = Rule.assg(v,t)
-    def ~~(a:String) = Rule.assg(v,Var(a))
-    def /~(t:Term) = Rule.upd(v,t)
-    def /~(a:String) = Rule.upd(v,Var(a))
-  case class Fun(name:String,terms:List[Term]) extends Term
-  case class IntVal(i:Int) extends Term
-
+  
+  extension (v:Var)
+    def :=(t:Term) = Assignment(v.v,t)
+    def ~~(t:Term) = Rule.eqs(v.v,t)
+    def ~~(a:String) = Rule.eqs(v.v,Var(a))
+    def /~(t:Term) = Rule.upd(v.v,t)
+    def /~(a:String) = Rule.upd(v.v,Var(a))
+  
   // Shortcuts to create data constructors and destructors
   def isQ(q:String,ts:List[Term]): Term = Fun(s"is§$q",ts)
   def Q(q:String,ts:List[Term]): Term = Fun(s"build§$q",ts)
@@ -55,11 +59,15 @@ object Term:
   
   /** Bottom-up application of an interpretation. */
   def evaluate(t:Term)(using is: Map[String,Interpretation]): Term = t match
-    case Fun(name,ts) if is contains name =>
-      val ts2 = ts.map(evaluate)
-      is(name).applyOrElse(ts2,_ => Fun(name,ts2))
-    case _ => t
-  
+      case Fun(name,ts) =>
+        val ts2 = ts.map(evaluate)
+        if is contains name
+        then is(name).applyOrElse(ts2,_ => Fun(name,ts2))
+        else Fun(name,ts2)
+      case Var(name) if is contains name =>
+        is(name).applyOrElse(Nil,_ => t)
+      case _ => t
+
 
 
 

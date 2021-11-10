@@ -1,6 +1,8 @@
 package dsl.revised.syntax
 
 import Program._
+import Program.Decl._
+import Program.InputCall._
 import dsl.revised.core.Network.Constructor
 
 object Show:
@@ -17,6 +19,8 @@ object Show:
     imp+decl
 
   def apply(d:Decl): String = d match
+    case ConstDecl(name, term) => s"const $name = $term;}"
+
     case DataDecl(name, args, const) => s"data $name ${
       if args.nonEmpty then s"<${args.mkString(",")}> " else ""} = ${const.map(apply).mkString(" | ")};"
 

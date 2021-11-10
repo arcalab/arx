@@ -3,9 +3,9 @@ package dsl.revised
 import dsl.revised.core.{Automaton, Term}
 import dsl.revised.core.Network.Constructor
 import dsl.revised.core.Term.{IntVal, Interpretation, falseT, trueT}
-import dsl.revised.syntax.Program.{AutDecl, DataDecl}
 import dsl.revised.typing.MutTypeCtxt
 import dsl.revised.typing.Type.{BaseType, VarType}
+import dsl.revised.syntax.Program.Decl.{DataDecl,AutDecl}
 
 object Prelude:
 
@@ -35,14 +35,17 @@ object Prelude:
   private val at = VarType("a")
 
   val invFunction = Map(
-    "at" -> (List(at),boolType)
+    "at" -> (List(at),boolType),
+    "notAt" -> (List(at),boolType)
   )
 
   val functions = Map(
     "==" -> (List(at,at),boolType), "!=" -> (List(at,at),boolType),
     ">=" -> (List(at,at),boolType), "<=" -> (List(at,at),boolType),
     ">"  -> (List(at,at),boolType), "<"  -> (List(at,at),boolType),
-    "->" -> (List(at,at),boolType),
+    "->" -> (List(boolType,boolType),boolType),
+    "||" -> (List(boolType,boolType),boolType),
+    "&&" -> (List(boolType,boolType),boolType),
     "!" -> (List(boolType),boolType),
     "+" -> (List(intType,intType),intType),
     "-" -> (List(intType,intType),intType),
@@ -74,7 +77,7 @@ object Prelude:
 
   private val a="a";private val b="b";private val c="c";private val m="m";private val t="t"
   import core.Rule._
-  import core.Term.{Var,Fun}
+  import core.Term.{Var,Fun,~~,/~, :=}
   import scala.language.implicitConversions
   implicit def str2var(s:String): Var = Var(s)
 

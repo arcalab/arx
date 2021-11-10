@@ -294,3 +294,26 @@ ReoLive Reborn!
 - Add support for server-client as in ReoLive (try to simplify reuse)
 
   
+# How it is being implemented
+
+- Text
+  - `Parser` generates `syntax.Program`
+- Program
+  - Imports + list of declarations of:
+    - data, automaton, network, link, (const)
+  - `Encode` generates `core.Network`
+- Network
+  - Sets of:
+    - data, function interpretations, connectors (netw/aut), links
+  - connectors have the full context replicated (data, functions, connectors, links)
+  - `Infer` generates `typing.MutTypeCtxt`
+  - `.toAut` generates flattened `core.Automaton`
+- Automaton
+  - init,inv,rules,inputs,outputs,registers,clocks,args
+  - `product` and `hiding`
+  - (`Uppaal` _will generate an Uppaal model (?)_)
+- TypeCtxt
+  - sets of types of:
+    - functions, connectors, ports
+  - type-contraints and seed for variables
+- 

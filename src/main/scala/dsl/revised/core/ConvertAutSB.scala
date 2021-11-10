@@ -25,7 +25,7 @@ object ConvertAutSB:
       Assignment(x.variable, term2revised(x.term)))
     val upd = gc.cmd.filter(x => sb.memory.contains(x.variable)).map(x =>
       Assignment(x.variable, term2revised(x.term)))
-    Rule(get, ask, und, pred, assg, upd, gc.highlights)
+    Rule(get, ask, und, pred, assg, upd, gc.highlights, Set()) // losing labels
 
   def aut2StreamBuilder(a: Automaton): StreamBuilder =
     StreamBuilder(a.init.map(x => Command(x.v, revised2term(x.t))),
@@ -47,6 +47,6 @@ object ConvertAutSB:
       r.ask.map(Ask.apply) ++
       r.und.map(Und.apply) ++
       r.pred.map(term2com)
-    val cmds = r.assg.map(x => Command(x.v, revised2term(x.t))) ++
+    val cmds = r.eqs.map(x => Command(x.v, revised2term(x.t))) ++
       r.upd.map(x => Command(x.v, revised2term(x.t)))
     GuardedCommand(Guard(guards), cmds, r.highlights)

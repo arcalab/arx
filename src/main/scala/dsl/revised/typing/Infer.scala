@@ -6,6 +6,7 @@ import revised.typing.Type._
 import Network.{Constructor, Link}
 import Connector.{CAut, CNet}
 import Term.{Fun, IntVal, Var}
+import dsl.revised.Error.Who
 import dsl.revised.Prelude.{boolType, intType}
 import revised.{Error, Prelude}
 
@@ -20,6 +21,22 @@ object Infer:
   def apply(net:Network): MutTypeCtxt =
     apply(CNet(net,Nil,Nil,Nil))
 
+  // temporary
+  def justCollect(n:Network): MutTypeCtxt = justCollect(CNet(n,Nil,Nil,Nil))
+  def justCollect(c:Connector): MutTypeCtxt =
+    implicit val ctx = new MutTypeCtxt(functions = Prelude.functions)
+    inferType(c)
+    //unify
+    ctx
+  /** Type the flattened automata of a network, using the typing information of the network. */
+  def typeAut(net:Network): (Automaton,MutTypeCtxt) =
+    implicit val ctx = new MutTypeCtxt(functions = Prelude.functions)
+    inferType(CNet(net,Nil,Nil,Nil))
+    //unify
+    val a = net.toAut
+    inferType(a)
+    unify
+    (a,ctx)
 
   /** Collects the typing context of a connector, without checking type constraints,
     *  and throws an exception if it fails. */
@@ -37,7 +54,7 @@ object Infer:
       init.foreach(inferType)
       rs.foreach( r => {
         r.pred.foreach(inferBoolType)
-        r.assg.foreach(inferType)
+        r.eqs.foreach(inferType)
         r.upd.foreach(inferType)
       })
       // no need to add ins, outs, regs to known ports, since no type restrictions are added.
@@ -106,9 +123,9 @@ object Infer:
     for (name,conn) <- net.connectors do
       val ctx2 = ctx.copyFuns
       def inferLater(): (List[String],List[String],List[String],MutTypeCtxt) =
-        Error.debug(s"=== inferring type for $name")(using "Infer")
+        Error.debug(s"=== inferring type for $name")(using Who("Infer"))
         inferType(conn)(using ctx2)
-        println(s"[infering later] $name - $conn - $ctx2")
+        //println(s"[infering later] $name - $conn - $ctx2")
         (conn.args,conn.ins,conn.outs,ctx2)
       ctx.addConn(name,inferLater)
     // Links (invocations)
@@ -122,17 +139,23 @@ object Infer:
         if args.size != argTs.size then
           Error.typing(s"connector $n applied with wrong number of arguments - '${args.mkString(",")}' with expected type '${argTs.mkString(",")}'")
         if ins.size != inTs.size then
-          Error.typing(s"connector $n applied with wrong number of inputs - '${ins.mkString(",")}' with expected type '${argTs.mkString(",")}'")
+          Error.typing(s"connector $n applied with wrong number of inputs - '${ins.mkString(",")}' with expected type '${inTs.mkString(",")}'")
         if outs.size != outTs.size then
-          Error.typing(s"connector $n returns wrong number of outputs - '${outs.mkString(",")}' with expected type '${argTs.mkString(",")}'")
+          Error.typing(s"connector $n returns wrong number of outputs - '${outs.mkString(",")}' with expected type '${outTs.mkString(",")}'")
         // add input and output types based on connector type
-        val lr: (List[Type],List[Type]) = ctx2.typeConstr.unzip
+        val lr: (List[Type],List[Type]) = ctx2.typeConstr.unzip // types infered by ctx2
+//        println(s"[Infer] got type of $n. TConstr: $lr")
         val argTs1 = args.map(inferType)
-        implicit val subst: Map[String,Type] = ctx.freshSubst(argTs1:::inTs:::outTs:::lr._1:::lr._2)
+//        println(s"[Infer] Replacing vars: ${argTs:::inTs:::outTs:::lr._1:::lr._2}")
+//        println(s"[Infer] ctx before: ${ctx}")
+        implicit val subst: Map[String,Type] = ctx.freshSubst(argTs:::inTs:::outTs:::lr._1:::lr._2) // fixed: argTs instead of argTs1
+//        println(s"[Infer] got subst ${subst}. new ctx: ${ctx}")
   //      val (inTs2,outTs2,tc2) = ctx.freshen(inTs,outTs,ctx2.typeConstr)
         for (i,t) <- ins.zip(replace(inTs)) do ctx.addPort(i,t)
         for (o,t) <- outs.zip(replace(outTs)) do ctx.addPort(o,t)
         ctx.typeConstr = ctx.typeConstr ::: (replace(lr._1) zip replace(lr._2)) ::: (argTs1 zip replace(argTs))
+//        println(s"[Infer] ctx after: ${ctx}")
+
 
   /////////////////
   // Unification //
@@ -158,5 +181,5 @@ object Infer:
       unify
     case _ =>
       Error.typing(s"types do not unify - ${
-        ctx.typeConstr.head._1} and ${ctx.typeConstr.head._2}")
+        ctx.typeConstr.head._1} and ${ctx.typeConstr.head._2}.") // Current context:\n$ctx")
 

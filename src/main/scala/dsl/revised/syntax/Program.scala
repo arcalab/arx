@@ -17,26 +17,30 @@ object Program:
 
   /** A declaration is any line of the module that is not an import one:
     * data, automata, network, link, or return. */
-  sealed abstract class Decl
-  case class DataDecl(name:String, args:List[String], const: List[Constructor]) extends Decl
-  case class AutDecl(name:String, args:List[String], inputs:List[String], outputs:List[String], aut:Automaton) extends Decl
-  case class NetDecl(name:String, args:List[String], inputs:List[String], outputs:List[String], decls:List[Decl]) extends Decl
-  case class LinkDecl(invoc:InputCall, outputs:List[String]) extends Decl
+  enum Decl:
+    case DataDecl(name:String, args:List[String], const: List[Constructor])
+    case AutDecl(name:String, args:List[String], inputs:List[String], outputs:List[String], aut:Automaton)
+    case NetDecl(name:String, args:List[String], inputs:List[String], outputs:List[String], decls:List[Decl])
+    case LinkDecl(invoc:InputCall, outputs:List[String])
+    case ConstDecl(name:String, term:Term)
 
   /** An inputcall is used on the LHS of the link declarations.
     * It can be a port name or a call to a connector (automata or network). */
-  sealed abstract class InputCall:
-    val name:String
-  case class PortCall(name:String) extends InputCall
-  case class ConnCall(name:String, args:List[Term], inputs:List[InputCall]) extends InputCall
+  enum InputCall:
+    def name:String
+    case PortCall(name:String)
+    case ConnCall(name:String, args:List[Term], inputs:List[InputCall])
 
 
+  
   ///////////////////
   // Experimenting //
   ///////////////////
 
   object Examples:
     import Automaton.Examples._
+    import Program.Decl._
+    import Program.InputCall._
 
     def enumerate(s:String,constr:String*): DataDecl =
       DataDecl(s,Nil,constr.toList.map(c=>Constructor(c,Nil)))

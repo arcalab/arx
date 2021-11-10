@@ -10,6 +10,7 @@ object Show:
   def apply(t: Term): String = t match {
     case Var(v) => v
     case Fun(n, Nil) => s"$n"
+    case Fun(n, List(t1,t2)) if n.forall("+-><!%/*=|&".toSet) => s"(${apply(t1)}$n${apply(t2)})"
     case Fun(n, ts) => s"$n(${ts.map(apply).mkString(",")})"
     case IntVal(i) => i.toString
   }
@@ -17,14 +18,21 @@ object Show:
   def apply(a: Assignment): String =
     s"${a.v}:=${apply(a.t)}"
 
+  private def showAssgEq(a: Assignment): String =
+    s"${a.v}=${apply(a.t)}"
+
   def apply(r: Rule): String =
     val guard = List(r.get, r.ask, r.und, r.pred.map(apply))
       .zip(List("get", "ask", "und", ""))
       .filter(_._1.nonEmpty)
       .map((y, x) => if x != "" then s"$x(${y.mkString(",")})" else y.mkString(","))
-    val cmd = List(r.assg.map(apply), r.upd.map(a => apply(Assignment(a.v + "'", a.t))))
-    guard.mkString(",") + " --> " +
-      cmd.filter(_.nonEmpty).map(_.mkString(",")).mkString(",") //+
+      .mkString(",")
+    val cmd = List(r.eqs.map(showAssgEq), r.upd.map(apply)) // a => apply(Assignment(a.v + "'", a.t))))
+      .filter(_.nonEmpty)
+      .map(_.mkString(","))
+      .mkString(",")
+    val lbls = if r.lbls.isEmpty then "" else r.lbls.mkString("[","; ","] ")
+    lbls + guard + " --> " + cmd //+
 //      s" [${r.highlights.mkString(",")}]"
 
   def apply(a: Automaton): String =
@@ -50,17 +58,30 @@ object Show:
 
   private def ppCon(conn: (String,Connector)): String = conn match
     case (name,CNet(n, args, ins, outs)) =>
-      s"def $name${if args.nonEmpty then s"<${args.mkString(",")}>"else ""}(${
+      s"def $name${if args.nonEmpty then s"[${args.mkString(",")}]"else ""}(${
         ins.mkString(",")}) {\n" +
       dsl.revised.syntax.Show.indent(apply(n)+(if outs.nonEmpty then s"\nreturn ${outs.mkString(",")};" else "")) +
       "\n}"
     case (name,CAut(a, args, ins, outs)) =>
-      s"aut $name${if args.nonEmpty then s"<${args.mkString(",")}>"else ""}(${
+      s"aut $name${if args.nonEmpty then s"[${args.mkString(",")}]"else ""}(${
         ins.mkString(",")}) {\n" +
       dsl.revised.syntax.Show.indent(apply(a)+(if outs.nonEmpty then s"\nreturn ${outs.mkString(",")};" else "")) +
       "\n}"
 
   private def ppLnk(ln:Link): String =
-    s"${ln.name}${if ln.terms.nonEmpty then s"<${ln.terms.map(apply).mkString(",")}>"else ""}(${
+    s"${ln.name}${if ln.terms.nonEmpty then s"[${ln.terms.map(apply).mkString(",")}]"else ""}(${
       ln.inputs.mkString(",")}) --> ${ln.outputs.mkString(",")};"
 
+  def simple(n:Network): String =
+    (if n.data.nonEmpty then n.data.map(ppData).mkString("\n")+"\n\n" else "") +
+    (if n.functions.nonEmpty then ppFun(n.functions)+"\n\n" else "") +
+    (if n.connectors.nonEmpty then n.connectors.toList.map(simple).mkString("\n")+"\n\n" else "") +
+    (if n.links.nonEmpty then n.links.map(ppLnk).mkString("\n") else "")
+
+  private def simple(conn: (String,Connector)): String = conn match
+    case (name,CNet(n, args, ins, outs)) =>
+      s"def $name${if args.nonEmpty then s"[${args.mkString(",")}]"else ""}(${
+        ins.mkString(",")}) {...}"
+    case (name,CAut(a, args, ins, outs)) =>
+      s"aut $name${if args.nonEmpty then s"[${args.mkString(",")}]"else ""}(${
+        ins.mkString(",")}) {...}"
