@@ -289,7 +289,7 @@ object Parser :
         |  clock t;
         |  init ticks:=0, working:=();
         |
-        |  inv at(working) -> (t<=16); // NOT SUPPORTED in uppaal: (t<=16) || notAt(working);
+        |  inv at(working) -> (t<=16); // Note: (t<=16)||notAt(working) is not supported in UPPAAL
         |
         |  rules
         |  // Either send a tick or an action based on MaxTicks(42) and period TDashMin-TDashMax (15-16)
@@ -305,7 +305,7 @@ object Parser :
         |aut decoder(inAct, beat, otherDec) {
         |  clock dec, syn, tk;
         |
-        |  init  at(waiting); // waiting := ();
+        |  init  at(waiting), tries:=3;// waiting := ();
         |
         |  inv at(decode) -> (dec<=13),
         |      syn<=23,
@@ -373,7 +373,7 @@ object Parser :
       |data Fruit  = Apple | Pear;
       |
       |def fifo2(a) {
-      |  //data F2 = Apple | Pineapple;
+      |  //data F2 = Apple | Pineapple; // TODO: qualified declarations (fifo2.F2 = fifo2.Apple |...)
       |  var(fifofull[Apple](a)) --> b;
       |  return b;
       |}

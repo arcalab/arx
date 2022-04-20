@@ -51,10 +51,10 @@ object Network:
   /** Collect all automata used in a network after instantiating with the right names,
     * ready to be composed. */
   def instantiateAuts(net:Network): List[Automaton] =
-    given Who = Who("Netw")
+    implicit val who = Who("Netw")
     import dsl.revised.Error.debug
     debug(s"Translating net with conn ${net.connectors.keys} - ${net}")
-    given subst: MutSubst = new MutSubst()
+    implicit val subst: MutSubst = new MutSubst()
     val auts = for Link(name,terms,inputs,outputs) <- net.links yield
       if !net.connectors.contains(name) then
         debug(s"NOT FOUND $name in ${net.connectors.keys.mkString(",")}")

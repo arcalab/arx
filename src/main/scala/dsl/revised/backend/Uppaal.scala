@@ -6,11 +6,15 @@ import dsl.revised.core.Rule
 import dsl.revised.core.Rule.Assignment
 import dsl.revised.core.Term.{Fun, Var}
 import dsl.revised.typing.{Infer, MutTypeCtxt, Type}
-import dsl.revised.Error.{UppaalEncodingError, uppEncoding}
+import dsl.revised.Error
+import Error.Who
+import dsl.revised.typing.Type.BaseType
 
 // Should only support data declarations at the top level! (no mechanism for hierarchical scope of overriden names)
 
 object Uppaal :
+  given Who = Who("Upp")
+
   def autToUppaal: String =
     """<?xml version="1.0" encoding="utf-8"?>
       |<!DOCTYPE nta PUBLIC '-//Uppaal Team//DTD Flat System 1.1//EN' 'http://www.it.uu.se/research/group/darts/uppaal/flat-1_2.dtd'>
@@ -52,7 +56,7 @@ object Uppaal :
 
   def netToUppaals(net:Network): String =
     val auts = Network.instantiateAuts(net) // todo: error if connectors include data or constants!
-    given ctx:MutTypeCtxt = new MutTypeCtxt(functions = Prelude.functions)
+    implicit val ctx:MutTypeCtxt = new MutTypeCtxt(functions = Prelude.functions)
     val x = Infer.inferType(net) // typecheck top-level variables, also used by the automata
     for a<-auts do Infer.inferType(a) // collect type constraints, adding to the top-level variables
     Infer.unify // unify types
@@ -66,18 +70,20 @@ object Uppaal :
     ""
 
 
+  def netToUppaal(net:Network): String =
+    val (aut,typeCtx) = Infer.typeAut(net) // flatten and typecheck automaton
+    val (autUpp,usedTypes) = autToUppaal(aut, typeCtx)  // convert the flattened automata into an UPPAAL automaton (core)
+    val dataDecl = getData(usedTypes,net.data)
+    s">>> data: $dataDecl\n$autUpp"
+
   def autToUppaal(aut:Automaton,typeCtx: MutTypeCtxt): (String,Set[String]) =
     val (init,usedTypes1) = getInit(aut,typeCtx)
     val (rules,usedTypes2) = getRules(aut,typeCtx)
     val (inv,usedTypes3) = getInv(aut,typeCtx)
+    println(s"ins: ${aut.inputs.map(x=>s"${fixVar(x)}:${typeCtx.getConcreteType(x)}").mkString(",")}; outs: ${
+      aut.outputs.map(x=>s"${fixVar(x)}:${typeCtx.getConcreteType(x)}").mkString(",")}")
     val autUpp = s">>> init: $init\n>>> inv $inv\n>>> rules: ${rules.mkString("\n  +++")}"
     (autUpp, usedTypes1++usedTypes2++usedTypes3)
-
-  def netToUppaal(net:Network): String =
-    val (aut,typeCtx) = Infer.typeAut(net) // flatten and typecheck automaton
-    val (auts,usedTypes) = autToUppaal(aut, typeCtx)
-    val dataDecl = getData(usedTypes,net.data)
-    s">>> data: $dataDecl\n$auts"
 
   def getData(usedTypes: Set[String], dataDecl: Map[String,(List[String],List[Network.Constructor])]): String =
     val x = for uTyp <- usedTypes yield
@@ -87,7 +93,7 @@ object Uppaal :
         case "Unit" => "typedef int[0,0] Unit; const Unit UnitC = 0;" // und | ()
         case _ =>
           if !dataDecl.contains(uTyp) || dataDecl(uTyp)._1.nonEmpty || dataDecl(uTyp)._2.exists(_.args.nonEmpty)
-          then uppEncoding(s"Cannot use data type '${uTyp} - complex or missing data type")
+          then Error.encoding(s"Cannot use data type '${uTyp} - complex or missing data type")
           else
             // uTyp = constr1 | constr2 | ... -> typedef int[0,{constr.size-1}] uTyp; const uTyp constr(0) - 0; ...
             val constrs = dataDecl(uTyp)._2.map(_.name).zipWithIndex.map((s,i)=>s"const $uTyp $s = $i;")
@@ -113,7 +119,7 @@ object Uppaal :
 
   private def getInitAssgm(a:Assignment,types:MutTypeCtxt): (String,Set[String]) =
     if !isConcreteTerm(a.t) then
-      uppEncoding(s"Cannot assign a term with variables: ${a.v} := ${a.t}")
+      Error.encoding(s"Cannot assign a term with variables: ${a.v} := ${a.t}")
     val t = types.getConcreteType(a.v)
     val (e,ts2) = getTerm(a.t,types)(using Set())
     (s"bool ${fixVar(a.v)}_set = true; ${fixType(t)} ${fixVar(a.v)} = $e;", ts2 + t.toString)
@@ -146,8 +152,8 @@ object Uppaal :
       (s"$t1_ $name $t2_", e1 ++ e2 + myType)
     case Fun(name, terms) =>
       val t2 = types.functions(name)._2.toString
-      val e2 = terms.flatMap(x => getTerm(x,types)._2).toSet
-      (t.toString, e2 + t2)
+      val (terms2,typ2) = terms.map(x => getTerm(x,types)).toSet.unzip
+      (s"$name(${terms2.mkString(",")})", typ2.flatten + t2)
     case Term.IntVal(i) => (i.toString, Set(Prelude.intType.name))
 
   private def getTermMP(t:Term,ts:MutTypeCtxt)(using ins:Set[String]) =
@@ -162,7 +168,7 @@ object Uppaal :
     (x,usedTs.flatten)
 
   private def getRule(r:Rule, a:Automaton, ctxt:MutTypeCtxt): (Edge,Set[String]) =
-    println(s"getRule $r with ${a.inputs}")
+    //println(s"getRule $r with ${a.inputs}")
     val allRead = r.get++r.ask
     val (regRead,portsRead) = allRead.partition(a.registers)
     //val regWritten = r.upd.map(_.v)
@@ -174,9 +180,16 @@ object Uppaal :
     /// todo: FIX - get of ports has no "set", value in channel "x" comes as "x[x_in]" and is used as "x_in"
     val (getReg,getPort) = r.get.partition(a.registers)
     val upd = updAssg ++ getReg.map(x=>s"${fixVar(x)}_set = false;")
-    val sync = portsRead.map(x=>s"$x[${x}_in]?")++eqsTerms.map(x=>s"${x._1}[${x._2}]!")
+    val sync = portsRead.map(x=>s"${fixVar(x)}[${fixVar(x)}_in]?")++eqsTerms.map(x=>s"${fixVar(x._1)}[${x._2}]!")
+    val sel = for r <- portsRead yield s"${fixVar(r)}_in: ${ctxt.getConcreteType(r)}"
     val allUsedTypes = (usedTypes1++usedTypes2++usedTypes3).flatten
-    ( Edge(guard=guards.mkString(" && "), sync=sync.mkString(", "), upd=upd.mkString(" "))
+
+    //if sync.size>1 then println(s"Multiple sincronization ports not yet supported (${sync.mkString(",")})")
+    for port <- (portsRead ++ r.eqs.map(_.v)) do ctxt.getConcreteType(port) match
+      case t if t==Prelude.intType =>  Error.encoding(s"Cannot send or receive unbounded integers (port $port)")
+      case _ =>
+
+    ( Edge(sel=sel.mkString(", ") ,guard=guards.mkString(" && "), sync=sync.mkString(", "), upd=upd.mkString(" "))
       , allUsedTypes)
 
 
